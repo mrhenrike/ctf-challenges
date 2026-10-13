@@ -1,0 +1,39 @@
+{
+  "source": "https://github.com/Ignitetechnologies/Vulnhub-CTF-Writeups",
+  "total": 308,
+  "local_completed": ["tr0ll-1", "tr0ll-2", "tr0ll-3", "goldeneye-1", "axis2-tomcat-manager", "my-tomcat-host", "thales-1"],
+  "phase1": [
+    {"slug": "kioptrix-1",         "name": "Kioptrix: Level 1",       "url": "https://www.hackingarticles.in/hack-the-kioptrix-level-1/",                           "status": "generating"},
+    {"slug": "kioptrix-2",         "name": "Kioptrix: Level 1.1",     "url": "https://www.hackingarticles.in/hack-the-kioptrix-level-2-boot2root-challenge/",       "status": "generating"},
+    {"slug": "kioptrix-3",         "name": "Kioptrix: Level 1.2",     "url": "https://www.hackingarticles.in/hack-the-kioptrix-level-1-2-boot2root-challenge/",     "status": "generating"},
+    {"slug": "kioptrix-4",         "name": "Kioptrix: Level 1.3",     "url": "https://www.hackingarticles.in/hack-the-kioptrix-level-1-3-boot2root-challenge/",     "status": "generating"},
+    {"slug": "dc-1",               "name": "DC: 1",                   "url": "https://www.hackingarticles.in/dc-1-vulnhub-walkthrough/",                            "status": "generating"},
+    {"slug": "dc-2",               "name": "DC: 2",                   "url": "https://www.hackingarticles.in/dc-2-walkthrough/",                                    "status": "generating"},
+    {"slug": "dc-3",               "name": "DC: 3",                   "url": "https://www.hackingarticles.in/dc-3-walkthrough/",                                    "status": "generating"},
+    {"slug": "dc-4",               "name": "DC: 4",                   "url": "https://www.hackingarticles.in/dc-4-vulnhub-walkthrough/",                            "status": "generating"},
+    {"slug": "mr-robot",           "name": "Mr. Robot: 1",            "url": "https://www.hackingarticles.in/hack-mr-robot-vm-ctf-challenge/",                      "status": "generating"},
+    {"slug": "stapler",            "name": "Stapler: 1",              "url": "https://www.hackingarticles.in/hack-stapler-vm-ctf-challenge/",                       "status": "generating"},
+    {"slug": "sickos-1-1",         "name": "SickOs: 1.1",             "url": "https://www.hackingarticles.in/hack-sickos-1-1-vm-ctf-challenge/",                    "status": "generating"},
+    {"slug": "lazysysadmin",       "name": "LazySysAdmin: 1",         "url": "https://www.hackingarticles.in/hack-lazysysadmin-vm-ctf-challenge/",                  "status": "generating"},
+    {"slug": "rickdiculouslyeasy", "name": "RickdiculouslyEasy: 1",   "url": "https://www.hackingarticles.in/hack-rickdiculouslyeasy-vm-ctf-challenge/",            "status": "generating"},
+    {"slug": "nullbyte",           "name": "NullByte: 1",             "url": "https://www.hackingarticles.in/hack-nullbyte-vm-ctf-challenge/",                      "status": "generating"},
+    {"slug": "bsides-vancouver-2018","name":"BSides Vancouver: 2018", "url": "https://www.hackingarticles.in/hack-the-bsides-vancouver2018-vm-boot2root-challenge/","status": "generating"},
+    {"slug": "toppo-1",            "name": "Toppo: 1",                "url": "https://www.hackingarticles.in/hack-the-toppo1-vm-ctf-challenges/",                   "status": "generating"},
+    {"slug": "symfonos-1",         "name": "Symfonos: 1",             "url": "https://www.hackingarticles.in/symfonos1-vulnhub-walkthrough/",                       "status": "generating", "medium_article": "https://medium.com/@mrhenrike/vulnhub-symfonos-1-walkthrough-fdd94a1de4db"},
+    {"slug": "symfonos-2",         "name": "Symfonos: 2",             "url": "https://www.hackingarticles.in/symfonos2-vulnhub-walkthrough/",                       "status": "generating"},
+    {"slug": "prime-1",            "name": "Prime: 1",                "url": "https://www.hackingarticles.in/prime-1-vulnhub-walkthrough/",                         "status": "generating"},
+    {"slug": "sar",                "name": "Sar: 1",                  "url": "https://www.hackingarticles.in/sar-vulnhub-walkthrough/",                             "status": "generating"}
+  ],
+  "medium_articles": [
+    {"slug": "dc-6",               "medium": "https://medium.com/@mrhenrike/vulnhub-dc-serie-6-walkthrough-35d2f712487"},
+    {"slug": "jigsaw-1",           "medium": "https://medium.com/@mrhenrike/vulnhub-jigsaw-1-walkthrough-179e279f591a"},
+    {"slug": "mission-pumpkin-1",  "medium": "https://medium.com/@mrhenrike/vulnhub-mission-pumpkin-v1-0-1-3-garden-walkthrough-5736ddb0bd1a"},
+    {"slug": "mission-pumpkin-2",  "medium": "https://medium.com/@mrhenrike/vulnhub-mission-pumpkin-v1-0-2-3-raising-walkthrough-46bd43453888"},
+    {"slug": "mission-pumpkin-3",  "medium": "https://medium.com/@mrhenrike/vulnhub-mission-pumpkin-v1-0-3-3-festival-walkthrough-cac7b216e26c"},
+    {"slug": "zeus-1",             "medium": "https://medium.com/@mrhenrike/vulnhub-zeus-1-walkthrough-7e2ad46c9ab9"},
+    {"slug": "matrix-v3",          "medium": "https://medium.com/@mrhenrike/vulnhub-matrix-v3-walkthrough-864db11df508"},
+    {"slug": "symfonos-1",         "medium": "https://medium.com/@mrhenrike/vulnhub-symfonos-1-walkthrough-fdd94a1de4db"},
+    {"slug": "unknown-device-1",   "medium": "https://medium.com/@mrhenrike/vulnhub-unknown-device-vm-1-4011b395b7ea"},
+    {"slug": "unknown-device-2",   "medium": "https://medium.com/@mrhenrike/vulnhub-unknown-device-vm-2-84e612fc825d"}
+  ]
+}
