@@ -1,0 +1,9 @@
+loot/
+*.ovpn
+*hash*.txt
+*.potfile
+*.restore
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
