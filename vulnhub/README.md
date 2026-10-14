@@ -95,6 +95,10 @@ sudo arp-scan -l
 
 ---
 
-## More VMs
+## Phase 2 — Additional 100 VMs
 
-See [PIPELINE.md](PIPELINE.md) for the full list of 308 VMs planned. Phase 1 (20 VMs) is documented above.
+Phase 2 added writeups for 100 more machines from the HackingArticles catalog. Each includes README, 5 screenshots, and an exploit automation script.
+
+Categories covered: web exploitation (SQLi, LFI, RCE, upload bypass), Active Directory, git exposure, SMB enumeration, password cracking, Docker escape, custom exploits, and more.
+
+See [PIPELINE.md](PIPELINE.md) for the full list of 308 VMs planned. Phase 1 (20 VMs) + Phase 2 (100 VMs) = 127 total documented.
