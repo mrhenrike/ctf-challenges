@@ -1,133 +1,176 @@
-# EnuBox: Mattermost — Writeup
+# Enubox: Mattermost — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.8 (host-only) |
-| **Difficulty** | Easy |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.0.110 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | `/root/Desktop/local.txt` |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/enubox-mattermost,414/) |
+| **Goal** | local.txt (root flag) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/enubox-mattermost-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → TFTP anon (README.md with Mattermost creds) → Mattermost:8065 admin → Zoom plugin FTP creds → FTP enum → SSH as mattermost → SUID binary reverse-engineered (Ghidra, hex key 0xf447 = 62535) → root
+Enubox: Mattermost chains TFTP anonymous access (leaking admin credentials), a misconfigured Mattermost Zoom plugin (leaking FTP credentials), FTP access to an SSH password, and finally a custom binary with a hardcoded numeric key reverse-engineered with Ghidra to obtain a root shell.
 
 ## Methodology
 
-1. Network scan: FTP/22/80/8065/TFTP
-2. TFTP anonymous access exposes credentials
-3. Mattermost admin panel → Zoom plugin leaks FTP creds
-4. FTP enum → SSH login
-5. Binary analysis with Ghidra → decimal key → root shell
+1. Network scan (TCP + UDP) — find Mattermost, TFTP, FTP
+2. TFTP anonymous read of README.md (admin credentials)
+3. Mattermost admin panel — enable Zoom plugin, extract FTP credentials
+4. FTP login — retrieve SSH password from `message` file
+5. SSH access as `mattermost`
+6. Binary reverse engineering with Ghidra (hex constant comparison)
+7. Root shell via correct key input
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sT -sU -A 192.168.1.8
+netdiscover -r 192.168.0.0/24
+nmap -sT -sU -A $TARGET
 ```
 
-Ports: 21 (FTP), 22 (SSH), 69 (TFTP), 80 (HTTP), 8065 (Mattermost).
+![nmap scan](images/01-nmap.png)
 
-![Nmap scan](images/01-nmap.png)
+Key services found:
+
+| Port | Service |
+|---|---|
+| 21 | FTP (vsftpd) |
+| 22 | SSH (OpenSSH) |
+| 69/UDP | TFTP |
+| 80 | HTTP (Apache) |
+| 8065 | Mattermost |
 
 ---
 
-## Step 2: TFTP — Credentials Leak
+## Step 2: TFTP Anonymous Access
 
 ```bash
-tftp 192.168.1.8
+tftp $TARGET
 tftp> get README.md
 tftp> quit
 cat README.md
-# Contains Mattermost admin credentials
 ```
 
-![TFTP file retrieval](images/02-tftp.png)
+![tftp credentials](images/02-tftp.png)
+
+The file contains Mattermost admin credentials:
+
+```
+Username: admin
+Password: ComplexPassword0!
+```
 
 ---
 
-## Step 3: Mattermost Access → FTP Creds
+## Step 3: Mattermost Admin Panel
 
-Log into `http://192.168.1.8:8065` with the credentials from README.md. Navigate to:
+Navigate to `http://$TARGET:8065/login` and log in as `admin` / `ComplexPassword0!`.
 
-**System Console → Plugins → Zoom Plugin**
+Go to **System Console > Plugins > Zoom**. Enable the plugin, then open its configuration. Change the Zoom API URL from `localhost` to `$TARGET`. The plugin attempts to connect and exposes an FTP credential in the response:
 
-Enable the plugin, change the "localhost" URL to the target IP, and browse to it. The page discloses FTP credentials.
+```
+FTP User: ftpuser
+FTP Pass: ftppassword
+```
 
-![Mattermost Zoom plugin FTP leak](images/03-mattermost.png)
+![mattermost plugin](images/03-mattermost.png)
 
 ---
 
-## Step 4: FTP Enumeration and SSH
+## Step 4: FTP Access
 
 ```bash
-ftp 192.168.1.8
-# Login with credentials found in Mattermost plugin
+ftp $TARGET
+Name: ftpuser
+Password: ftppassword
 ftp> dir
 ftp> cd users/mattermost
 ftp> get message
 ftp> bye
 cat message
-# "Welcome!!" — this is the SSH password
+```
 
-ssh mattermost@192.168.1.8
-# Password: Welcome!!
-ls ~/Desktop/
-# README.md and binary 'secret'
+![ftp message](images/04-ftp.png)
+
+The `message` file contains the SSH password for user `mattermost`:
+
+```
+Password: Welcome!!
 ```
 
 ---
 
-## Step 5: Binary Reverse Engineering
-
-The `secret` binary asks for a key. Expired hint in README.md — need to reverse the binary.
+## Step 5: SSH Access and Binary Discovery
 
 ```bash
-# Download to attacker for analysis
-php -S 0.0.0.0:8080 &     # on target
-wget http://192.168.1.8:8080/secret -O /tmp/secret   # on attacker
-
-# Analyze with Ghidra (or strings/ltrace)
-# The binary compares input against 0xf447
-python3 -c "print(0xf447)"
-# 62535
+ssh mattermost@$TARGET
+ls
+cd Desktop/
+ls
+cat README.md   # contains a secret key string
+./secret        # binary requiring a numeric key
 ```
 
-![Ghidra decompilation showing hex comparison](images/04-ghidra.png)
+The binary outputs an "expired" error with the key from README.md. The binary requires analysis.
 
 ---
 
-## Step 6: Root Shell
+## Step 6: Binary Reverse Engineering with Ghidra
+
+Transfer the binary to the attacker machine:
+
+```bash
+# On target
+php -S 0.0.0.0:8080
+
+# On attacker
+wget http://$TARGET:8080/secret
+```
+
+Open the binary in Ghidra. Decompile the `main` function. The code compares the user input against the hex constant `0xf447`. Convert to decimal:
+
+```bash
+echo $((0xf447))
+# Output: 62535
+```
+
+![ghidra analysis](images/05-root-flag.png)
+
+---
+
+## Step 7: Root Shell
 
 ```bash
 ./secret
-# Enter key: 62535
-# Shell elevated to root
+# Enter: 62535
 whoami
 # root
 cd /root/Desktop
 cat local.txt
 ```
 
-![Root shell and flag](images/05-root.png)
+Root access obtained. Flag captured.
 
 ---
 
 ## Lessons Learned
 
-1. **TFTP anonymous access** exposes any file in the TFTP root — never store credentials there; restrict TFTP to read-only or disable it
-2. **Plugin configuration panels** that proxy URLs or display connected service credentials are dangerous if admin accounts are weak
-3. **SUID binaries with hardcoded comparison values** are easily reversed with Ghidra/strings — never use hardcoded secrets for authentication
-4. **SSH password matching a "welcome message"** is a credential reuse anti-pattern
+- TFTP allows anonymous read by default and should never be left exposed with sensitive files.
+- Plugin integrations in collaboration platforms can leak downstream service credentials through their configuration UI.
+- Binary reverse engineering with Ghidra reveals hardcoded secrets that cannot be seen by normal execution.
+- Serving application files over HTTP from the target enables quick transfer for offline analysis.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| TFTP anonymous access | Disable TFTP; if needed restrict access by IP and serve no sensitive files |
-| Mattermost weak admin creds | Enforce strong credentials; enable MFA for admin accounts |
-| Binary with hardcoded key | Implement proper authentication; never ship authentication logic in a client-side binary |
-| SSH password reuse | Use key-based auth; enforce unique passwords |
+| TFTP anonymous access with credentials | Disable TFTP if not needed; never store credentials in TFTP-accessible files |
+| Mattermost plugin credential disclosure | Sanitize plugin configuration responses; avoid storing credentials in plugin config |
+| Weak FTP credentials | Enforce strong passwords; restrict FTP to necessary accounts |
+| Hardcoded root key in binary | Never embed authentication secrets in binaries; use proper authentication mechanisms |
+| SSH password authentication | Prefer key-based SSH authentication |

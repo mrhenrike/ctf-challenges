@@ -1,121 +1,161 @@
 # Seattle: v0.3 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.8 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.8 |
 | **Difficulty** | Easy |
 | **OS** | Linux |
-| **Goal** | Admin panel access (no flag file) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/seattle-v03,145/) |
+| **Goal** | Admin access (no traditional flag) |
+| **Source** | [HackingArticles](http://www.hackingarticles.in/hack-seattle-vm-ctf-challenge/) |
+| **VulnHub** | https://www.vulnhub.com/entry/seattle-v03,145/ |
 
 ## Attack Summary
 
-nmap/nikto → blog tab username enumeration → Burp Suite cookie capture → sqlmap cookie-based SQLi → admin credentials → authenticated admin panel
+Seattle v0.3 is a deliberately vulnerable e-commerce web application. The attack chain involves passive reconnaissance with Nikto, cookie capture with Burp Suite, and SQL injection via sqlmap to extract admin credentials from the database. No shell access is required — the goal is authenticated access to the admin panel.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Web enumeration (nikto finds `/admin/`)
-3. Username enumeration via blog tab
-4. SQLi via captured cookie (sqlmap)
-5. Admin login with recovered credentials
+1. Host discovery with netdiscover
+2. Port and service enumeration with nmap
+3. Web application scanning with Nikto
+4. Manual browser enumeration to identify the admin username
+5. Cookie capture with Burp Suite
+6. SQL injection enumeration with sqlmap
+7. Admin login with recovered credentials
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover
+```
+
+Identify the target on the local network. The VM appeared at `192.168.1.8`.
+
+![netdiscover](images/01-netdiscover.png)
+
+### Port Scan
+
+```bash
 nmap -p- -A 192.168.1.8
 ```
 
-Only port 80 (HTTP) is open. The site is a simulated e-commerce application.
+Only port 80 (HTTP) is open. The target is a pure web application challenge.
 
----
+![nmap](images/02-nmap.png)
 
-## Step 2: Web Enumeration
+## Step 2: Web Application Enumeration
+
+### Nikto Scan
 
 ```bash
 nikto -h 192.168.1.8
 ```
 
-Nikto finds `/admin/` and `/images/`. Browse to the site and check each tab. The **Blog** tab contains a "Hey Admin!" link that reveals the username: **admin**.
+Nikto reveals two interesting directories:
+- `/admin/` — administrative interface
+- `/images/` — image directory with listing
+
+### Manual Browsing
+
+Navigate to `http://192.168.1.8` in a browser. The site is a simple e-commerce store with tabs for Home, Blog, Clothing, and My Account.
+
+**Username enumeration via the Blog tab:**
+
+Open the Blog tab. A post titled "Hey Admin!" reveals a link that discloses the admin username: `admin`.
+
+## Step 3: SQL Injection via sqlmap
+
+### Capture the Cookie
+
+Open Burp Suite and intercept traffic from the e-commerce site while browsing any page. Save the captured HTTP request (including cookies) to a file on your Kali machine:
 
 ```bash
-dirb http://192.168.1.8/
+# Save the request to a file, for example:
+# /root/Desktop/sea.txt
+# The file should contain the full HTTP request with Cookie header
 ```
 
----
-
-## Step 3: Cookie Capture with Burp Suite
-
-Configure Burp Suite as proxy (127.0.0.1:8080). Browse the site while intercepting traffic. When the application sets a session cookie, capture the full request and save it to a file:
+### Enumerate Databases
 
 ```bash
-# Save the intercepted request to /tmp/seattle_req.txt
+sqlmap -r /root/Desktop/sea.txt --dbs
 ```
 
-The cookie contains a parameter vulnerable to SQL injection (error-based).
+sqlmap identifies the following databases including `seattle`.
 
----
+![sqlmap databases](images/03-sqlmap.png)
 
-## Step 4: SQL Injection with sqlmap
-
-List databases:
+### Enumerate Tables
 
 ```bash
-sqlmap -r /tmp/seattle_req.txt --dbs
-# Found: seattle
+sqlmap -r /root/Desktop/sea.txt -D seattle --tables
 ```
 
-List tables in the `seattle` database:
+The `seattle` database contains a `tblMembers` table.
+
+### Enumerate Columns
 
 ```bash
-sqlmap -r /tmp/seattle_req.txt -D seattle --tables
-# Found: tblMembers
+sqlmap -r /root/Desktop/sea.txt -D seattle -T tblMembers --columns
 ```
 
-Dump the password column:
+Columns include: `memberID`, `username`, `password`, `email`, and others.
+
+### Dump the Password
 
 ```bash
-sqlmap -r /tmp/seattle_req.txt -D seattle -T tblMembers -C password --dump
+sqlmap -r /root/Desktop/sea.txt -D seattle -T tblmembers -C password --dump
 ```
 
-Recovered password: **Assasin1**
+The admin password is recovered:
 
----
+![password recovered](images/04-password.png)
 
-## Step 5: Admin Login
+**Credentials:** `admin` / `Assasin1`
 
-Navigate to the "My Account" tab and log in with:
-- Username: `admin`
-- Password: `Assasin1`
+## Step 4: Admin Login
 
-Admin panel is now accessible — objective complete.
+Navigate to the "My Account" tab at `http://192.168.1.8/` and log in with:
 
----
+- **Username:** `admin`
+- **Password:** `Assasin1`
+
+![admin login success](images/05-admin-login.png)
+
+Admin access is confirmed. The challenge is complete.
+
+## Vulnerabilities Found
+
+| # | Vulnerability | Location | Severity |
+|---|---|---|---|
+| 1 | SQL Injection (error-based) | Cookie parameter | Critical |
+| 2 | Username Enumeration | Blog post link | Low |
+| 3 | Weak Admin Password | `/admin/` login | High |
+| 4 | Exposed Admin Interface | `/admin/` (no IP restriction) | Medium |
+| 5 | Exposed `phpinfo()` | (found by Nikto) | Low |
+| 6 | Reflected XSS | Multiple parameters | Medium |
+| 7 | Stored XSS | Blog/comment feature | High |
+| 8 | Insecure Direct Object Reference | Member profile URLs | Medium |
+| 9 | Path Traversal | File parameter | High |
 
 ## Lessons Learned
 
-1. **Cookie-based SQL injection** — session cookies can carry user-supplied data passed directly into SQL queries without sanitization
-2. **Username enumeration** — UI elements (blog posts, "Hey Admin!" links) should not expose valid usernames
-3. **Weak credentials** — `Assasin1` is a predictable, dictionary-crackable password
-4. **Admin panel exposure** — `/admin/` accessible without IP restrictions or additional authentication factors
-
-## Vulnerabilities Present (from VulnHub description)
-
-The VM intentionally includes multiple vulnerabilities not covered in this walkthrough:
-- Reflected and stored XSS
-- IDOR
-- Path traversal
-- Exposed `phpinfo()`
-- Open admin interface
+- Cookie-based parameters are a common SQL injection vector. Always include cookies when testing web applications.
+- Username enumeration through application logic (e.g., blog post attribution) is a low-effort first step.
+- SQL injection on authentication-adjacent tables quickly yields credentials.
+- Nikto is a fast first pass but should be followed by manual application testing.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Cookie SQLi | Use parameterized queries; never pass cookie values directly to SQL |
-| Username enumeration | Return generic error messages; do not reveal valid usernames in UI |
-| Weak admin password | Enforce strong password policy; use bcrypt for password storage |
-| Exposed /admin/ | Restrict by IP; add 2FA for admin access |
+|---|---|
+| SQL Injection | Use parameterized queries / prepared statements throughout the application |
+| Username Enumeration | Avoid disclosing usernames in public-facing content |
+| Weak Credentials | Enforce strong password policy; hash with bcrypt/argon2 |
+| Exposed Admin Interface | Restrict `/admin/` to trusted IP ranges via server configuration |
+| Exposed `phpinfo()` | Remove `phpinfo()` from production deployments |
+| XSS | Encode all output; implement Content-Security-Policy header |
+| IDOR | Validate ownership on every object access; use indirect references |
+| Path Traversal | Validate and sanitize file path inputs; use `realpath()` checks |

