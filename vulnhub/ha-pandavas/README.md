@@ -83,7 +83,7 @@ This generates a wordlist from the page's Mahabharata-themed content, which will
 snmpwalk -v1 -c public 192.168.10.162 | more
 ```
 
-![snmpwalk](images/02-snmp.png)
+![snmpwalk](images/02-dirb.png)
 
 The SNMP walk leaks:
 - **Flag 2** in the MIB tree output
@@ -172,7 +172,7 @@ echo '<base64_string>' | base64 -d
 
 ## Step 6: MySQL Inside Docker
 
-![mysql](images/03-mysql.png)
+![mysql](images/03-snmp.png)
 
 The decoded credential from `.ash_history` is the MySQL root password. Connect to the MySQL container:
 
@@ -184,7 +184,7 @@ mysqldump -A -u root --password=ignite@123 | grep -i flag
 
 ## Step 7: Privilege Escalation — Root Shell via Sudo
 
-![privesc](images/04-privesc.png)
+![privesc](images/04-docker.png)
 
 Set up a listener on the attacker machine:
 
@@ -202,7 +202,7 @@ The listener catches a root shell.
 
 ## Step 8: Root Flag
 
-![root-flag](images/05-root-flag.png)
+![root-flag](images/05-root.png)
 
 ```bash
 id

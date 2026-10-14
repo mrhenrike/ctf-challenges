@@ -39,7 +39,7 @@ The HTTP scan reveals `robots.txt` with 15 disallowed entries. The Drupal site's
 
 ## Step 2: OSINT — Credentials via GitHub
 
-![osint](images/02-osint.png)
+![osint](images/02-github-creds.png)
 
 The Drupal welcome page mentions `@DC7User`. Search Twitter for that handle — the profile links to a GitHub account. The GitHub repository `staffdb` contains a file `config.php` with plaintext credentials:
 
@@ -123,7 +123,7 @@ export TERM=xterm
 
 ## Step 7: Privilege Escalation — Poisoning backup.sh
 
-![privesc](images/04-privesc.png)
+![privesc](images/04-php-shell.png)
 
 Check permissions on the backup script:
 
@@ -154,7 +154,7 @@ Wait for the cron job to execute `backup.sh` as root. A root shell arrives on th
 
 ## Step 8: Root Flag
 
-![root-flag](images/05-root-flag.png)
+![root-flag](images/05-root.png)
 
 ```bash
 id

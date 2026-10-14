@@ -115,7 +115,7 @@ ftp> bye
 
 The home directory backup mechanism executes `backup.sh`. A shell arrives as `goper`.
 
-![foothold](images/03-shell.png)
+![foothold](images/03-ftp-upload.png)
 
 Upgrade the shell:
 
@@ -186,7 +186,7 @@ chmod +x pspy64
 ./pspy64
 ```
 
-![pspy](images/04-pspy.png)
+![pspy](images/04-sudo.png)
 
 pspy output reveals a root-owned tmux process with a socket under `/opt`. The shell history confirms a shared tmux session:
 
@@ -201,7 +201,7 @@ export TERM=xterm
 tmux -S /opt/.tmux-0/sockets/default attach
 ```
 
-![root-flag](images/05-root-flag.png)
+![root-flag](images/05-root.png)
 
 A root shell is obtained by attaching to the existing tmux session.
 

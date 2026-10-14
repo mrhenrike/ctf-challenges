@@ -131,7 +131,7 @@ ssh userx@192.168.1.110
 
 ## Step 6: Privilege Escalation — userx → evdaez
 
-![privesc-1](images/03-privesc.png)
+![privesc-1](images/03-burp.png)
 
 ```bash
 sudo -l
@@ -176,7 +176,7 @@ Shell received as `resercherx`.
 
 ## Step 8: Privilege Escalation — resercherx → root
 
-![privesc-2](images/04-privesc.png)
+![privesc-2](images/04-sudo.png)
 
 ```bash
 sudo -l
@@ -209,7 +209,7 @@ The install hook triggers — a root shell drops.
 
 ## Step 9: Root Flag
 
-![root-flag](images/05-root-flag.png)
+![root-flag](images/05-root.png)
 
 ```bash
 id
