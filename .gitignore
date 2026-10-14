@@ -3,3 +3,8 @@ Thumbs.db
 *.tmp
 *.log
 *.swp
+
+# Internal style/tooling — not for public
+vulnhub/_STYLE/
+vulnhub/.vm-database.json
+vulnhub/PIPELINE.md
