@@ -8,3 +8,6 @@ Thumbs.db
 vulnhub/_STYLE/
 vulnhub/.vm-database.json
 vulnhub/PIPELINE.md
+
+# Claude Code project rules (local only)
+CLAUDE.md
