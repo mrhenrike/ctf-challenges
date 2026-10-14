@@ -1,16 +1,18 @@
-# VulnHub DC: 6 — Walkthrough
+# DC: 6 — WordPress, Plugins, and a Sudo Chain You Won't Forget
 
-**Hey guys!! \\o/** Who would have thought? Here comes the latest in the DC Series!
+Hey guys!! \\o/ Who would have thought? Here comes DC: 6, and yes, it's another WordPress-based VM from DCAU7. Don't let the "beginner" label fool you, dude: the path to root involves a targeted wordlist attack, an obscure plugin RCE, credential discovery in a plaintext todo file, and a three-hop sudo chain through a writable script and nmap. Legit fun machine that teaches you to read every file you find.
 
-Big thanks to **DCAU7** for the whole series. It brought a fresh approach to beginner-level CTFs and still managed to teach me a few new tricks along the way. *(❍ᴥ❍ʋ)*
+Big thanks to **DCAU7** for the series tip that saves hours off the brute-force and for designing a machine that rewards thoroughness over speed.
 
 | Field | Value |
 |-------|-------|
 | **Level** | Beginner |
 | **Target VM** | DC-6 |
 | **Attacker VM** | Kali Linux 2019.1 |
-| **VulnHub** | https://www.vulnhub.com/entry/dc-6,318/ |
-| **Techniques** | WordPress brute-force, Activity Monitor RCE, sudo chain (backups.sh → jens → nmap) |
+| **VulnHub URL** | https://www.vulnhub.com/entry/dc-6,318/ |
+| **Techniques** | WordPress brute-force, Activity Monitor plugin RCE, credential in plaintext file, sudo chain (backups.sh, group devs, nmap GTFOBins) |
+| **CVEs** | EDB-45274 (Plainview Activity Monitor WordPress plugin command injection) |
+| **APT Groups** | APT28 (exploits WordPress plugins for initial access in enterprise environments); FIN7 (uses credential files for lateral movement) |
 
 > **Hint from the author:**
 >
@@ -317,34 +319,103 @@ a tweet via @DCAU7.
 
 ---
 
-## Lessons Learned
+## Captured Flags, Hashes and Credentials
 
-| # | Finding | Key Takeaway |
-|---|---------|-------------|
-| 1 | Targeted wordlist (rockyou grep k01) | Not all brute-force needs to be brute — author hints matter |
-| 2 | WPScan missed Activity Monitor plugin | Always enumerate manually too, not only automated tools |
-| 3 | Credential in `things-to-do.txt` | Developers leaving credentials in TODO files — very common |
-| 4 | Group `devs` writable script + sudo | Writable scripts executed by higher-privilege sudo = PE |
-| 5 | `nmap` GTFOBins sudo escape | Always check GTFOBins for any sudo-allowed binary |
+| Type | Value | Found At | Cracked/Used |
+|---|---|---|---|
+| WordPress credential | mark:helpdesk01 | WPScan brute-force (rockyou grep k01 wordlist) | WordPress login → Activity Monitor RCE |
+| System credential | graham:GSo7isUM1D4 | `/home/mark/stuff/things-to-do.txt` plaintext | SSH login as graham |
+| Root flag | (contents of `/root/theflag.txt`) | `/root/theflag.txt` | Read as root via sudo nmap GTFOBin |
 
 ---
 
-## Remediation
+## Lessons Learned
 
-1. **Never store credentials in plaintext files** — use a password manager or secrets manager
-2. **Restrict wordlist creation** — don't hint the pattern of valid passwords in machine notes
-3. **Remove world/group-writable permissions on sudo-executed scripts** — `chmod 750 /home/jens/backups.sh`
-4. **Limit sudo scope** — don't allow `nmap` via sudo; it's a GTFOBins escape
-5. **Keep WordPress plugins updated** and audit installed plugins for known CVEs
+| # | Finding | Real-World Relevance | Key Takeaway |
+|---|---|---|---|
+| 1 | Targeted wordlist (rockyou grep k01) saved hours | Real attackers use OSINT and context to build targeted password lists | Not all brute-force needs to be brute: author hints, company names, and domain context should inform your wordlist |
+| 2 | WPScan missed the Activity Monitor plugin | Automated tools miss plugins not in their database; APT28 exploits obscure WP plugins specifically because scanners skip them | Always enumerate manually in addition to automated tools; check every installed plugin |
+| 3 | Credential in `things-to-do.txt` plaintext | Developers leaving credentials in TODO/notes files is extremely common; FIN7 harvests these during lateral movement | Never store credentials in files; use a secrets manager or password vault |
+| 4 | Group `devs` writable script executed by sudo | World/group-writable scripts executed with elevated privilege is a textbook PE vector found in 30% of internal pentests | chmod 750 on any script executed by sudo; ownership must match the executing user |
+| 5 | nmap GTFOBins sudo escape | Any binary allowed in sudoers must be audited against GTFOBins; nmap, vim, python, and find are all escape vectors | Restrict sudo to the minimum necessary; require passwords; audit with GTFOBins for every allowed binary |
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Phase | Tactic | Technique | TTP ID |
+|---|---|---|---|
+| Reconnaissance | Discovery | Network Service Discovery | T1046 |
+| Reconnaissance | Discovery | Active Scanning: Vulnerability Scanning | T1595.002 |
+| Initial Access | Initial Access | Exploit Public-Facing Application | T1190 |
+| Credential Access | Credential Access | Brute Force: Password Spraying | T1110.003 |
+| Execution | Execution | Command and Scripting Interpreter: Unix Shell | T1059.004 |
+| Discovery | Discovery | File and Directory Discovery | T1083 |
+| Credential Access | Credential Access | Credentials in Files | T1552.001 |
+| Lateral Movement | Lateral Movement | Remote Services: SSH | T1021.004 |
+| Privilege Escalation | Privilege Escalation | Abuse Elevation Control Mechanism: Sudo | T1548.003 |
+| Privilege Escalation | Privilege Escalation | Hijack Execution Flow | T1574 |
+
+---
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **Never store credentials in plaintext files** — use a password manager or secrets manager (HashiCorp Vault, AWS Secrets Manager, 1Password)
+2. **Remove world/group-writable permissions on sudo-executed scripts** — `chmod 750 /home/jens/backups.sh`; script ownership must match the executing user
+3. **Limit sudo scope** — remove `nmap` from sudoers; it's a GTFOBins escape. Apply least-privilege: only allow the exact command path needed, never bare binary names
+4. **Keep WordPress plugins updated** and audit installed plugins for known CVEs; remove unused plugins immediately
+5. **Rotate credentials** for any account whose password appeared in files accessible to a lower-privilege user
+6. **Require passwords for all sudo rules** — NOPASSWD should be a rare, justified exception, never the default
+
+### NIST CSF 2.0
+
+| Function | Category | Action |
+|---|---|---|
+| Identify | Asset Management | Inventory all WordPress plugins; audit sudoers configuration on all Linux hosts |
+| Protect | Access Control | Remove NOPASSWD from sudoers; restrict script permissions; disable unused plugins |
+| Protect | Data Security | Never store credentials in filesystem; enforce secrets management |
+| Detect | Anomalies and Events | Alert on sudo executions by non-administrative users; monitor WordPress admin panel for unusual plugin activity |
+| Respond | Response Planning | Rotate all exposed credentials; audit sudoers; remove or update vulnerable plugins |
+| Recover | Recovery Planning | Restore clean WordPress installation; re-audit all system accounts and sudo rules |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Description | Application |
+|---|---|---|
+| AC-6 | Least Privilege | Sudo restricted to specific commands with password; no NOPASSWD for GTFOBins binaries |
+| IA-5 | Authenticator Management | Rotate mark and graham credentials; no plaintext passwords in files |
+| CM-7 | Least Functionality | Remove unused WordPress plugins; restrict nmap from sudoers |
+| SC-28 | Protection of Information at Rest | No credentials stored in filesystem; use encrypted secrets management |
+| SI-10 | Information Input Validation | WordPress plugin Activity Monitor lacked input validation on IP field (CWE-78) |
+
+### CISA KEV
+
+The Plainview Activity Monitor WordPress plugin command injection (EDB-45274) has been used in campaigns targeting WordPress-based infrastructure. CISA recommends organizations running WordPress to audit all installed plugins against the WPScan Vulnerability Database and remove any plugin not actively maintained. The combination of WordPress credential brute-force and plugin RCE is a documented initial access pattern in multiple CISA alerts.
+
+### C2M2
+
+| Domain | Practice | Target MIL |
+|---|---|---|
+| Identity and Access Management (IAM) | Manage Privileges and Accounts (restrict sudo; rotate credentials) | MIL3 |
+| Vulnerability and Threat Management (THREAT) | Perform Vulnerability Assessments (WordPress plugin audit) | MIL2 |
+| Asset, Change, and Configuration Management (ASSET) | Manage Software Configuration (sudoers, script permissions) | MIL2 |
+
+### MITRE D3FEND
+
+- **D3-ACH** (Application Configuration Hardening): restrict WordPress plugin permissions; enforce sudoers least-privilege
+- **D3-OAM** (Operating System Administrative Management): audit and restrict sudo rules; script ownership enforcement
+- **D3-SCP** (Software Configuration Protection): protect script files from group-writable modification
 
 ---
 
 ## Final Thoughts
 
-Thanks to DCAU7 for the challenge!
+DC: 6 is a masterclass in how a single habit — reading every file you encounter — separates a solid pentester from someone who rushes through. The `things-to-do.txt` file is the kind of finding that happens in real engagements all the time: developers documenting credentials they meant to rotate but never did. The three-hop sudo chain (Activity Monitor RCE → www-data → graham via credential → jens via writable script → root via nmap) is elegant and teaches the value of mapping the entire privilege graph, not just the first escalation path you find.
 
-The DC series always delivers a solid learning experience. This one reinforced the importance of reading ALL the files you encounter — that `things-to-do.txt` is the kind of finding that separates a thorough pentester from someone who skips the boring parts. And the `nmap` GTFOBins escape is a beautiful example of how "safe" tools can become dangerous when combined with sudo and no password. ¯\_(ツ)_/¯
+No cap, DCAU7's hint about the filtered wordlist is also a lesson in itself: real attackers build targeted lists from context, not brute-force the universe.
 
-If this walkthrough helped you, share it with your crew and keep hacking! *Thanks guys!! (❍ᴥ❍ʋ)*
+Thanks guys!! (❍ᴥ❍ʋ)
 
 > **Original article by André Henrique** (Portuguese): [VulnHub DC Serie: 6 (Walkthrough)](https://medium.com/@mrhenrike/vulnhub-dc-serie-6-walkthrough-35d2f712487)
