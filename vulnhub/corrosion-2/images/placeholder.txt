@@ -1,0 +1,3 @@
+Images from https://www.hackingarticles.in/corrosion-2-vulnhub-walkthrough/
+Hosted on blogger.googleusercontent.com (signed URLs expired at download time).
+Download manually from the article or re-fetch when URLs are refreshed.
