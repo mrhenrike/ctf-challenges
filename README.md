@@ -51,8 +51,3 @@ Each platform folder contains individual challenge writeups. Every writeup follo
 ## License
 
 For educational purposes only. Do not test techniques shown here against systems you do not own or have explicit written permission to test.
-
----
-## POCTF-2026
-POCTF:QJSZVGZE
-https://pointeroverflowctf.com/
