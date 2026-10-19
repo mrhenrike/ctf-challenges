@@ -132,3 +132,80 @@ FLAG 1: ZIP with ../shell.php → upload.php (zip slip) → webshell → flag
 3. **ZIP uploads** must sanitize all internal paths before extraction
 4. **HMAC as authentication in mobile apps** fails when the key can be extracted from the binary
 5. Use session-based authentication with a dynamic token instead of a static key
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | ID | Description |
+|---|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 | Zip Slip on upload.php to write arbitrary files |
+| Execution | Command and Scripting Interpreter: Unix Shell | T1059.004 | RCE via webshell after Zip Slip |
+| Credential Access | Unsecured Credentials: Credentials In Files | T1552.001 | HMAC-MD5 key hardcoded in APK |
+| Persistence | Server Software Component: Web Shell | T1505.003 | PHP webshell placed via path traversal |
+| Resource Development | Obtain Capabilities: Tool | T1588.002 | jadx/dex2jar for APK reverse engineering |
+
+---
+
+## Remediation
+
+### Technical Fixes
+
+1. **Validate ZIP entry paths**: canonicalize each path and reject entries containing `../` or absolute paths
+2. **Use server-side HMAC keys** distributed via authenticated key exchange, never embedded in clients
+3. **Restrict upload directory permissions**: no execute bit, separate from web root
+4. **Implement allowlists for file extensions** on upload (reject `.php`, `.phtml`, `.phar`)
+5. **Use a sandboxed extraction directory** and verify all extracted files stay within it
+
+### OWASP Top 10 2021
+
+| ID | Risk | Relevance |
+|---|---|---|
+| A01 | Broken Access Control | Path traversal via Zip Slip bypasses upload directory restrictions |
+| A08 | Software and Data Integrity Failures | Uploaded ZIP contents not validated before extraction |
+
+### OWASP Mobile Top 10 2024
+
+| ID | Risk | Relevance |
+|---|---|---|
+| M1 | Improper Credential Usage | HMAC key hardcoded in APK binary |
+| M7 | Insufficient Binary Protections | Key and auth logic visible in decompiled Java |
+
+### D3FEND Countermeasures
+
+| ID | Technique | Application |
+|---|---|---|
+| D3-FV | File Verification | Validate and sanitize all ZIP entry paths before extraction |
+| D3-AODO | Application Developer Obfuscation | Binary protection to hinder key extraction |
+| D3-CKMS | Cryptographic Key Management | Server-side key management for HMAC |
+
+### NIST CSF 2.0
+
+| Function | Category | Subcategory | Application |
+|---|---|---|---|
+| Protect | PR.DS | PR.DS-01 | Validate integrity of uploaded files (path sanitization) |
+| Protect | PR.AA | PR.AA-01 | Server-side authentication tokens, not client-embedded keys |
+| Detect | DE.CM | DE.CM-01 | Monitor upload directory for unexpected file creation |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---|---|---|
+| SC-12 | Cryptographic Key Establishment and Management | Dynamic key distribution, no hardcoded HMAC keys |
+| SI-10 | Information Input Validation | Sanitize ZIP entry paths before extraction |
+| CM-7 | Least Functionality | Disable PHP execution in upload directories |
+| AC-3 | Access Enforcement | Restrict file write permissions to designated directories only |
+
+---
+
+## Final Thoughts
+
+The Zip Slip vulnerability is deceptively simple: a `../` in a filename inside a ZIP archive, and suddenly you are writing files anywhere on the server. Combined with a hardcoded HMAC key in the APK, this challenge demonstrates a classic chain: mobile reverse engineering leading to server compromise. Always canonicalize paths from ZIP entries, and never trust client-side authentication secrets.
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+Enjoyed reading about Zip Slip and mobile HMAC bypasses? Share the knowledge:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

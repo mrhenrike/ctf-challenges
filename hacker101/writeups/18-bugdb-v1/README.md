@@ -145,9 +145,82 @@ query {
 3. **GraphQL Relay pattern (edges/nodes)** requires adapted queries to correctly extract data
 4. **Fields marked `private: true`** are semantically private but technically accessible without authorization
 
-## Remediation
+## MITRE ATT&CK Mapping
+
+| ID | Technique | Tactic | How it was used |
+|----|-----------|--------|----------------|
+| T1190 | Exploit Public-Facing Application | Initial Access | GraphQL introspection to discover schema and hidden queries |
+| T1087.001 | Account Discovery: Local Account | Discovery | Enumerated users via GraphQL `allUsers` query |
+| T1530 | Data from Cloud Storage Object | Collection | Accessed another user's bugs via IDOR on `user(id:)` query |
+| T1552.001 | Unsecured Credentials: Credentials In Files | Credential Access | Extracted private bug reports containing sensitive data |
+
+## Remediation and Containment
+
+### Technical Fixes
 
 - Disable introspection in production
 - Implement field-level authorization
 - Validate user permissions before returning private data
 - Add rate limiting and query complexity limits
+
+### OWASP Top 10 2021
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| A01:2021 | Broken Access Control | IDOR: querying other users' bugs without authorization |
+| A05:2021 | Security Misconfiguration | GraphQL introspection enabled in production |
+
+### OWASP API Security Top 10 2023
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| API1:2023 | Broken Object Level Authorization | `user(id:)` returns any user's bugs without ownership check |
+| API3:2023 | Broken Object Property Level Authorization | All fields exposed via introspection without filtering |
+| API8:2023 | Security Misconfiguration | Introspection enabled; exposes full schema to attackers |
+
+### MITRE D3FEND Countermeasures
+
+| ID | Technique | Application |
+|----|-----------|-------------|
+| D3-ACL | Access Control List | Enforce per-object authorization on GraphQL resolvers |
+| D3-SPP | Strong Password Policy | Restrict API access; require authentication for all queries |
+
+### NIST CSF 2.0
+
+| Function | Category | Application |
+|----------|----------|-------------|
+| ID (Identify) | ID.AM | Inventory all GraphQL endpoints and their exposure level |
+| PR (Protect) | PR.AC | Object-level authorization on every resolver |
+| DE (Detect) | DE.CM | Monitor GraphQL query patterns for introspection and enumeration |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---------|-------|-------------|
+| AC-3 | Access Enforcement | Enforce authorization checks on every GraphQL resolver |
+| AC-4 | Information Flow Enforcement | Prevent cross-user data access in API responses |
+| CM-7 | Least Functionality | Disable introspection and unused queries in production |
+| AU-3 | Content of Audit Records | Log all GraphQL operations with user context |
+
+### C2M2
+
+| Domain | Practice | MIL | Application |
+|--------|----------|-----|-------------|
+| ACCESS | Access Control Management | MIL-2 | Enforce BOLA controls on all GraphQL resolvers |
+| THREAT | Threat and Vulnerability Management | MIL-2 | Periodic API security testing; schema review |
+
+---
+
+## Final Thoughts
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+GraphQL introspection is a goldmine for attackers: it hands them the entire schema, including queries and types that were never meant to be public. Combine that with missing object-level authorization and you have full BOLA exploitation in a few queries. Always disable introspection in production and enforce authorization at the resolver level, not the route level.
+
+Follow me for more writeups and security content:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

@@ -55,7 +55,6 @@ unzip oauth.apk -d apk_contents
 ```python
 #!/usr/bin/env python3.14
 import sys, struct, logging
-sys.path.insert(0, '/home/mrhenrike/.local/lib/python3.14/site-packages')
 logging.disable(logging.CRITICAL)
 from androguard.core.dex import DEX
 
@@ -138,3 +137,73 @@ The app uses a Brainfuck-like interpreter embedded in the DEX to obfuscate the f
 ### Lesson Learned
 
 Writeups with hardcoded arrays (e.g., CyberNilsen) may be from older APK versions. Always extract the array from the real APK with androguard before running the algorithm.
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | ID | Description |
+|---|---|---|---|
+| Credential Access | Steal Application Access Token | T1528 | OAuth `access_token` exposed in redirect URL callback |
+| Defense Evasion | Deobfuscate/Decode Files or Information | T1140 | Brainfuck-encoded logic inside DEX `iArr` array decoded to compute flag path |
+| Credential Access | Unsecured Credentials: Credentials In Files | T1552.001 | Flag path computable from hardcoded obfuscated array in APK |
+| Resource Development | Obtain Capabilities: Tool | T1588.002 | androguard for DEX parsing and array extraction |
+| Reconnaissance | Search Open Technical Databases | T1596 | Analyzing the APK structure and WebAppInterface exposure |
+
+---
+
+## Remediation
+
+### Technical Fixes
+
+1. **Use Authorization Code flow with PKCE** instead of Implicit flow to prevent token exposure in URLs
+2. **Never embed secrets or flag logic in the APK**: all sensitive computation should be server-side
+3. **Use server-side session tokens** with short TTLs instead of exposing access tokens in redirects
+4. **Apply code obfuscation (ProGuard/R8)** as defense-in-depth, but do not rely on it for security
+5. **Implement token binding** to tie access tokens to the requesting device
+
+### OWASP Mobile Top 10 2024
+
+| ID | Risk | Relevance |
+|---|---|---|
+| M1 | Improper Credential Usage | OAuth access_token exposed in redirect URL |
+| M7 | Insufficient Binary Protections | Flag path logic embedded in APK, extractable via androguard |
+| M9 | Insecure Data Storage | Sensitive authentication logic stored client-side |
+
+### D3FEND Countermeasures
+
+| ID | Technique | Application |
+|---|---|---|
+| D3-AODO | Application Developer Obfuscation | Code obfuscation to hinder Brainfuck array extraction |
+| D3-CKMS | Cryptographic Key Management | Server-side secret management, no client-embedded logic |
+| D3-OAM | OAuth Authentication Management | Use Authorization Code + PKCE instead of Implicit flow |
+
+### NIST CSF 2.0
+
+| Function | Category | Subcategory | Application |
+|---|---|---|---|
+| Protect | PR.DS | PR.DS-01 | Protect sensitive data at rest (no secrets in APK) |
+| Protect | PR.AA | PR.AA-01 | Secure OAuth implementation with PKCE |
+| Protect | PR.DS | PR.DS-02 | Protect tokens in transit (never in URL fragments) |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---|---|---|
+| SC-12 | Cryptographic Key Establishment and Management | Server-side key management for all authentication secrets |
+| IA-5 | Authenticator Management | Short-lived tokens, not static paths derivable from the binary |
+| AC-16 | Security and Privacy Attributes | Token binding and audience restriction for OAuth tokens |
+
+---
+
+## Final Thoughts
+
+OAuth Implicit flow and hardcoded logic in APKs: two mistakes that compound each other. The token leaks in the redirect URL, and the flag path is computable from a Brainfuck interpreter hidden inside the DEX bytecode. This challenge reinforces why Authorization Code + PKCE replaced Implicit flow, and why sensitive logic must stay on the server. When you see an APK, reach for `androguard` and `jadx` before anything else.
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+If reverse engineering Android APKs and breaking OAuth flows sounds like your kind of weekend, let's connect:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
