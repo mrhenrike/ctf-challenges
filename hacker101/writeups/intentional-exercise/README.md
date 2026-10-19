@@ -119,3 +119,71 @@ The server returns the flag.
 2. **Security through obscurity** (hiding the endpoint) fails when the APK can be decompiled
 3. **Hash algorithms are predictable**: knowing the key and algorithm, any hash can be forged
 4. **Use HMAC with a dynamic per-session key** instead of a static hardcoded key
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | ID | Description |
+|---|---|---|---|
+| Credential Access | Unsecured Credentials: Credentials In Files | T1552.001 | Secret key `s00p3rs3cr3tk3y` hardcoded in `MainActivity.java` |
+| Resource Development | Obtain Capabilities: Tool | T1588.002 | Using dex2jar + jd-gui for APK decompilation |
+| Initial Access | Valid Accounts | T1078 | Forging authentication hash to access protected `/flagBearer` endpoint |
+| Defense Evasion | Obfuscated Files or Information | T1027 | `substring(28)` trick obscuring the payload derivation |
+
+---
+
+## Remediation
+
+### Technical Fixes
+
+1. **Replace static keys with server-issued session tokens** that expire and cannot be extracted from the binary
+2. **Use HMAC with a dynamic nonce/timestamp** to prevent replay and forgery attacks
+3. **Implement certificate pinning** to prevent traffic interception during analysis
+4. **Apply R8/ProGuard obfuscation** as defense-in-depth (never the sole protection)
+5. **Server-side validation** of request origin, not just hash correctness
+
+### OWASP Mobile Top 10 2024
+
+| ID | Risk | Relevance |
+|---|---|---|
+| M1 | Improper Credential Usage | SHA-256 key hardcoded in Java source, extractable via decompilation |
+| M7 | Insufficient Binary Protections | No obfuscation; key and algorithm visible in plain decompiled Java |
+
+### D3FEND Countermeasures
+
+| ID | Technique | Application |
+|---|---|---|
+| D3-DENCR | Data Encryption | TLS with certificate pinning for all API communication |
+| D3-AODO | Application Developer Obfuscation | Code obfuscation to raise the cost of static analysis |
+| D3-CKMS | Cryptographic Key Management | Server-side key management, no client-embedded secrets |
+
+### NIST CSF 2.0
+
+| Function | Category | Subcategory | Application |
+|---|---|---|---|
+| Protect | PR.DS | PR.DS-01 | Protect data-at-rest (keys should not be in the binary) |
+| Protect | PR.AA | PR.AA-01 | Dynamic authentication instead of static hash-based auth |
+| Identify | ID.AM | ID.AM-08 | Inventory all embedded secrets in mobile releases |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---|---|---|
+| SC-12 | Cryptographic Key Establishment and Management | No hardcoded keys; use key exchange protocols |
+| SC-13 | Cryptographic Protection | Use HMAC with dynamic nonces instead of bare SHA-256 |
+| IA-5 | Authenticator Management | Rotate authentication secrets; never embed in client code |
+
+---
+
+## Final Thoughts
+
+This challenge is a textbook example of why "security through obscurity" fails. A static key in a decompilable APK is no secret at all. The fix: server-issued ephemeral tokens and proper HMAC with nonces. When you audit mobile apps, always start with `dex2jar` + `jd-gui` and grep for "key", "secret", "password".
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+Found this useful? Let's connect and trade notes on mobile security:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

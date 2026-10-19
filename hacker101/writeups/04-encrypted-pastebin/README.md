@@ -194,9 +194,78 @@ This allows:
 
 ---
 
-## Remediation
+## MITRE ATT&CK Mapping
+
+| ID | Technique | Tactic | How it was used |
+|----|-----------|--------|----------------|
+| T1190 | Exploit Public-Facing Application | Initial Access | Padding oracle attack on encrypted paste parameter |
+| T1059.006 | Command and Scripting Interpreter: Python | Execution | Python scripts for automated padding oracle decryption |
+| T1005 | Data from Local System | Collection | Extracted AES key, IV and admin notes via decryption |
+| T1557 | Adversary-in-the-Middle | Credential Access | Manipulated ciphertext blocks to inject SQL via CBC bitflip |
+| T1552.004 | Unsecured Credentials: Private Keys | Credential Access | AES key derived from readable encrypted parameter |
+
+## Remediation and Containment
+
+### Technical Fixes
 
 1. Migrate to AES-GCM (built-in authentication) or add HMAC-SHA256 before CBC encryption
 2. Use a generic response for any decryption error ("Invalid token")
 3. Parameterize SQL queries (use `?` with `cursor.execute`, never string interpolation)
 4. Sanitize the `id` field to accept integers only
+
+### OWASP Top 10 2021
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| A02:2021 | Cryptographic Failures | AES-CBC without authentication; padding oracle leaks plaintext |
+| A03:2021 | Injection | SQL injection via CBC bitflip allows arbitrary queries |
+| A05:2021 | Security Misconfiguration | Verbose error messages distinguish padding from application errors |
+
+### MITRE D3FEND Countermeasures
+
+| ID | Technique | Application |
+|----|-----------|-------------|
+| D3-ANET | Authenticated Encryption | Replace AES-CBC with AES-GCM to prevent padding oracle |
+| D3-SPP | Strong Password Policy | Rotate encryption keys regularly; use proper KDF (HKDF, PBKDF2) |
+| D3-MFA | Multi-factor Authentication | Limit access to paste creation/editing endpoints |
+
+### NIST CSF 2.0
+
+| Function | Category | Application |
+|----------|----------|-------------|
+| PR (Protect) | PR.DS | Encrypt data at rest with authenticated encryption (AEAD) |
+| PR (Protect) | PR.AC | Access control on paste management; input validation |
+| DE (Detect) | DE.CM | Monitor for repeated malformed requests (padding oracle probes) |
+| RS (Respond) | RS.AN | Analyze padding oracle attack patterns in WAF/IDS logs |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---------|-------|-------------|
+| SC-12 | Cryptographic Key Establishment and Management | Proper key derivation, rotation, and storage for AES keys |
+| SC-13 | Cryptographic Protection | Use AEAD (AES-GCM/ChaCha20-Poly1305); never raw CBC |
+| SI-10 | Information Input Validation | Validate and sanitize all user input before SQL queries |
+| SI-11 | Error Handling | Return generic errors; never distinguish cryptographic failures |
+
+### C2M2
+
+| Domain | Practice | MIL | Application |
+|--------|----------|-----|-------------|
+| ACCESS | Access Control Management | MIL-2 | Enforce least privilege on paste endpoints; authenticate all operations |
+| ASSET | Asset, Change, and Configuration Management | MIL-2 | Track cryptographic configurations; enforce AEAD across all encryption |
+
+---
+
+## Final Thoughts
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Padding oracle attacks are a masterclass in how error messages become oracles: a single bit of information (valid vs. invalid padding) is enough to decrypt entire ciphertext blocks. Combine that with CBC bitflip for SQL injection, and you have a full chain from crypto to database compromise. Always use authenticated encryption.
+
+Follow me for more CTF content:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
