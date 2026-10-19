@@ -1,16 +1,13 @@
 # Poisoned Well
 
-**Category:** Web
-**Challenge:** Poisoned Well
-**CTF:** Pointer Overflow CTF 2026
-**Points:** 95 (WEB 300, Wave 2)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Web |
+| **Difficulty** | Unknown |
+| **Points** | 95 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

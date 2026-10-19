@@ -1,17 +1,13 @@
 # Excavation
 
-**Category:** Reverse Engineering
-**Challenge:** Excavation
-**CTF:** Pointer Overflow CTF 2026
-**Points:** RE 100, Wave 1
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-JQ2M3L7ADB7Z4ZGX
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

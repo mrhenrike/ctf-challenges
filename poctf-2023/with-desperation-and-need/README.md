@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | With Desperation and Need |
 | **Category** | Cracking |
 | **Difficulty** | Medium |
 | **Points** | 200 |
+| **Flag** | `poctf{uwsp_d35p3r4710n_dr1v35_d15c0v3ry}` |
 | **Status** | Solved |
 
 ---

@@ -1,16 +1,13 @@
 # What Goes Unwritten
 
-**Category:** Forensics
-**Challenge:** What Goes Unwritten
-**CTF:** Pointer Overflow CTF 2026
-**Points:** FOR 200 (Wave 3)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-44MUDQYGRDWRTJW5
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Forensics |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

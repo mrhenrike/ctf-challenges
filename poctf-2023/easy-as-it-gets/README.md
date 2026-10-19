@@ -1,15 +1,13 @@
 # Easy as it Gets
 
-**Category:** Reverse Engineering
-**Challenge:** Easy as it Gets
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_4d_v1c70r14m_w4573l4nd3r}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_4d_v1c70r14m_w4573l4nd3r}` |
+| **Status** | Solved |
 
 ---
 

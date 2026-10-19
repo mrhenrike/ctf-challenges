@@ -1,16 +1,13 @@
 # A Peculiar Game
 
-**Category:** Miscellaneous / Steganography
-**Challenge:** A Peculiar Game
-**CTF:** Pointer Overflow CTF 2026
-**Points:** MISC 200 (Wave 4)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-C72DA241EF03DB00
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Miscellaneous / Steganography |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `E396D9A0F7816588` |
+| **Status** | Solved |
 
 ---
 

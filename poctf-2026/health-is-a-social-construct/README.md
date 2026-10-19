@@ -1,15 +1,13 @@
 # Health Is a Social Construct
 
-**Category:** Game Hacking (GH 200)
-**Challenge:** Health Is a Social Construct
-**Points:** 138 (Wave 2)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Game Hacking (GH 200) |
+| **Difficulty** | Unknown |
+| **Points** | 138 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

@@ -1,13 +1,13 @@
 # My Name is Human
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Misc                                       |
-| Difficulty  | Medium                                     |
-| Points      | 200                                        |
-| Flag        | `poctf{uwsp_cry_h4v0c}`                   |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_cry_h4v0c}` |
+| **Status** | Solved |
 
 ---
 

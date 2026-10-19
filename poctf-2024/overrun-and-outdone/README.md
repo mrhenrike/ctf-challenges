@@ -1,16 +1,13 @@
 # Overrun and Outdone
 
-**Category:** Exploitation
-**Challenge:** Overrun and Outdone
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Exploit 200
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_17_w45_7h3_b357_0f_71m35}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Exploitation |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{uwsp_17_w45_7h3_b357_0f_71m35}` |
+| **Status** | Solved |
 
 ---
 

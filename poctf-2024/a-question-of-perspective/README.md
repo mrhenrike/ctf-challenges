@@ -3,10 +3,66 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | A Question of Perspective |
-| **Category** | Cryptography |
-| **Difficulty** | Expert |
-| **Points** | 400 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+
+```python
+known = b'poctf{uwsp_'
+encrypted = [0x23, 0x59, 0x86, 0x1e, 0x60, 0xcf, 0xdc, 0x4e, 0x6a, 0x0b, 0x0c]
+key_bits = bytes(a ^ b for a, b in zip(known, encrypted))
+```
+
+This reveals the first 88 bits of the repeating key.
+
+### Step 3: Determine Key Length and Pattern
+
+The total key (confirmed + resolved bits) is at most 57 bits. The encrypted message is 256 bits. The key repeats to match the ciphertext length. After 80 bits the key pattern wraps, confirming the repetition structure.
+
+### Step 4: Full Decryption
+
+Extend the key to match the ciphertext length and XOR:
+
+```python
+full_key = (key_bytes * ((len(ciphertext) // len(key_bytes)) + 1))[:len(ciphertext)]
+plaintext = bytes(a ^ b for a, b in zip(ciphertext, full_key))
+```
+
+---
+
+## Flag
+
+```
+poctf{uwsp_f10w3r5_f0r_41g3rn0n}` |
+
+```python
+known = b'poctf{uwsp_'
+encrypted = [0x23, 0x59, 0x86, 0x1e, 0x60, 0xcf, 0xdc, 0x4e, 0x6a, 0x0b, 0x0c]
+key_bits = bytes(a ^ b for a, b in zip(known, encrypted))
+```
+
+This reveals the first 88 bits of the repeating key.
+
+### Step 3: Determine Key Length and Pattern
+
+The total key (confirmed + resolved bits) is at most 57 bits. The encrypted message is 256 bits. The key repeats to match the ciphertext length. After 80 bits the key pattern wraps, confirming the repetition structure.
+
+### Step 4: Full Decryption
+
+Extend the key to match the ciphertext length and XOR:
+
+```python
+full_key = (key_bytes * ((len(ciphertext) // len(key_bytes)) + 1))[:len(ciphertext)]
+plaintext = bytes(a ^ b for a, b in zip(ciphertext, full_key))
+```
+
+---
+
+## Flag
+
+```
+poctf{uwsp_f10w3r5_f0r_41g3rn0n}` |
 | **Status** | Solved |
 
 ---

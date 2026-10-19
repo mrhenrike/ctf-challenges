@@ -1,16 +1,13 @@
 # A Quiet Home
 
-**Category:** Forensics
-**Challenge:** A Quiet Home
-**CTF:** Pointer Overflow CTF 2026
-**Points:** FOR 200 (Wave 4)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-5SDRSL7HESH4VHD3
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Forensics |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

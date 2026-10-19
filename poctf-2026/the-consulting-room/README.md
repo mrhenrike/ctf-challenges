@@ -1,16 +1,22 @@
 # The Consulting Room
 
-**Category:** Cryptography
-**Challenge:** The Consulting Room
-**CTF:** Pointer Overflow CTF 2026
-**Points:** 125 (CRYP 200, Wave 3)
-**Result:** Solved
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Cryptography |
+| **Difficulty** | Unknown |
+| **Points** | 125 |
+| **Flag** | `poctf{dynamic}` |
 
-**Flag:**
+[*] Block 2/4...
+  -> b'XYWITBQBDAZLL2.A'
 
-~~~text
-poctf{...}
-~~~
+[*] Block 3/4...
+  -> b'H4IRJRTFM6VG24F6'
+
+[*] Block 4/4...
+  -> b'JYHSOP3RZ}` |
+| **Status** | Solved |
 
 ---
 

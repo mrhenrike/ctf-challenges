@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | I Never Knew Glory |
-| **Category** | Miscellaneous |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
 | **Status** | Solved |
 
 ---

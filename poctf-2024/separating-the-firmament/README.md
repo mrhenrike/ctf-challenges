@@ -1,16 +1,13 @@
 # Separating the Firmament
 
-**Category:** Reverse Engineering
-**Challenge:** Separating the Firmament
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 300
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_7h3_w0rlB5_4_57463}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_7h3_w0rlB5_4_57463}` |
+| **Status** | Solved |
 
 ---
 

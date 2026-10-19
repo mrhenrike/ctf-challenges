@@ -1,15 +1,13 @@
 # Vigil of the Ceaseless Eyes
 
-**Category:** Web
-**Challenge:** Vigil of the Ceaseless Eyes
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-(Flag obtained upon accessing secret/flag.pdf as plaintext)
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Web Exploitation |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

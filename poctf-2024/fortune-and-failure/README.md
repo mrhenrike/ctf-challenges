@@ -3,10 +3,20 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Fortune and Failure |
-| **Category** | Cryptography |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+
+**Ciphertext:**
+
+```
+hottx{unsh_4_w4ck_7zrfuyh_7y3_h1dl5}` |
+
+**Ciphertext:**
+
+```
+hottx{unsh_4_w4ck_7zrfuyh_7y3_h1dl5}` |
 | **Status** | Solved |
 
 ---

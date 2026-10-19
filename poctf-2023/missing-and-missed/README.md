@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | Missing and Missed |
 | **Category** | Cryptography |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_m155_m3_w17h_7h053_cr4zy_ch4r5}` |
 | **Status** | Solved |
 
 ---

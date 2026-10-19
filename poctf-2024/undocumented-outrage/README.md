@@ -1,12 +1,15 @@
 # Undocumented Outrage
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | Crack |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_wh15p3r5_1n_7h3_d4rk}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Beneath the Pea Beneath the Pillow |
-| **Category** | Miscellaneous |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
 | **Status** | Solved |
 
 ---

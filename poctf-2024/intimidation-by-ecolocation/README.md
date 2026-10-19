@@ -1,12 +1,57 @@
 # Intimidation by Ecolocation
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | OSINT |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+
+### Step 3: Analyze the Map and Image
+
+The challenge image contained an arrow pointing to a specific sign location. Additional clues referenced:
+- **OldBalt.Rd** (Old Baltimore Road)
+- **North Maryland** area
+
+### Step 4: Geolocate and Find the Sign
+
+Using Google Maps, searched for **West Old Baltimore Road** in Maryland. Navigated Street View to the indicated location.
+
+Found a road sign reading: **"HOV LANE ENDS"**
+
+### Step 5: Unlock the Flag
+
+Used the sign text formatted without spaces as the password: `HOVLANEENDS`
+
+Entered on the Pastebin page to reveal the full flag.
+
+```
+Flag: poctf{uwsp_1_4m_7h3_0n3_wh0_kn0ck5}` |
+
+### Step 3: Analyze the Map and Image
+
+The challenge image contained an arrow pointing to a specific sign location. Additional clues referenced:
+- **OldBalt.Rd** (Old Baltimore Road)
+- **North Maryland** area
+
+### Step 4: Geolocate and Find the Sign
+
+Using Google Maps, searched for **West Old Baltimore Road** in Maryland. Navigated Street View to the indicated location.
+
+Found a road sign reading: **"HOV LANE ENDS"**
+
+### Step 5: Unlock the Flag
+
+Used the sign text formatted without spaces as the password: `HOVLANEENDS`
+
+Entered on the Pastebin page to reveal the full flag.
+
+```
+Flag: poctf{uwsp_1_4m_7h3_0n3_wh0_kn0ck5}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

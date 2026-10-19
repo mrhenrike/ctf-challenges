@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | He Pretends To Be A Boor |
-| **Category** | Steganography |
-| **Difficulty** | Expert |
-| **Points** | 400 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_7h3r3_15_n0_sp00n}` |
 | **Status** | Solved |
 
 ---

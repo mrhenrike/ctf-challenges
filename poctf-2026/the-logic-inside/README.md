@@ -1,16 +1,13 @@
 # The Logic Inside
 
-**Category:** Web
-**Challenge:** The Logic Inside
-**CTF:** Pointer Overflow CTF 2026
-**Points:** WEB 200 (Wave 4)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-0204185226846852
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Web |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `0204185226846852` |
+| **Status** | Solved |
 
 ---
 

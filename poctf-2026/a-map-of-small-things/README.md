@@ -1,16 +1,13 @@
 # A Map of Small Things
 
-**Category:** Cryptography
-**Challenge:** A Map of Small Things
-**CTF:** Pointer Overflow CTF 2026
-**Points:** 137 (CRYP 300, Wave 4)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Cryptography |
+| **Difficulty** | Unknown |
+| **Points** | 137 |
+| **Flag** | `17759930830448937043` |
+| **Status** | Solved |
 
 ---
 

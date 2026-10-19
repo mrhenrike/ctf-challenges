@@ -1,15 +1,57 @@
 # If You Don't, Remember Me
 
-**Category:** Forensics
-**Challenge:** If You Don't, Remember Me
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved (reference)
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{dynamic}` |
 
-**Flag:**
+The second portion `77333163306D335F37305F3768335F39346D33` appears to be hex-encoded ASCII.
+
+---
+
+## 3. Step 2: Hex Decoding
+
+![Python solve script](images/ifyoudontrememberme-python-solve.png)
+
+~~~bash
+echo -n "77333163306D335F37305F3768335F39346D33" | xxd -r -p
+# Output: w31c0m3_70_7h3_94m3
+~~~
+
+---
+
+## 4. Flag Assembly
+
+Combining the prefix with the decoded portion:
 
 ~~~text
-poctf{uwsp_w31c0m3_70_7h3_94m3}
+poctf{uwsp_w31c0m3_70_7h3_94m3}` |
+
+The second portion `77333163306D335F37305F3768335F39346D33` appears to be hex-encoded ASCII.
+
+---
+
+## 3. Step 2: Hex Decoding
+
+![Python solve script](images/ifyoudontrememberme-python-solve.png)
+
+~~~bash
+echo -n "77333163306D335F37305F3768335F39346D33" | xxd -r -p
+# Output: w31c0m3_70_7h3_94m3
 ~~~
+
+---
+
+## 4. Flag Assembly
+
+Combining the prefix with the decoded portion:
+
+~~~text
+poctf{uwsp_w31c0m3_70_7h3_94m3}` |
+| **Status** | Solved (reference) |
 
 ---
 

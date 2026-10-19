@@ -1,12 +1,15 @@
 # Whodah Thunkit
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | Crack |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_l0n3ly_4nd_f0r70rn}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

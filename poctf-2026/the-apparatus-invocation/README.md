@@ -1,15 +1,13 @@
 # The Apparatus, Invocation
 
-**Category:** Miscellaneous
-**Challenge:** The Apparatus, Invocation
-**Points:** MISC 101 (Wave 1)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Miscellaneous |
+| **Difficulty** | Unknown |
+| **Points** | 101 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

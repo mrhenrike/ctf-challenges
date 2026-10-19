@@ -1,16 +1,13 @@
 # The Apparatus, Apport
 
-**Category:** OSINT
-**Challenge:** The Apparatus, Apport
-**CTF:** Pointer Overflow CTF 2026
-**Points:** OSINT 200 (Wave 4, Apparatus Series)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-MATHERS_1888
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | OSINT |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

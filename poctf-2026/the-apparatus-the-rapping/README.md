@@ -1,11 +1,15 @@
 # The Apparatus, The Rapping
 
-| Field | Value |
-|---|---|
-| CTF | Pointer Overflow CTF 2026 |
-| Category | Steganography (Wave 3, Apparatus Series) |
-| Challenge ID | 101 |
-| Flag | `99CD887F9C53AB2A` |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Application |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
+
+---
 
 ## Overview
 

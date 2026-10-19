@@ -1,16 +1,13 @@
 # No Structure Required
 
-**Category:** Web
-**Challenge:** No Structure Required
-**CTF:** Pointer Overflow CTF 2026
-**Points:** WEB 100, Wave 3
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Web |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

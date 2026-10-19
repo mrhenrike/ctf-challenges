@@ -1,16 +1,13 @@
 # Read Me My Fortune
 
-**Category:** Exploitation
-**Challenge:** Read Me My Fortune
-**CTF:** Pointer Overflow CTF 2026
-**Points:** EXP 200, Wave 1
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Exploitation |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

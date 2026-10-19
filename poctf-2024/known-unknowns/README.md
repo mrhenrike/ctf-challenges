@@ -1,16 +1,13 @@
 # Known Unknowns
 
-**Category:** Digital Forensics
-**Challenge:** Known Unknowns
-**CTF:** Pointer Overflow CTF 2024
-**Points:** DF 200
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_7h3_13f7_h4nd_0f_d4rkn355}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{uwsp_7h3_13f7_h4nd_0f_d4rkn355}` |
+| **Status** | Solved |
 
 ---
 

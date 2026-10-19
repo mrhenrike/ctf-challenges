@@ -1,16 +1,13 @@
 # Leap of Faith
 
-**Category:** Game Hacking
-**Challenge:** Leap of Faith
-**CTF:** Pointer Overflow CTF 2026
-**Points:** 87 (GH 200, Wave 2)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Game Hacking |
+| **Difficulty** | Unknown |
+| **Points** | 87 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

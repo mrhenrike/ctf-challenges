@@ -1,15 +1,13 @@
 # Sunshine on Filth is Not Polluted
 
-**Category:** Exploitation (Pwn)
-**Challenge:** Sunshine on Filth is Not Polluted
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_7h3_1355_y0u_kn0w_7h3_837732}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_7h3_1355_y0u_kn0w_7h3_837732}` |
+| **Status** | Solved |
 
 ---
 

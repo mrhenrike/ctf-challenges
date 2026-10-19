@@ -1,18 +1,13 @@
 # Letters Never Sent: Variant 088
 
-**Category:** Crypto / Visual Stego / Classical Cipher
-**Challenge:** Letters Never Sent
-**Variant:** `variant_088`
-**Points:** CRYP 100 (Wave 1)
-**Result:** Solved
-
-**Recovered key:** `WITHER`
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Crypto / Visual Stego / Classical Cipher |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

@@ -1,13 +1,13 @@
 # The Color Drained from His Face
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Hard                                       |
-| Points      | 300                                        |
-| Flag        | `poctf{uwsp_7h3_5leep3r_mu57_4w4k3n}`    |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | ID |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

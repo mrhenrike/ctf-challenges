@@ -1,12 +1,15 @@
 # A Tangle a Jingle
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | OSINT |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_1_h4v3_4_dr34m}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

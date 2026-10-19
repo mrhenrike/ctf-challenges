@@ -1,13 +1,13 @@
 # I Have Objections
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Easy                                       |
-| Points      | 100                                        |
-| Flag        | `poctf{uwsp_71m3_15_4n_1llu510n}`         |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | ID |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_71m3_15_4n_1llu510n}` |
+| **Status** | Solved |
 
 ---
 

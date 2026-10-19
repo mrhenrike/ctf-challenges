@@ -1,15 +1,13 @@
 # Time is but a Window
 
-**Category:** Exploitation (Pwn)
-**Challenge:** Time is but a Window
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_71m3_15_4_f4c702}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Exploitation |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{uwsp_71m3_15_4_f4c702}` |
+| **Status** | Solved |
 
 ---
 
