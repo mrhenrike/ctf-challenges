@@ -68,8 +68,12 @@ sec4us/
 # SOCBrasil (tokens, sessions, private data)
 socbrasil/
 
-# POCTF 2026 (competition may be active, not public yet)
-pointeroverflow-poctf-2026/
+# POCTF 2026 internal files (writeups with frameworks are published)
+pointeroverflow-poctf-2026/challenges/stego_solver.py
+pointeroverflow-poctf-2026/challenges/browser_solver.js
+pointeroverflow-poctf-2026/challenges/exploit_solver.py
+pointeroverflow-poctf-2026/challenges/solve_all.py
+pointeroverflow-poctf-2026/challenges/browser_mass_solve.js
 
 # Pwn2Win (incomplete, private notes)
 pwn2win/
