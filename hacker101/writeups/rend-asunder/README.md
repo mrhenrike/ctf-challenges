@@ -284,3 +284,72 @@ tesseract /tmp/rend.png stdout 2>/dev/null
 8. **`window.parent.location = 'javascript:...'`**: silently blocked in Chrome 67 from cross-origin iframe to parent
 9. **`window.parent.location = 'http://...'`**: navigates the parent frame, destroys the iframe, causes Puppeteer timeout
 10. **postMessage to parent (data:)**: no pre-configured listener; parent does not respond
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | ID | Description |
+|---|---|---|---|
+| Execution | Command and Scripting Interpreter: JavaScript | T1059.007 | Script injection into headless Chrome sandbox |
+| Initial Access | Exploitation for Client Execution | T1203 | Targeting Chrome 67 CVEs for sandbox escape and RCE |
+| Collection | Data from Information Repositories | T1213 | Extracting flag from `<noscript>` DOM element |
+| Defense Evasion | Exploitation for Defense Evasion | T1211 | SOP bypass via browser vulnerability (null origin) |
+| Lateral Movement | Exploitation of Remote Services | T1210 | Chrome 67 V8 type confusion (CVE-2018-17463) for cross-context access |
+
+---
+
+## Remediation
+
+### Technical Fixes
+
+1. **Keep browsers updated**: Chrome 67 has known CVEs (CVE-2018-17462, CVE-2018-17463) that enable RCE
+2. **Use sandboxed execution environments** (gVisor, Firecracker) instead of relying on browser isolation alone
+3. **Never store sensitive data in `<noscript>` tags**: they are accessible via `innerHTML` even with JS enabled
+4. **Enforce Content Security Policy (CSP)** to restrict script execution sources
+5. **Avoid `data:` URLs as parents**: their null origin creates unpredictable SOP behavior
+
+### OWASP Top 10 2021
+
+| ID | Risk | Relevance |
+|---|---|---|
+| A05 | Security Misconfiguration | Outdated Chrome 67 with known CVEs used as sandbox |
+| A06 | Vulnerable and Outdated Components | Deliberately outdated browser version with exploitable V8 engine |
+
+### D3FEND Countermeasures
+
+| ID | Technique | Application |
+|---|---|---|
+| D3-PSA | Process Sandboxing | Use kernel-level sandboxing (gVisor) beyond browser sandbox |
+| D3-SWU | Software Update | Keep headless browser at latest stable version |
+| D3-CSP | Content Security Policy | Restrict script sources and prevent inline script injection |
+
+### NIST CSF 2.0
+
+| Function | Category | Subcategory | Application |
+|---|---|---|---|
+| Protect | PR.PS | PR.PS-01 | Patch management for all software components (browsers) |
+| Protect | PR.DS | PR.DS-01 | Do not store secrets in client-accessible DOM elements |
+| Detect | DE.CM | DE.CM-09 | Monitor for exploitation attempts against known CVEs |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---|---|---|
+| SI-2 | Flaw Remediation | Patch Chrome to latest version, eliminating CVE-2018-17462/17463 |
+| SC-39 | Process Isolation | Kernel-level process isolation for script execution sandboxes |
+| CM-11 | User-Installed Software | Control and audit browser versions in production environments |
+
+---
+
+## Final Thoughts
+
+Rend Asunder is a beast. Flag 0 teaches that `<noscript>` is not a hiding place; Flags 1 and 2 demand actual browser exploitation against Chrome 67 CVEs. The pixel exfiltration channel developed during this challenge (3px binary blocks with 100% accuracy) was a creative detour, even if it did not unlock the remaining flags. The lesson: when the hint says "you need RCE," believe it and research the exact browser version's CVE history.
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+Browser exploitation is a rabbit hole worth exploring. If you are tackling Chrome CVEs or headless sandbox escapes, reach out:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

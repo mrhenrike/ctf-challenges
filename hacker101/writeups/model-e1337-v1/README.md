@@ -58,4 +58,59 @@
 
 ---
 
-See also `../model-e1337/WRITEUP.md` for the complete implementation with scripts.
+See also `../model-e1337/README.md` for the complete implementation with scripts.
+
+## MITRE ATT&CK Mapping
+
+| ID | Technique | Tactic | How it was used |
+|----|-----------|--------|----------------|
+| T1190 | Exploit Public-Facing Application | Initial Access | XXE on `/set-config` to exfiltrate application source code |
+| T1005 | Data from Local System | Collection | Read `main.py` (flag in comment) and `rng.py` via XXE |
+| T1588.005 | Obtain Capabilities: Exploits | Resource Development | Z3 SMT solver for PRNG seed recovery from observed outputs |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **XXE:** Disable external entity resolution (`setFeature(feature_external_ges, False)`)
+2. **PRNG:** Use `secrets` module or OS-level CSPRNG instead of 32-bit custom seed
+3. **Error leakage:** Never reveal expected unlock codes in error responses
+4. **Configuration endpoints:** Authenticate and rate-limit `/set-config` and `/get-config`
+
+### OWASP Top 10 2021
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| A05:2021 | Security Misconfiguration | XML parser allows external entities; error messages leak expected codes |
+| A02:2021 | Cryptographic Failures | 32-bit seed space; custom non-cryptographic PRNG |
+
+### MITRE D3FEND Countermeasures
+
+| ID | Technique | Application |
+|----|-----------|-------------|
+| D3-CSPP | Content Security Policy Pinning | Restrict XML processing capabilities |
+| D3-MFA | Multi-factor Authentication | Replace rolling code with HMAC-OTP (RFC 6238) |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---------|-------|-------------|
+| SC-13 | Cryptographic Protection | Use CSPRNG with adequate seed size (128+ bits) |
+| SI-10 | Information Input Validation | Disable DTD and external entity processing in XML |
+| SI-11 | Error Handling | Return generic errors; do not leak internal state |
+
+---
+
+## Final Thoughts
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Model E1337 v1 demonstrates the power of XXE beyond SSRF: using it as a source code reader gives you everything needed to reverse-engineer the application logic. Once you have the PRNG algorithm and a 32-bit keyspace, it is a math problem, not a security problem.
+
+Connect and share your approach to crypto challenges:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

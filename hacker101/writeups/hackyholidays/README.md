@@ -219,3 +219,58 @@ GET /attack-box/launch/?payload=<base64>
 | attack-box | grinchadmin | s4nt4sucks |
 | secure-login zip | — | hahahaha |
 | forum | grinch | BahHumbug |
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Credential Access | Brute Force: Password Cracking | T1110.002 |
+| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 |
+| Persistence | Account Manipulation | T1098 |
+| Execution | Server-Side Template Injection (SSTI) | T1059 |
+| Discovery | File and Directory Discovery | T1083 |
+| Collection | Data from Information Repositories | T1213 |
+| Initial Access | Supply Chain Compromise (nested SSRF) | T1195 |
+
+---
+
+## OWASP Top 10 2021
+
+- **A01:2021 Broken Access Control**: IDOR in `/people-rater`, admin cookie tampering, LFI bypass
+- **A03:2021 Injection**: blind SQLi in `/evil-quiz`, SSTI in `/hate-mail-generator`, nested SQLi+SSRF in `/r3c0n_server`
+- **A07:2021 Identification and Authentication Failures**: unsigned JSON cookies, default credentials, weak password hashes
+- **A05:2021 Security Misconfiguration**: `robots.txt` disclosure, HTML comments with flags, `intval()` integer overflow
+
+## MITRE D3FEND Countermeasures
+
+- **D3-IPCF (IPC Filtering)**: parameterize all SQL queries; restrict template inputs
+- **D3-SPP (Strong Password Policy)**: enforce password complexity; never store passwords in crackable hashes
+- **D3-SCA (Session Cookie Attribute)**: sign and encrypt session cookies; never trust client-side JSON cookies
+
+## NIST CSF 2.0
+
+- **Protect (PR.DS)**: validate all inputs server-side; parameterize database queries
+- **Protect (PR.AA)**: sign authentication cookies; enforce MFA on admin endpoints
+- **Detect (DE.CM)**: monitor for blind SQLi patterns, anomalous cookie manipulation, SSRF payloads
+
+## NIST SP 800-53 Rev. 5
+
+- **SI-10 (Information Input Validation)**: validate all inputs; use allowlists for template parameters
+- **AC-3 (Access Enforcement)**: enforce server-side authorization; sign session tokens
+- **IA-5 (Authenticator Management)**: use bcrypt/argon2 for password hashing; no default credentials
+- **SC-28 (Protection of Information at Rest)**: encrypt sensitive data; never store flags in `robots.txt`
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Twelve flags, nine vulnerability classes, one Christmas theme. If this marathon through IDOR, blind SQLi, SSTI, integer overflow, and nested SSRF gave you new tools for your next engagement, spread the holiday cheer.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
