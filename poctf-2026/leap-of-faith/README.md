@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{47.1391.d7690bd43ae8e9d4302e23dcb6876479.YNTUQ7IYQRYCTF6NJBRHN7FLKT}
+poctf{...}
 ~~~
 
 ---
@@ -112,7 +112,7 @@ Headers:
   X-POCTF-TEAM-KEY: <team.key>
   X-POCTF-CHALLENGE-NONCE: <nonce>
 Body: {}
-Response: {"marker": "POCTF{...}"}
+Response: {"marker": "poctf{...}"}
 ~~~
 
 The server requires a recent tick (within a few seconds). If `stale_last_tick` is returned, send fresh ticks first.
@@ -142,7 +142,7 @@ for seq in range(1, 16):
 After 5 accepted ticks (with 2-second spacing), the `/complete` endpoint returned the flag:
 
 ~~~json
-{"marker": "POCTF{47.1391.d7690bd43ae8e9d4302e23dcb6876479.YNTUQ7IYQRYCTF6NJBRHN7FLKT}"}
+{"marker": "poctf{...}"}
 ~~~
 
 ---
@@ -165,7 +165,7 @@ Ticker.gd -> POST /api/challenges/47/tick
     |          (5+ ticks with 2s spacing)
     |
 FlagToken.gd -> POST /api/challenges/47/complete
-                   -> marker = POCTF{47.1391...}
+                   -> marker = poctf{...}
 ~~~
 
 ---

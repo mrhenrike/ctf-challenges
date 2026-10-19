@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Exploitation (EXP 200, Wave 3) |
 | Challenge ID | 128 |
-| Flag | `POCTF{128.1391.22e36244056f290e.LRNTS4NONLQODZEBABM5E3SZSA}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -71,7 +71,7 @@ The sandbox escape exploited a weakness in how the restricted environment was co
 
 The exploit was submitted interactively through the challenge's web console, and the flag was returned directly.
 
-**Flag:** `POCTF{128.1391.22e36244056f290e.LRNTS4NONLQODZEBABM5E3SZSA}`
+**Flag:** `poctf{...}`
 
 ---
 
@@ -90,7 +90,7 @@ Several other Lua sandbox escape techniques are worth noting for similar challen
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{128.1391.22e36244056f290e.LRNTS4NONLQODZEBABM5E3SZSA}` | Lua sandbox service | Sandbox escape via metatable/GC hook exploitation |
+| Flag | `poctf{...}` | Lua sandbox service | Sandbox escape via metatable/GC hook exploitation |
 
 ---
 

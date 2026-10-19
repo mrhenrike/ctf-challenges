@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Reverse Engineering (Wave 4) |
 | Challenge ID | 123 |
-| Flag | `POCTF{123.1391.97d3cdd5c98f172a.M2ABQAUYLBJBDBRMYX7SHZGJJL}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -69,7 +69,7 @@ For cases where executing the binary is undesirable (potential anti-analysis tra
 
 This is slower but safer, and builds a deeper understanding of the VM's behavior.
 
-**Flag:** `POCTF{123.1391.97d3cdd5c98f172a.M2ABQAUYLBJBDBRMYX7SHZGJJL}`
+**Flag:** `poctf{...}`
 
 ---
 
@@ -77,7 +77,7 @@ This is slower but safer, and builds a deeper understanding of the VM's behavior
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{123.1391.97d3cdd5c98f172a.M2ABQAUYLBJBDBRMYX7SHZGJJL}` | prog.bin | Custom VM execution and bytecode analysis |
+| Flag | `poctf{...}` | prog.bin | Custom VM execution and bytecode analysis |
 
 ---
 

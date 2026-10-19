@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Steganography (Wave 3) |
 | Challenge ID | 103 |
-| Flag | `POCTF{BF9DBAF4A82E68ED}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -75,7 +75,7 @@ The velocity values directly encode the ASCII representation of hex digits (0-9 
 ## 4. Verification
 
 - The decoded nonce is 16 hex characters, consistent with the CTF's nonce format
-- Wrapped as `POCTF{BF9DBAF4A82E68ED}` and submitted: **Correct**
+- Wrapped as `poctf{...}` and submitted: **Correct**
 - The MIDI file plays as a legitimate musical piece; the velocity encoding does not produce audibly unusual dynamics
 
 ---
@@ -84,7 +84,7 @@ The velocity values directly encode the ASCII representation of hex digits (0-9 
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{BF9DBAF4A82E68ED}` | MIDI note-on velocity values | ASCII hex extraction from velocity bytes |
+| Flag | `poctf{...}` | MIDI note-on velocity values | ASCII hex extraction from velocity bytes |
 
 ---
 

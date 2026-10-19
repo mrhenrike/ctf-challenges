@@ -8,7 +8,7 @@
 **Flag:**
 
 ~~~text
-POCTF{3.1391.4HL6VOV65LIRM4LX.44UWMEAN3CHJ3P2RLXV6CFJ2JJ}
+poctf{...}
 ~~~
 
 ---
@@ -124,7 +124,7 @@ Server response:
 {
   "ok": true,
   "message": "Silent. The apparatus speaks.",
-  "flag": "POCTF{3.1391.4HL6VOV65LIRM4LX.44UWMEAN3CHJ3P2RLXV6CFJ2JJ}",
+  "flag": "poctf{...}",
   "clicks": 17
 }
 ~~~

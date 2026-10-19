@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | OSINT (Wave 3) |
 | Challenge ID | 97 |
-| Flag | `POCTF{97.1391.132359662c3327e0.EE5SOV7QFSDD4IOQK7H3FPPPSG}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -62,7 +62,7 @@ This is where the challenge gets tricky. The specific artwork "I Dreamt I was a 
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{97.1391.132359662c3327e0.EE5SOV7QFSDD4IOQK7H3FPPPSG}` | Challenge validation after answering "2015" | OSINT research + year enumeration |
+| Flag | `poctf{...}` | Challenge validation after answering "2015" | OSINT research + year enumeration |
 
 ---
 

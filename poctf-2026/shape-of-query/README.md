@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{81.1391.5U5RHFUCP55S7XAU.MUAHLFZPU2BV3OI7QE3RQGGG36}
+poctf{...}
 ~~~
 
 ---
@@ -94,7 +94,7 @@ This returned all team members including `admin_1391`, whose `privateNotes` fiel
   "id": "admin_1391",
   "username": "admin",
   "role": "admin",
-  "privateNotes": "POCTF{81.1391.5U5RHFUCP55S7XAU.MUAHLFZPU2BV3OI7QE3RQGGG36}"
+  "privateNotes": "poctf{...}"
 }
 ~~~
 
@@ -113,7 +113,7 @@ GraphQL introspection at /graphql
 Direct lookup user(id:"admin_1391") -> denied (BOLA)
     |
 Nested path: me -> team -> members -> privateNotes
-    -> admin_1391.privateNotes = POCTF{...}
+    -> admin_1391.privateNotes = poctf{...}
 ~~~
 
 ---

@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{78.1391.f9abb0b1889ab33f.6GNTWXFDVQY4K2OZNWWHD3IKNX}
+poctf{...}
 ~~~
 
 ---
@@ -100,7 +100,7 @@ Response:
 ~~~json
 {
   "_id": 1,
-  "flag": "POCTF{78.1391.f9abb0b1889ab33f.6GNTWXFDVQY4K2OZNWWHD3IKNX}",
+  "flag": "poctf{...}",
   "label": "team-flag",
   "note": "Do not share. This is the token the compliance auditor requested."
 }

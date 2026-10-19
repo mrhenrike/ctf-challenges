@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Steganography (Wave 2) |
 | Challenge ID | 99 |
-| Flag | `POCTF{99.1391.PN7TFG32VJN2PESJ.OJHIQAJGSFU7C2LHTKBFAHFVO3}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -65,14 +65,14 @@ for channel in range(3):
 Analysis of the photograph's pixel data revealed the flag hidden through steganographic encoding. The specific technique exploits the relationship between pixel intensity values ("where light falls") to encode the flag string within the image.
 
 ```text
-Flag: POCTF{99.1391.PN7TFG32VJN2PESJ.OJHIQAJGSFU7C2LHTKBFAHFVO3}
+Flag: poctf{...}
 ```
 
 ---
 
 ## 4. Verification
 
-- The flag format matches POCTF pattern: `POCTF{ID.TEAM.NONCE.TOKEN}`
+- The flag format matches POCTF pattern: `poctf{...}`
 - Challenge ID 99 and team 1391 confirmed in the flag structure
 - Submitted on the challenge page: **Correct**
 
@@ -82,7 +82,7 @@ Flag: POCTF{99.1391.PN7TFG32VJN2PESJ.OJHIQAJGSFU7C2LHTKBFAHFVO3}
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{99.1391.PN7TFG32VJN2PESJ.OJHIQAJGSFU7C2LHTKBFAHFVO3}` | Image pixel data | Steganographic extraction from photograph |
+| Flag | `poctf{...}` | Image pixel data | Steganographic extraction from photograph |
 
 ---
 

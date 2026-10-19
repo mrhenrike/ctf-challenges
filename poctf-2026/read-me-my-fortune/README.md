@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{127.1391.3UG3RV35BFJRKMCN.2UVXMNCL4B5I5UXPC6GOADTWJF}
+poctf{...}
 ~~~
 
 ---
@@ -67,7 +67,7 @@ Full session output:
   Template:
 
   ── Your Reading ─────────────────────────────────────
-  POCTF{127.1391.3UG3RV35BFJRKMCN.2UVXMNCL4B5I5UXPC6GOADTWJF}
+  poctf{...}
   ─────────────────────────────────────────────────────
 ~~~
 

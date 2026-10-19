@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | OSINT (Wave 2) |
 | Challenge ID | 92 |
-| Flag | `POCTF{92.1391.414e06b0eda6879d.IFQXJR2P3PDW56OZM5Z7ONLEIB}` |
+| Flag | `poctf{...}` |
 
 ---
 
@@ -63,7 +63,7 @@ The accumulated evidence from cross-platform correlation, registration analysis,
 ## 5. Flag
 
 ~~~text
-POCTF{92.1391.414e06b0eda6879d.IFQXJR2P3PDW56OZM5Z7ONLEIB}
+poctf{...}
 ~~~
 
 ---
@@ -92,7 +92,7 @@ Assemble evidence → FLAG
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{92.1391.414e06b0eda6879d.IFQXJR2P3PDW56OZM5Z7ONLEIB}` | OSINT investigation | Cross-platform identity correlation |
+| Flag | `poctf{...}` | OSINT investigation | Cross-platform identity correlation |
 
 ---
 

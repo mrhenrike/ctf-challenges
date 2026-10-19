@@ -11,7 +11,7 @@
 **Flag:**
 
 ~~~text
-POCTF{2.1391.4NHVS27W3WQFC6P3.H3CIX3SDP37AVKH5VMYD5Z42MC}
+poctf{...}
 ~~~
 
 ---
@@ -194,7 +194,7 @@ assert beaufort(pt, key) == ct
 Output:
 
 ~~~text
-POCTF{2.1391.4NHVS27W3WQFC6P3.H3CIX3SDP37AVKH5VMYD5Z42MC}
+poctf{...}
 ~~~
 
 ---
@@ -238,7 +238,7 @@ The plaintext only comes out correctly when the key advances over alphabetic cha
 The recovered plaintext is:
 
 ~~~text
-POCTF{2.1391.4NHVS27W3WQFC6P3.H3CIX3SDP37AVKH5VMYD5Z42MC}
+poctf{...}
 ~~~
 
 Submitted via the challenge API and confirmed correct.

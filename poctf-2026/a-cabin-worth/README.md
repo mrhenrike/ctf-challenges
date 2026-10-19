@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Forensics (Wave 2) |
 | Challenge ID | 110 |
-| Flag | `POCTF{110.1391.7FSZMGJDF3QOAYLE.CGMV5X7PRXWDI73ZR2BH37TIDI}` |
+| Flag | `poctf{...}` |
 
 ---
 
@@ -94,7 +94,7 @@ The decrypted note contained the flag in its body.
 ## 6. Flag
 
 ~~~text
-POCTF{110.1391.7FSZMGJDF3QOAYLE.CGMV5X7PRXWDI73ZR2BH37TIDI}
+poctf{...}
 ~~~
 
 ---
@@ -123,7 +123,7 @@ Decrypt encrypted notes → FLAG
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{110.1391.7FSZMGJDF3QOAYLE.CGMV5X7PRXWDI73ZR2BH37TIDI}` | Encrypted Joplin note | E2EE decryption via recovered master key |
+| Flag | `poctf{...}` | Encrypted Joplin note | E2EE decryption via recovered master key |
 
 ---
 

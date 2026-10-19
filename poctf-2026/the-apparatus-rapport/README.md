@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{5.1391.7MXYFA7DZEY75P7Q.5EWPA2RYQGCBRRVGZ33KVCCKAW}
+poctf{...}
 ~~~
 
 ---
@@ -109,7 +109,7 @@ Valid game. X wins on move 5 by completing the right column.
 ### Primary Message (Flag)
 
 ~~~text
-POCTF{5.1391.7MXYFA7DZEY75P7Q.5EWPA2RYQGCBRRVGZ33KVCCKAW}
+poctf{...}
 ~~~
 
 ### Secondary Message (Lore)

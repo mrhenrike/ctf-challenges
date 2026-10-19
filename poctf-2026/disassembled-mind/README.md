@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Reverse Engineering (Wave 2) |
 | Challenge ID | 117 |
-| Flag | `POCTF{117.1391.W2M5LDMGLAU3NEED.TCG7KSCBOFQFYTMCPGBYSVKTIP}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -70,7 +70,7 @@ key = 0x00  # identity for this example
 flag = ''.join(chr(b ^ key) for b in encoded)
 ```
 
-**Flag:** `POCTF{117.1391.W2M5LDMGLAU3NEED.TCG7KSCBOFQFYTMCPGBYSVKTIP}`
+**Flag:** `poctf{...}`
 
 ---
 
@@ -78,7 +78,7 @@ flag = ''.join(chr(b ^ key) for b in encoded)
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{117.1391.W2M5LDMGLAU3NEED.TCG7KSCBOFQFYTMCPGBYSVKTIP}` | program.pyc | Python bytecode decompilation and static data flow analysis |
+| Flag | `poctf{...}` | program.pyc | Python bytecode decompilation and static data flow analysis |
 
 ---
 

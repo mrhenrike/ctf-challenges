@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{EKVESUYBMYNLISNZ}
+poctf{...}
 ~~~
 
 ---
@@ -83,14 +83,14 @@ Both the even-indexed-only approach and the all-lines approach produced the same
 Output:
 
 ~~~text
-POCTF{EKVESUYBMYNLISNZ}
+poctf{...}
 ~~~
 
 ---
 
 ## 5. Verification
 
-- The decoded string starts with `POCTF{` and ends with `}`, matching the expected flag format.
+- The decoded string starts with `poctf{...}`, matching the expected flag format.
 - All 18 characters inside the braces are uppercase alphabetic, consistent with the CTF's token style.
 - Both decoding approaches (every-other-line carrier selection vs. all-trailing-lines) converge on the same output.
 - Submitted on the challenge page: **Correct.**

@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Steganography / Forensics (Wave 2) |
 | Challenge ID | 100 |
-| Flag | `POCTF{100.1391.ATHYP4AT7NVE5SL4.TLGMIYEQXOEMBW67DX7FC2EN4B}` |
+| Flag | `poctf{...}` |
 
 ---
 
@@ -80,7 +80,7 @@ The extracted data assembles into the flag.
 ## 6. Flag
 
 ~~~text
-POCTF{100.1391.ATHYP4AT7NVE5SL4.TLGMIYEQXOEMBW67DX7FC2EN4B}
+poctf{...}
 ~~~
 
 ---
@@ -107,7 +107,7 @@ Assemble fragments → FLAG
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{100.1391.ATHYP4AT7NVE5SL4.TLGMIYEQXOEMBW67DX7FC2EN4B}` | Git commit history | Commit metadata extraction from bundle |
+| Flag | `poctf{...}` | Git commit history | Commit metadata extraction from bundle |
 
 ---
 

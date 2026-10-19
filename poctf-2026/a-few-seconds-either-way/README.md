@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Exploitation (EXP 200, Wave 4) |
 | Challenge ID | 130 |
-| Flag | `POCTF{130.1391.35f1c1a76ffcc8e4.D6YLGR7KA7ETGGEJJ3OF5OVK7A}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -73,7 +73,7 @@ The flag was extracted by precisely timing the interaction to hit the vulnerable
 
 ## 4. Verification
 
-- The extracted flag matches the POCTF format: `POCTF{ID.TEAM.NONCE.TOKEN}`
+- The extracted flag matches the POCTF format: `poctf{...}`
 - Challenge ID 130 and team 1391 confirmed
 - Submitted on the challenge page: **Correct**
 
@@ -83,7 +83,7 @@ The flag was extracted by precisely timing the interaction to hit the vulnerable
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{130.1391.35f1c1a76ffcc8e4.D6YLGR7KA7ETGGEJJ3OF5OVK7A}` | Service response during TOCTOU window | Timing-based exploitation |
+| Flag | `poctf{...}` | Service response during TOCTOU window | Timing-based exploitation |
 
 ---
 

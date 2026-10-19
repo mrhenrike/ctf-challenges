@@ -8,7 +8,7 @@
 **Flag:**
 
 ~~~text
-POCTF{48.1391.6827672b8f2e5e3a5049b817cdd49041.EDJ32RKVZ2TRFRQHTRXPSBPHDI}
+poctf{...}
 ~~~
 
 ---
@@ -78,7 +78,7 @@ After sending enough ticks, immediately POST to `/complete` (the last tick must 
 
 ~~~text
 POST /api/challenges/48/complete
-Response: {"marker": "POCTF{48.1391.6827...}", "ok": true}
+Response: {"marker": "poctf{...}", "ok": true}
 ~~~
 
 ---

@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Reverse Engineering / XOR (Wave 4) |
 | Challenge ID | 120 |
-| Flag | `POCTF{120.1391.67394f13da82d44a.JXOJXT6IYD66EHH4VS6EERM7IR}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -77,7 +77,7 @@ strings decoded | grep -i "POCTF\|flag\|nonce"
 Running `strings` on the decoded binary (or executing it in a sandbox) reveals the flag directly:
 
 ```
-POCTF{120.1391.67394f13da82d44a.JXOJXT6IYD66EHH4VS6EERM7IR}
+poctf{...}
 ```
 
 Alternatively, executing the decoded binary in a controlled environment produces the same output.
@@ -102,7 +102,7 @@ With a 2-byte repeating key, only positions 0 and 1 are needed: the rest confirm
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{120.1391.67394f13da82d44a.JXOJXT6IYD66EHH4VS6EERM7IR}` | XOR-encoded ELF binary | 2-byte alternating XOR decode using keys from face template |
+| Flag | `poctf{...}` | XOR-encoded ELF binary | 2-byte alternating XOR decode using keys from face template |
 
 ---
 

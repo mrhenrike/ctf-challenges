@@ -10,7 +10,7 @@
 
 ~~~text
 JQ2M3L7ADB7Z4ZGX
-POCTF{JQ2M3L7ADB7Z4ZGX}
+poctf{...}
 ~~~
 
 ---

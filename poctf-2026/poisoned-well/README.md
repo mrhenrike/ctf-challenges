@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{82.1391.BLMCP32MRZXWXDWK.VI7PT2BER5JC3YRJPDNNDQ5DHI}
+poctf{...}
 ~~~
 
 ---
@@ -72,7 +72,7 @@ This response is cached (X-Cache: MISS on first request, HIT for subsequent).
 ~~~bash
 curl -b "$COOKIE" "https://poisoned-well.pointeroverflowctf.com/verify"
 # {"cached_host":"evil.example.com/",
-#  "flag":"POCTF{82.1391.BLMCP32MRZXWXDWK.VI7PT2BER5JC3YRJPDNNDQ5DHI}",
+#  "flag":"poctf{...}",
 #  "message":"Cache has been poisoned..."}
 ~~~
 

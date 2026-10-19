@@ -8,7 +8,7 @@
 **Flag:**
 
 ~~~text
-POCTF{109.1391.67TQSOQ32U4S47B5.QFLAUNPCD4BBC75UPCRBZ75FST}
+poctf{...}
 ~~~
 
 ---
@@ -142,7 +142,7 @@ The tab has **form data** with fields filled mid-submission:
     "id": {
       "workstation": "hollis-office-desktop-elena",
       "analyst-name": "K. Vance",
-      "artifact-flag": "POCTF{109.1391.67TQSOQ32U4S47B5.QFLAUNPCD4BBC75UPCRBZ75FST}",
+      "artifact-flag": "poctf{...}",
       "case-notes": "Subject: E. Marchetti disappearance. Chain of custody initiated 2026-06-29."
     }
   }
@@ -156,7 +156,7 @@ The flag is in the `artifact-flag` field, entered into the form but never submit
 ## 7. Flag Discovery
 
 ~~~text
-POCTF{109.1391.67TQSOQ32U4S47B5.QFLAUNPCD4BBC75UPCRBZ75FST}
+poctf{...}
 ~~~
 
 Submitted and confirmed correct.

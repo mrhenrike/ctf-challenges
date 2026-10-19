@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Exploitation (EXP 300, Wave 2) |
 | Challenge ID | 129 |
-| Flag | `POCTF{129.1391.B72TXMFWR2WUULIT.CNIGYWA4CCCCUPQ2W7BXHHADVA}` |
+| Flag | `poctf{...}` |
 
 ## Overview
 
@@ -76,7 +76,7 @@ export POCTF_DEV_MODE=1
 python3 service.py
 ```
 
-The dev mode flag `POCTF{dev.flag.local.testing.only}` was returned in 34 steps, confirming the exploit path works.
+The dev mode flag `poctf{...}` was returned in 34 steps, confirming the exploit path works.
 
 ## Live Execution
 
@@ -98,7 +98,7 @@ The script connects to the service, authenticates with the session token, sends 
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{129.1391.B72TXMFWR2WUULIT.CNIGYWA4CCCCUPQ2W7BXHHADVA}` | VM kernel memory (READ_HOST_FLAG) | Off-by-one sandbox escape via 32 nested CALLs |
+| Flag | `poctf{...}` | VM kernel memory (READ_HOST_FLAG) | Off-by-one sandbox escape via 32 nested CALLs |
 
 ---
 

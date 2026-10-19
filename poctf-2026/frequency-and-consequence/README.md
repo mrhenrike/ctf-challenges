@@ -5,7 +5,7 @@
 | CTF | Pointer Overflow CTF 2026 |
 | Category | Miscellaneous / Signal Processing (Wave 2) |
 | Challenge ID | 91 |
-| Flag | `POCTF{WJVH6UXJM6RCISFX}` |
+| Flag | `poctf{...}` |
 
 ---
 
@@ -66,7 +66,7 @@ The spectral analysis reveals encoded characters at specific frequency bins. Eac
 ## 4. Flag
 
 ~~~text
-POCTF{WJVH6UXJM6RCISFX}
+poctf{...}
 ~~~
 
 The nonce `WJVH6UXJM6RCISFX` was recovered from the frequency domain encoding.
@@ -95,7 +95,7 @@ Assemble nonce → FLAG
 
 | Type | Value | Found At | Method |
 |---|---|---|---|
-| Flag | `POCTF{WJVH6UXJM6RCISFX}` | Frequency domain encoding | Goertzel algorithm / spectral analysis |
+| Flag | `poctf{...}` | Frequency domain encoding | Goertzel algorithm / spectral analysis |
 
 ---
 
