@@ -1,67 +1,64 @@
-# Maq152: Beep Beep Elastics (Elastix)
+# Maq152: Beep Beep Elastics
 
-> **Platform:** SEC4US CTF Lab | **Category:** Web Hacking: Medium | **Points:** Dynamic
+Writeup for the **Beep Beep Elastics** challenge on [SEC4US](https://sec4us.com.br/).
+
+> **Category:** Hacking: Medium
+> **Difficulty:** Medium
+
+---
 
 ## Overview
 
-Elastix PBX system with multiple attack vectors: LFI through VTiger CRM, Webmin file disclosure, and Shellshock. The primary path exploits configuration file exposure.
+An Elastix PBX system exposing multiple attack surfaces. The exploitation chain leverages vtiger CRM's Local File Inclusion vulnerability to extract credentials, a SOAP-based file upload for code execution, and sudo chmod misconfiguration for root escalation.
 
----
+## Reconnaissance
 
-## Approach
+1. Scan the target to discover multiple web services, VoIP (SIP), and SMTP.
+2. Access the Elastix web interface and identify the platform version.
+3. Enumerate web directories to discover vtiger CRM and FreePBX admin panels.
+4. Research known Elastix and vtiger CRM vulnerabilities.
 
-**Technique:** LFI + VTiger CRM + Credential Reuse
+## Exploitation
 
-### Reconnaissance
+1. Exploit the vtiger CRM Local File Inclusion (LFI) vulnerability to read sensitive server files.
+2. Extract Elastix configuration files containing database or admin credentials via LFI.
+3. Use the SOAP interface to upload a malicious file (PHP shell) to the web-accessible directory.
+4. Trigger the uploaded shell to gain a reverse connection as the web server user.
+5. Alternatively, use extracted credentials to access the FreePBX or Elastix admin panel directly.
 
-```bash
-nmap -sV -sC -p- <TARGET_IP> -oN nmap_full.txt
-```
+## Privilege Escalation
 
-Multiple services exposed: HTTPS (443), Webmin (10000), and the Elastix PBX interface.
+1. Enumerate sudo permissions for the current user: `sudo -l`.
+2. Discover that `chmod` can be executed with sudo without a password.
+3. Use `sudo chmod` to make sensitive files readable or to set SUID on `/bin/bash`.
+4. Example: `sudo chmod u+s /bin/bash` then `/bin/bash -p` for a root shell.
+5. Retrieve the flag from the root directory.
 
-### Exploitation
-
-1. **LFI via VTiger CRM:** The VTiger CRM module included with Elastix is vulnerable to Local File Inclusion
-2. **Configuration disclosure:** Read `amportal.conf` through the LFI, exposing database and admin passwords stored in plaintext
-3. **Credential reuse:** The admin password from the configuration file works for SSH root access
-4. **Alternative path:** If SSH fails, a SOAP file upload combined with sudo chmod provides privilege escalation
-5. **Flag retrieval:** Read the flag from the filesystem with root access
-
-### Tools Used
-
-nmap, curl, Burp Suite, searchsploit, ssh
-
----
-
-## Security Frameworks
+## Security Framework Mapping
 
 ### MITRE ATT&CK
 
-| Technique | Description |
-|-----------|-------------|
-| T1083 | File and Directory Discovery |
-| T1552.001 | Credentials In Files |
+| Technique | ID |
+|-----------|----|
+| Exploit Public-Facing Application | T1190 |
+| Unsecured Credentials: Credentials in Files | T1552.001 |
+| Abuse Elevation Control Mechanism: Sudo | T1548.003 |
+| Server Software Component: Web Shell | T1505.003 |
 
 ### CWE
 
-| ID | Description |
-|----|-------------|
-| CWE-22 | Path Traversal |
-| CWE-256 | Plaintext Storage of a Password |
+- **CWE-98:** Improper Control of Filename for Include (LFI in vtiger CRM)
+- **CWE-434:** Unrestricted Upload of File with Dangerous Type (SOAP file upload)
+- **CWE-269:** Improper Privilege Management (sudo chmod without restriction)
 
 ---
 
-## Author
+> "Beep beep, the road runner escapes again. But in Elastix, every protocol is a lane: LFI reads the map, SOAP uploads the trap, and sudo chmod opens every gate."
 
-**Andre Henrike** (@mrhenrike)
-
-A PBX system is only as secure as its configuration files. Always encrypt stored credentials. Thanks guys!! (❍ᴥ❍ʋ)
+```
+(❍ᴥ❍ʋ)
+```
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike
 - X: https://x.com/mrhenrike
-
----
-
-*For educational purposes only. Do not use any technique shown here against systems you do not own or have explicit permission to test.*

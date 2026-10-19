@@ -1,65 +1,62 @@
 # Maq150: Estatisticas
 
-> **Platform:** SEC4US CTF Lab | **Category:** Web Hacking: Hard | **Points:** Dynamic
+Writeup for the **Estatisticas** challenge on [SEC4US](https://sec4us.com.br/).
+
+> **Category:** Hacking: Medium
+> **Difficulty:** Medium
+
+---
 
 ## Overview
 
-A statistics web application requiring multiple chained vulnerabilities to reach the flag. Multi-step exploitation through the web interface.
+A web application serving statistics functionality that contains exploitable vulnerabilities in its input handling. Careful enumeration of the web interface reveals injection points that lead to system compromise.
 
----
+## Reconnaissance
 
-## Approach
+1. Scan the target to identify web services and their technology stack.
+2. Browse the statistics application, mapping all endpoints and input fields.
+3. Inspect page sources, JavaScript files, and hidden form parameters.
+4. Enumerate directories with wordlists to find admin panels or backup files.
 
-**Technique:** Web Application Chain Exploitation
+## Exploitation
 
-### Reconnaissance
+1. Identify input fields in the statistics application that interact with the backend.
+2. Test for common web vulnerabilities: SQL injection, command injection, file inclusion.
+3. Confirm the exploitable vulnerability and determine its type and scope.
+4. Craft a payload to achieve remote code execution through the vulnerable parameter.
+5. Establish a reverse shell as the web application user.
 
-```bash
-nmap -sV -sC -p- <TARGET_IP> -oN nmap_full.txt
-gobuster dir -u http://<TARGET_IP> -w /usr/share/wordlists/dirb/common.txt
-```
+## Privilege Escalation
 
-### Exploitation
+1. Enumerate the system for privilege escalation vectors from the initial shell.
+2. Check configuration files, database connections, and cron jobs for stored credentials or misconfigurations.
+3. Exploit the identified vector to elevate privileges to root.
+4. Access and retrieve the final flag.
 
-1. **Web enumeration:** Identify the statistics application and its exposed functionality
-2. **Vulnerability chaining:** Discover and chain multiple vulnerabilities (authentication bypass, file inclusion, or injection)
-3. **Initial access:** Obtain command execution through the web application
-4. **Privilege escalation:** Enumerate the system for escalation vectors
-5. **Flag retrieval:** Access the flag file with elevated privileges
-
-### Tools Used
-
-nmap, gobuster, Burp Suite, curl, netcat
-
----
-
-## Security Frameworks
+## Security Framework Mapping
 
 ### MITRE ATT&CK
 
-| Technique | Description |
-|-----------|-------------|
-| T1190 | Exploit Public-Facing Application |
-| T1068 | Exploitation for Privilege Escalation |
+| Technique | ID |
+|-----------|----|
+| Exploit Public-Facing Application | T1190 |
+| Command and Scripting Interpreter | T1059 |
+| Exploitation for Privilege Escalation | T1068 |
 
 ### CWE
 
-| ID | Description |
-|----|-------------|
-| CWE-200 | Exposure of Sensitive Information |
+- **CWE-89:** Improper Neutralization of SQL Commands (if SQLi)
+- **CWE-78:** Improper Neutralization of OS Commands (if command injection)
+- **CWE-20:** Improper Input Validation
 
 ---
 
-## Author
+> "Statistics never lie, but the application serving them might accept far more than numbers. Every unvalidated input is a data point in the attacker's favor."
 
-**Andre Henrike** (@mrhenrike)
-
-Statistics never lie, but sometimes they hide the truth in plain sight. Thanks guys!! (❍ᴥ❍ʋ)
+```
+(❍ᴥ❍ʋ)
+```
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike
 - X: https://x.com/mrhenrike
-
----
-
-*For educational purposes only. Do not use any technique shown here against systems you do not own or have explicit permission to test.*

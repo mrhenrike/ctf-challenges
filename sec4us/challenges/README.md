@@ -17,13 +17,13 @@ Personal collection of writeups for individual challenges on the [SEC4US](https:
 | [Maq100](maq100-servidor-dns/) | Servidor DNS | DNS Zone Transfer | Solved |
 | [Maq101](maq101-metasploitable/) | Metasploitable | Multi-vector Exploitation | Solved |
 | [Maq103](maq103-xp-facil/) | XP e Facil | Windows XP Exploitation | Solved |
-| [Maq104](maq104-insista-e-persista-neste-xp/) | Insista e Persista neste XP | Windows XP Exploitation | Solved |
-| [Maq105](maq105-preste-muita-atencao/) | Preste muita atencao | Network Hacking | Solved |
+| [Maq104](maq104-insista-persista-xp/) | Insista e Persista neste XP | Windows XP Exploitation | Solved |
+| [Maq105](maq105-preste-atencao/) | Preste muita atencao | Network Hacking | Solved |
 | [Maq106](maq106-servidor-irc/) | Servidor IRC | IRC Exploitation | Solved |
 | [Maq107](maq107-servidor-voip/) | Servidor VoIP | VoIP Hacking | Solved |
 | [Maq110](maq110-servidor-de-arquivos/) | Servidor de Arquivos | File Server Exploitation | Solved |
 | [Maq114](maq114-windows-server-2008/) | Windows Server 2008 | Windows Exploitation | Solved |
-| [Maq127](maq127-tudo-esta-na-memoria/) | Tudo esta na memoria | Memory Forensics | Solved |
+| [Maq127](maq127-tudo-na-memoria/) | Tudo esta na memoria | Memory Forensics | Solved |
 | [Maq128](maq128-servidor-ftp/) | Servidor FTP | FTP Exploitation | Solved |
 | [Maq131](maq131-servidor-de-arquivos-2/) | Servidor de Arquivos 2 | File Server Exploitation | Solved |
 | [Maq141](maq141-ftp-e-irc-server/) | FTP e IRC Server | Multi-service Exploitation | Solved |
@@ -41,7 +41,7 @@ Personal collection of writeups for individual challenges on the [SEC4US](https:
 
 | Challenge | Name | Category | Status |
 |-----------|------|----------|--------|
-| [Maq108](maq108-servidor-de-comandos/) | Servidor de Comandos | Command Injection | Solved |
+| [Maq108](maq108-servidor-comandos/) | Servidor de Comandos | Command Injection | Solved |
 | [Maq112](maq112-servidor-cgi/) | Servidor CGI | CGI Exploitation | Solved |
 | [Maq123](maq123-sistema-cadastro-xml/) | Sistema de Cadastro XML | XXE / XML Injection | Solved |
 | [Maq137](maq137-servidor-web-jakarta/) | Servidor Web Jakarta | Java Web Exploitation | Solved |
@@ -49,7 +49,7 @@ Personal collection of writeups for individual challenges on the [SEC4US](https:
 | [Maq149](maq149-cms-drupal/) | CMS Drupal Server | Drupal Exploitation | Solved |
 | [Maq165](maq165-webconsole/) | Webconsole | Web Console RCE | Solved |
 | [Maq186](maq186-web-dev/) | Web Dev | Web Application Hacking | Solved |
-| [Maq193](maq193-wordpress-e-seus-plugins/) | Wordpress e seus Plugins | WordPress Plugin Exploitation | Solved |
+| [Maq193](maq193-wordpress-plugins/) | Wordpress e seus Plugins | WordPress Plugin Exploitation | Solved |
 
 ### Web: SQL Injection
 
@@ -64,7 +64,7 @@ Personal collection of writeups for individual challenges on the [SEC4US](https:
 
 | Challenge | Name | Category | Status |
 |-----------|------|----------|--------|
-| [Maq113](maq113-cavucar-aos-80km/) | Cavucar aos 80km | LFI/RFI | Solved |
+| [Maq113](maq113-cavucar-80km/) | Cavucar aos 80km | LFI/RFI | Solved |
 
 ### Web: SSTI
 
@@ -94,19 +94,19 @@ Personal collection of writeups for individual challenges on the [SEC4US](https:
 | [Maq116](maq116-fbi-access/) | FBI Access | Web + Command Injection | Solved |
 | [Maq119](maq119-gato-tom/) | Gato Tom | Tomcat WAR Deploy (Pivot) | Solved |
 | [Maq120](maq120-transferencia-ftp/) | Transferencia de Arquivo FTP | FTP + Privesc | Solved |
-| [Maq122](maq122-c0d1ng/) | C0d1nG | Code Review | Solved |
-| [Maq124](maq124-veneno-mortal-32bits/) | Veneno Mortal em 32 bits | Buffer Overflow (x86) | Solved |
-| [Maq125](maq125-veneno-mortal-64bits/) | Veneno Mortal em 64bits | Buffer Overflow (x64) | Solved |
+| [Maq122](maq122-coding/) | C0d1nG | Code Review | Solved |
+| [Maq124](maq124-veneno-mortal-32bit/) | Veneno Mortal em 32 bits | Buffer Overflow (x86) | Solved |
+| [Maq125](maq125-veneno-mortal-64bit/) | Veneno Mortal em 64bits | Buffer Overflow (x64) | Solved |
 | [Maq129](maq129-apague-o-fogo/) | Apague o Fogo | WordPress + MSS Fix | Solved |
 | [Maq135](maq135-liggoat/) | LigGoat | OWASP WebGoat Exploitation | Solved |
-| [Maq138](maq138-cms-das-profundezas/) | CMS das Profundezas | Kernel CVE-2010-3904 | Solved |
+| [Maq138](maq138-cms-profundezas/) | CMS das Profundezas | Kernel CVE-2010-3904 | Solved |
 | [Maq139](maq139-windows-7-turbinado/) | Windows 7 turbinado | FTP Traversal CVE-2015-7603 | Solved |
 | [Maq140](maq140-childrensday/) | ChildrensDay | Apache Traversal + Dirty Pipe | Solved |
 | [Maq146](maq146-mr-robot/) | Mr. Robot | WordPress + nmap SUID | Solved |
 | [Maq150](maq150-estatisticas/) | Estatisticas | Web Exploitation | Solved |
 | [Maq152](maq152-beep-elastics/) | Beep Beep Elastics | Elastix LFI + SSH | Solved |
 | [Maq153](maq153-mrsean/) | Mr.Sean | WP-Forum SQLi + Plugin RCE | Solved |
-| [Maq154](maq154-gerenciador-servicos-linux/) | Gerenciador de Servicos Linux | Webmin CVE-2006-3392 | Solved |
+| [Maq154](maq154-gerenciador-linux/) | Gerenciador de Servicos Linux | Webmin CVE-2006-3392 | Solved |
 | [Maq155](maq155-email-break/) | Email Break | Email Server Exploitation | Solved |
 | [Maq156](maq156-jarbas/) | Jarbas (Jenkins) | Jenkins RCE + Cron Privesc | Solved |
 | [Maq158](maq158-a-imagem/) | A imagem | FTP + PHP + SSH sudo | Solved |
@@ -114,7 +114,7 @@ Personal collection of writeups for individual challenges on the [SEC4US](https:
 | [Maq170](maq170-stormtroopers/) | StormTroopers | SSTI Twig + sudo awk | Solved |
 | [Maq171](maq171-iweb/) | IWEB | iWeb Traversal + MS15-051 | Solved |
 | [Maq172](maq172-pensamento-hacker/) | Pensamento Hacker | Web Exploitation | Solved |
-| [Maq184](maq184-halloween-sec4us/) | Halloween SEC4US | Trick or Treat Web Challenge | Solved |
+| [Maq184](maq184-halloween/) | Halloween SEC4US | Trick or Treat Web Challenge | Solved |
 
 ### Web: Insecure Deserialization
 
