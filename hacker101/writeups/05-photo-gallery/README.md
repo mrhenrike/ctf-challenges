@@ -1,7 +1,7 @@
-# Photo Gallery — Writeup (3/3)
+# Photo Gallery: Writeup (3/3)
 
 **Difficulty:** Moderate  
-**Category:** Web — SQL Injection, File Read, Stacked Queries, RCE  
+**Category:** Web: SQL Injection, File Read, Stacked Queries, RCE  
 **Flags:** 3/3 (complete)  
 **Platform:** Hacker101 CTF
 
@@ -14,13 +14,13 @@
 **What you face:** A numeric ID parameter that looks innocent, an SQLite database with stored filenames, and a disk space calculation function that calls `subprocess` with `shell=True` using data from the database.
 
 **Vulnerabilities exploited:**
-- SQL Injection (CWE-89) on a numeric parameter — UNION SELECT with `1.1` to return zero real rows
+- SQL Injection (CWE-89) on a numeric parameter: UNION SELECT with `1.1` to return zero real rows
 - Stacked Queries (`;UPDATE ... COMMIT`) to modify persistent state
 - Command Injection (CWE-78) via `subprocess.check_output(..., shell=True)` with a controlled filename
 - Arbitrary File Read via UNION SELECT injecting paths as filenames
 
 **What you learn:**
-- Numeric IDs are just as injectable as strings — always parameterize
+- Numeric IDs are just as injectable as strings: always parameterize
 - UNION SELECT with a decimal (`1.1`) returns zero rows from the original query, exposing only the UNION
 - Stacked queries allow modifying the database via SELECT (not just reading)
 - `subprocess` with `shell=True` and unsanitized data = critical command injection
@@ -44,7 +44,7 @@ Exploit SQL injection in the `id` parameter of the `/fetch` endpoint to read int
 
 ---
 
-## Flag 0 — Arbitrary File Read via Decimal SQLi
+## Flag 0: Arbitrary File Read via Decimal SQLi
 
 **Vulnerability:** The `id` parameter in `/fetch?id=N` is interpolated directly into the SQL query.
 
@@ -72,7 +72,7 @@ Returns the "image" whose content is flag 0.
 
 ---
 
-## Flag 1 — SQL Injection + Source Code Read
+## Flag 1: SQL Injection + Source Code Read
 
 **Vulnerability:** UNION SELECT allows injecting any filename, including system paths.
 
@@ -88,7 +88,7 @@ Flag 1 is embedded in the source code (as a string or comment).
 
 ---
 
-## Flag 2 — Stacked Queries + RCE via subprocess (shell=True)
+## Flag 2: Stacked Queries + RCE via subprocess (shell=True)
 
 **Vulnerability:** The disk space calculation function uses `subprocess.check_output` with `shell=True` and interpolates the `filename` directly:
 
@@ -149,7 +149,7 @@ FLAG 2: stacked UPDATE → filename='* || env > recon.txt' → GET / → UNION S
 
 ## Lessons Learned
 
-1. **SQL injection on numeric parameters** — always parameterize queries, even for IDs
+1. **SQL injection on numeric parameters**: always parameterize queries, even for IDs
 2. **UNION SELECT with decimal** (`1.1`) returns zero real rows, leaving only the UNION result
 3. **Stacked queries** allow UPDATE/INSERT via SQLi, modifying persistent state
 4. **subprocess with shell=True and unsanitized data** = critical command injection

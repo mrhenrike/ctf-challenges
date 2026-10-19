@@ -1,4 +1,4 @@
-# Petshop Pro — Writeup (3/3)
+# Petshop Pro: Writeup (3/3)
 
 **Difficulty:** Easy  
 **Category:** Web (Price Manipulation, Brute Force, Stored XSS)  
@@ -14,12 +14,12 @@
 **What you face:** A checkout that trusts prices sent by the client, a login with distinct error messages for wrong username vs wrong password, and product fields that are reflected in the cart without sanitization.
 
 **Vulnerabilities exploited:**
-- Client-Side Price Manipulation (CWE-602) — price in a `hidden` field is not validated server-side
-- Username Enumeration (CWE-204) — different response for "Invalid username" vs "Invalid password"
-- Stored XSS (CWE-79) — product name injected with HTML/JS is rendered in the cart
+- Client-Side Price Manipulation (CWE-602): price in a `hidden` field is not validated server-side
+- Username Enumeration (CWE-204): different response for "Invalid username" vs "Invalid password"
+- Stored XSS (CWE-79): product name injected with HTML/JS is rendered in the cart
 
 **What you learn:**
-- Prices and critical values must NEVER come from the client — always fetch from the database server-side
+- Prices and critical values must NEVER come from the client: always fetch from the database server-side
 - Distinct error messages for user/password allow two-phase enumeration
 - Stored XSS on products can affect other users who view the cart
 - Burp Turbo Intruder outperforms the Community Intruder for brute-force without throttling
@@ -33,7 +33,7 @@ Exploit three vulnerabilities in a pet shop application: price manipulation at c
 
 ---
 
-## Flag 0 — Price Manipulation (Hidden Field in Cart)
+## Flag 0: Price Manipulation (Hidden Field in Cart)
 
 **Vulnerability:** The checkout form sends item prices in a `type="hidden"` field that is not validated server-side.
 
@@ -59,7 +59,7 @@ With the price set to zero, finalize the checkout. The flag appears in the order
 
 ---
 
-## Flag 1 — Admin Credential Brute Force
+## Flag 1: Admin Credential Brute Force
 
 **Vulnerability:** The `/login` endpoint differentiates between "Invalid username" and "Invalid password", allowing username enumeration separately from password enumeration.
 
@@ -99,7 +99,7 @@ After finding the correct credentials, log in at `/login`. The flag appears imme
 
 ---
 
-## Flag 2 — Stored XSS on Product Edit Field
+## Flag 2: Stored XSS on Product Edit Field
 
 **Vulnerability:** Product edit fields (name, description) are stored and reflected without sanitization in the cart.
 

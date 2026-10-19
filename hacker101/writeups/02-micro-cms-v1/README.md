@@ -1,7 +1,7 @@
-# Micro-CMS v1 — Writeup (4/4)
+# Micro-CMS v1: Writeup (4/4)
 
 **Difficulty:** Easy  
-**Category:** Web — IDOR, XSS, SQL Injection  
+**Category:** Web: IDOR, XSS, SQL Injection  
 **Flags:** 4/4 (complete)  
 **Platform:** Hacker101 CTF
 
@@ -53,7 +53,7 @@ POST /page/edit/:id → Save edits
 </html>
 ```
 
-### Page 2 — XSS Hint
+### Page 2: XSS Hint
 
 Page 2 contains `<button>Some button</button>` rendered as actual HTML, indicating that HTML tags in the body are allowed.
 
@@ -87,7 +87,7 @@ Page 2 contains `<button>Some button</button>` rendered as actual HTML, indicati
 
 ## Exploit
 
-### Flag 1 — IDOR: Reading a Private Page
+### Flag 1: IDOR: Reading a Private Page
 
 #### Reconnaissance
 
@@ -118,7 +118,7 @@ curl -s "https://a840377ee21d5a203838babc75b82f3f.ctf.hacker101.com/page/edit/5"
 
 ---
 
-### Flag 2 — Stored XSS in Body via `<img onerror>`
+### Flag 2: Stored XSS in Body via `<img onerror>`
 
 #### Reconnaissance
 
@@ -145,7 +145,7 @@ The server detected the XSS and revealed the flag in the tag attribute:
 
 ---
 
-### Flag 3 — SQL Injection on ID Parameter
+### Flag 3: SQL Injection on ID Parameter
 
 #### Exploit
 
@@ -166,7 +166,7 @@ The single quote causes an SQL error in the backend, which returns the flag dire
 
 ---
 
-### Flag 4 — Stored XSS in Title, Unsafe Rendering on Home Page
+### Flag 4: Stored XSS in Title, Unsafe Rendering on Home Page
 
 #### Reconnaissance
 
@@ -204,9 +204,9 @@ On the home page `/`, the title is rendered **without escaping**:
 
 | # | Vector | Flag |
 |---|--------|------|
-| 1 | IDOR — `/page/edit/5` | `^FLAG^c983186c1e85c370cf6e4f84569688aecf36ab779ebac81b97f8b695d076a106$FLAG$` ✅ |
-| 2 | XSS Body — `<img onerror>` | `^FLAG^09d306f50f9f0797feb81ac39784fd77897a618f26d126055431d6e10f83988f$FLAG$` ✅ |
-| 3 | SQLi — `/page/edit/1'` | `^FLAG^fe5dfb8594d66ba0ff4516e512fe4721a9bd399043973dd64b7015d22a4e8831$FLAG$` ✅ |
+| 1 | IDOR: `/page/edit/5` | `^FLAG^c983186c1e85c370cf6e4f84569688aecf36ab779ebac81b97f8b695d076a106$FLAG$` ✅ |
+| 2 | XSS Body: `<img onerror>` | `^FLAG^09d306f50f9f0797feb81ac39784fd77897a618f26d126055431d6e10f83988f$FLAG$` ✅ |
+| 3 | SQLi: `/page/edit/1'` | `^FLAG^fe5dfb8594d66ba0ff4516e512fe4721a9bd399043973dd64b7015d22a4e8831$FLAG$` ✅ |
 | 4 | XSS Title on Home Page | `^FLAG^575d603ec2953150477227d40e5a029b00e96cfe6ff99db01b6039a9ee6acb27$FLAG$` ✅ |
 
 ---

@@ -1,9 +1,9 @@
-# Grayhatcon CTF — Writeup
+# Grayhatcon CTF: Writeup
 
 **Difficulty:** Moderate  
 **Category:** Web  
 **Platform:** Hacker101 CTF  
-**Progress:** ✅ **4/4 flags** — complete (2026-10-01)  
+**Progress:** ✅ **4/4 flags**: complete (2026-10-01)  
 **Instance:** `https://3f2ccba44281099039778561c3b1d116.ctf.hacker101.com`  
 
 ---
@@ -15,14 +15,14 @@
 **What you face:** Four completely distinct attack vectors: IP bypass via header, account takeover via predictable hash, IDOR on another user's subaccounts, and SQL injection in the admin panel to retrieve credentials and delete the listing.
 
 **Vulnerabilities exploited:**
-- IP Spoofing via `X-Forwarded-For` (CWE-290) — `.htaccess` trusts the header for admin access
-- Insecure Direct Object Reference / IDOR (CWE-639) — another user's `owner_hash` used in subaccount registration
-- Account Takeover via predictable hash — `account_hash` obtained via `POST /reset` and reused in `POST /register`
-- SQL Injection (CWE-89) — `/dashboard/auctions/questions?id=` to extract admin credentials
-- Broken Authorization — `enable_toggle` accepts another user's subaccount hash
+- IP Spoofing via `X-Forwarded-For` (CWE-290): `.htaccess` trusts the header for admin access
+- Insecure Direct Object Reference / IDOR (CWE-639): another user's `owner_hash` used in subaccount registration
+- Account Takeover via predictable hash: `account_hash` obtained via `POST /reset` and reused in `POST /register`
+- SQL Injection (CWE-89): `/dashboard/auctions/questions?id=` to extract admin credentials
+- Broken Authorization: `enable_toggle` accepts another user's subaccount hash
 
 **What you learn:**
-- `X-Forwarded-For` must never be trusted for access control — any client can forge it
+- `X-Forwarded-For` must never be trusted for access control: any client can forge it
 - Account reset hashes must not be reusable for creating new accounts
 - IDOR in subaccount functionality (`enable_toggle`) is as critical as in primary resources
 - SQLi on ID parameters allows credential extraction from internal tables via UNION
@@ -32,19 +32,19 @@
 
 ## Application Overview
 
-**HackerBay** — a marketplace where someone listed HackerOne usernames/passwords. The goal is to hack and delete the listing before it's purchased.
+**HackerBay**: a marketplace where someone listed HackerOne usernames/passwords. The goal is to hack and delete the listing before it's purchased.
 
 Application structure:
-- `/` — main page  
-- `/register` — create account  
-- `/login` — authenticate  
-- `/dashboard` — logged-in user panel  
-- `/s3cr3t-4dm1n/` — admin directory (restricted by `.htaccess`)  
-- `/s3cr3t-4dm1n/.htaccess` — allows direct reading  
+- `/`: main page  
+- `/register`: create account  
+- `/login`: authenticate  
+- `/dashboard`: logged-in user panel  
+- `/s3cr3t-4dm1n/`: admin directory (restricted by `.htaccess`)  
+- `/s3cr3t-4dm1n/.htaccess`: allows direct reading  
 
 ---
 
-## Flag 1 — IP Restriction Bypass via .htaccess ✅
+## Flag 1: IP Restriction Bypass via .htaccess ✅
 
 ### Recon
 - `GET /robots.txt` → `Disallow: s3cr3t-4dm1n/`
@@ -65,7 +65,7 @@ curl "https://INSTANCE/s3cr3t-4dm1n/" -H "X-Forwarded-For: 8.8.8.8"
 
 ---
 
-## Flag 2 — Account Takeover via `owner_hash` ✅
+## Flag 2: Account Takeover via `owner_hash` ✅
 
 ### Recon
 - `POST /reset` with `username=hunter2` → hidden field `account_hash=cf505baebbaf25a0a4c63eb93331eb36`
@@ -80,7 +80,7 @@ Login as `subatk` → `/awaiting-enable` displays Flag 2.
 
 ---
 
-## Flag 3 — IDOR enable_toggle on subuser ✅
+## Flag 3: IDOR enable_toggle on subuser ✅
 
 **Flag:** `^FLAG^cdacb979d03096dcedf778248072812c161fef2f468bd7b0ce98323adb80c840$FLAG$`  
 
@@ -100,7 +100,7 @@ IDOR on the subusers endpoint: `enable_toggle=enable` accepts another user's sub
 
 ---
 
-## Flag 4 — SQLi + delete auction via admin ✅
+## Flag 4: SQLi + delete auction via admin ✅
 
 **Flag:** `^FLAG^07691fb71ac55123ec4fca32a0060b47cec41a6f2c7f0f1f9ad870a6ece3a8a9$FLAG$`  
 
@@ -180,8 +180,8 @@ IDOR on the subusers endpoint: `enable_toggle=enable` accepts another user's sub
 
 ## Tools
 
-- `bash scripts/ctf-session.sh activate 38` — retrieve instance URL
-- `bash scripts/ctf-session.sh submit <flag>` — submit flag
+- `bash scripts/ctf-session.sh activate 38`: retrieve instance URL
+- `bash scripts/ctf-session.sh submit <flag>`: submit flag
 - `curl` + manual POST parameter manipulation
 
 ---

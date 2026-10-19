@@ -1,4 +1,4 @@
-# Mobile Webdev — Writeup (2/2)
+# Mobile Webdev: Writeup (2/2)
 
 **Difficulty:** Easy  
 **Category:** Android (APK Reverse Engineering, HMAC bypass, Zip Slip)  
@@ -14,12 +14,12 @@
 **What you face:** An APK with a hardcoded HMAC key to authenticate uploads, and a server that decompresses ZIP files without sanitizing paths, allowing path traversal to overwrite PHP files and achieve RCE.
 
 **Vulnerabilities exploited:**
-- Hardcoded HMAC Key (CWE-798) — MD5 key hardcoded in the APK, extractable by decompilation
-- Zip Slip (CWE-22) — upload endpoint decompresses ZIP without validating `../` in filenames
-- RCE via File Upload — Zip Slip allows overwriting executable PHP files on the server
+- Hardcoded HMAC Key (CWE-798): MD5 key hardcoded in the APK, extractable by decompilation
+- Zip Slip (CWE-22): upload endpoint decompresses ZIP without validating `../` in filenames
+- RCE via File Upload: Zip Slip allows overwriting executable PHP files on the server
 
 **What you learn:**
-- HMAC with a hardcoded client key is illusory authentication — anyone with the APK can sign
+- HMAC with a hardcoded client key is illusory authentication: anyone with the APK can sign
 - Zip Slip: files inside a ZIP can have relative paths that escape the target directory
 - Chaining: reverse engineering (flag 0) + server exploitation (flag 1)
 - How to correctly validate ZIP uploads: verify the canonicalized path stays within the destination directory
@@ -38,7 +38,7 @@ Reverse engineer the APK to discover the HMAC-MD5 key, bypass authentication, an
 
 ---
 
-## Flag 0 — HMAC bypass with APK key
+## Flag 0: HMAC bypass with APK key
 
 **Vulnerability:** HMAC key hardcoded in the APK, recoverable via reverse engineering.
 
@@ -71,7 +71,7 @@ Include the calculated HMAC in the expected header/parameter. The response conta
 
 ---
 
-## Flag 1 — Zip Slip on upload.php
+## Flag 1: Zip Slip on upload.php
 
 **Vulnerability:** The `upload.php` endpoint extracts ZIP files without sanitizing paths, allowing writing files to arbitrary server directories.
 

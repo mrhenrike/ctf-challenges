@@ -1,4 +1,4 @@
-# Ticketastic: Live Instance — Writeup (2/2)
+# Ticketastic: Live Instance: Writeup (2/2)
 
 **Difficulty:** Moderate  
 **Category:** Web (CSRF, SQL Injection)  
@@ -9,14 +9,14 @@
 
 ## Challenge Overview
 
-**Context:** A support ticketing system (same codebase as the Demo Instance). This challenge is the "live instance" — there is no public registration link, but the user creation endpoint exists without CSRF protection. The SQLite database is queried via string concatenation on the ticket ID.
+**Context:** A support ticketing system (same codebase as the Demo Instance). This challenge is the "live instance": there is no public registration link, but the user creation endpoint exists without CSRF protection. The SQLite database is queried via string concatenation on the ticket ID.
 
 **What you face:** An application that appears to have no public registration, tickets with sequential IDs, and an admin who interacts with open tickets (simulated).
 
 **Vulnerabilities exploited:**
-- CSRF (CWE-352) — `/addUser` accepts GET without a CSRF token
-- Stored XSS (CWE-79) — links in ticket bodies rendered without sanitization
-- SQL Injection (CWE-89) — `?id=` uses `%s % user_input` directly in the SQLite query
+- CSRF (CWE-352): `/addUser` accepts GET without a CSRF token
+- Stored XSS (CWE-79): links in ticket bodies rendered without sanitization
+- SQL Injection (CWE-89): `?id=` uses `%s % user_input` directly in the SQLite query
 
 **What you learn:**
 - User creation endpoints without CSRF can be exploited to create admin accounts by any visitor
@@ -37,7 +37,7 @@ Exploit CSRF to create an admin account, then use SQL Injection to extract the f
 
 ---
 
-## Flag 0 — CSRF for Admin Account Creation
+## Flag 0: CSRF for Admin Account Creation
 
 **Vulnerability:** The user creation endpoint accepts GET without a CSRF token.
 
@@ -65,7 +65,7 @@ Log in with `test:test`. The admin posted the flag in a link in the panel. Navig
 
 ---
 
-## Flag 1 — SQL Injection in the Ticket ID Field
+## Flag 1: SQL Injection in the Ticket ID Field
 
 **Vulnerability:** Direct user input interpolation into the SQL query.
 

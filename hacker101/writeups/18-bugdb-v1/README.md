@@ -1,4 +1,4 @@
-# BugDB v1 — Writeup (1/1)
+# BugDB v1: Writeup (1/1)
 
 **Difficulty:** Easy  
 **Category:** Web, GraphQL  
@@ -14,8 +14,8 @@
 **What you face:** A GraphQL endpoint with no visible documentation. The schema must be discovered via introspection, and the correct query to access private bugs from other users must be constructed.
 
 **Vulnerabilities exploited:**
-- Unrestricted GraphQL Introspection (OWASP API9) — exposes the complete schema including available types and queries
-- Broken Object Level Authorization / BOLA (CWE-639) — `allUsers` returns private bugs from all users without checking authentication
+- Unrestricted GraphQL Introspection (OWASP API9): exposes the complete schema including available types and queries
+- Broken Object Level Authorization / BOLA (CWE-639): `allUsers` returns private bugs from all users without checking authentication
 
 **What you learn:**
 - GraphQL introspection should be disabled in production (`__schema`, `__type`)
@@ -36,7 +36,7 @@ Exploit the GraphQL API without authentication to extract sensitive data (privat
 
 ---
 
-## Flag 0 — GraphQL Introspection + Data Exfiltration
+## Flag 0: GraphQL Introspection + Data Exfiltration
 
 **Vulnerability:** Introspection enabled in production + absence of field-level access control.
 

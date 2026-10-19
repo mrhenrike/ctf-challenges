@@ -1,4 +1,4 @@
-# Model E1337 Rolling Code Lock — Writeup (2/2 flags)
+# Model E1337 Rolling Code Lock: Writeup (2/2 flags)
 
 **Difficulty:** Hard | **Category:** Web + Crypto | **Points:** ~13
 
@@ -9,11 +9,11 @@
 **What you face:** A lock that only opens with the right code, which changes constantly. To open it, you need to: (1) read the source code via XXE to understand the PRNG, and (2) recover the seed by observing PRNG outputs to predict the next code.
 
 **Vulnerabilities exploited:**
-- XXE (CWE-611) — `/set-config` processes XML with external entities; exfiltrates `main.py` and `rng.py`
-- Weak PRNG / Seed Recovery (CWE-338) — 32-bit seed = ~4B possibilities, recoverable via Z3 or GF(2)
+- XXE (CWE-611): `/set-config` processes XML with external entities; exfiltrates `main.py` and `rng.py`
+- Weak PRNG / Seed Recovery (CWE-338): 32-bit seed = ~4B possibilities, recoverable via Z3 or GF(2)
 
 **What you learn:**
-- XXE as a source code exfiltration vector — not just SSRF
+- XXE as a source code exfiltration vector: not just SSRF
 - Custom PRNGs are dangerous: mathematical invariants allow recovering the seed
 - Z3 SMT solver for solving equations over PRNG bits
 - GF(2) (linear algebra over binary field) as a more efficient alternative to Z3
@@ -27,7 +27,7 @@ Flask app with two attack vectors:
 - Flag 1: XXE on the `/set-config` endpoint to read source code
 - Flag 2: Brute-force of 32-bit seed of a custom PRNG to predict the "rolling code"
 
-## Flag 1 — XXE
+## Flag 1: XXE
 
 ### Reconnaissance
 
@@ -67,7 +67,7 @@ The SAX handler reads the entity `&xxe;` content via `SYSTEM "main.py"` (relativ
 
 ---
 
-## Flag 2 — Custom PRNG brute-force
+## Flag 2: Custom PRNG brute-force
 
 ### Reading rng.py via XXE
 
@@ -289,81 +289,6 @@ Thanks guys!! (❍ᴥ❍ʋ)
 ---
 
 XXE to read the source code, then brute-force a 32-bit PRNG seed with two leaked outputs: this challenge is a masterclass in chaining information disclosure with cryptographic weakness. Custom PRNGs with small seeds and error messages that leak expected values are a recipe for disaster.
-
-- Instagram: https://www.instagram.com/uniaogeek
-- LinkedIn: http://linkedin.com/in/mrhenrike
-- X: https://x.com/mrhenrike
-
----
-
-## MITRE ATT&CK Mapping
-
-| ID | Technique | Tactic | How it was used |
-|----|-----------|--------|----------------|
-| T1190 | Exploit Public-Facing Application | Initial Access | XXE on `/set-config` to exfiltrate source code |
-| T1005 | Data from Local System | Collection | Read `main.py` and `rng.py` via XXE entity resolution |
-| T1588.005 | Obtain Capabilities: Exploits | Resource Development | Built C brute-forcer for 32-bit PRNG seed recovery |
-| T1059.006 | Command and Scripting Interpreter: Python | Execution | Python XXE payload generation and URL encoding |
-
-## Remediation and Containment
-
-### Technical Fixes
-
-1. **XXE:** Disable external entity resolution in `xml.sax` with `setFeature(feature_external_ges, False)`
-2. **PRNG:** Use `secrets.token_bytes()` or `/dev/urandom` instead of custom PRNG with 32-bit seed
-3. **Error messages:** Never reveal the expected code in error responses
-4. **Seed space:** If rolling codes are required, use HMAC-based OTP (RFC 4226/6238) with 128+ bit secrets
-
-### OWASP Top 10 2021
-
-| ID | Category | Relevance |
-|----|----------|-----------|
-| A05:2021 | Security Misconfiguration | XML parser with external entities enabled; error leaking expected codes |
-| A02:2021 | Cryptographic Failures | 32-bit PRNG seed; custom (non-cryptographic) random number generator |
-
-### MITRE D3FEND Countermeasures
-
-| ID | Technique | Application |
-|----|-----------|-------------|
-| D3-CSPP | Content Security Policy Pinning | Restrict XML processing; disable external entity resolution |
-| D3-MFA | Multi-factor Authentication | Use HMAC-OTP instead of custom rolling codes |
-| D3-AL | Audit Logging | Log all `/set-config` and `/unlock` attempts for anomaly detection |
-
-### NIST CSF 2.0
-
-| Function | Category | Application |
-|----------|----------|-------------|
-| PR (Protect) | PR.DS | Disable external entities in all XML parsers |
-| PR (Protect) | PR.AC | Restrict access to configuration endpoints; rate-limit unlock attempts |
-| DE (Detect) | DE.CM | Monitor for XXE probes and brute-force patterns on `/unlock` |
-
-### NIST SP 800-53 Rev. 5
-
-| Control | Title | Application |
-|---------|-------|-------------|
-| SC-12 | Cryptographic Key Establishment and Management | Use CSPRNG with 128+ bit seeds for all security-sensitive randomness |
-| SC-13 | Cryptographic Protection | Replace custom PRNG with HMAC-based OTP (RFC 6238) |
-| SI-10 | Information Input Validation | Validate and sanitize XML input; disable DTD processing |
-| SI-11 | Error Handling | Generic error messages; never reveal expected values |
-
-### C2M2
-
-| Domain | Practice | MIL | Application |
-|--------|----------|-----|-------------|
-| ACCESS | Access Control Management | MIL-2 | Restrict configuration endpoints; enforce authentication |
-| ASSET | Asset, Change, and Configuration Management | MIL-2 | Inventory XML parsers; enforce secure defaults across all XML processing |
-
----
-
-## Final Thoughts
-
-Thanks guys!! (❍ᴥ❍ʋ)
-
----
-
-This challenge is a perfect demonstration of why custom cryptography is dangerous: a 32-bit seed means only ~4 billion possibilities, and with two leaked outputs the seed is uniquely determined. Combined with XXE for source code exfiltration, it shows how information disclosure chains into full compromise. If you need rolling codes, use HMAC-OTP with proper key sizes.
-
-Reach out and let's discuss crypto and web security:
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike

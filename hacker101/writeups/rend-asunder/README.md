@@ -1,4 +1,4 @@
-# Rend Asunder — Writeup (IN PROGRESS: 1/3)
+# Rend Asunder: Writeup (IN PROGRESS: 1/3)
 
 **Difficulty:** Expert  
 **Category:** Native (DOM XSS + iframe escape + RCE)  
@@ -12,22 +12,22 @@
 
 **What you face:**
 - Flag 0: flag embedded in a `<noscript>` tag in the iframe DOM
-- Flag 1: the URL/body of the parent (`data:` URL) contains something — SOP null-origin blocks direct access
-- Flag 2: requires RCE on the server (not in the browser) — Chrome 67 has exploitable CVEs
+- Flag 1: the URL/body of the parent (`data:` URL) contains something: SOP null-origin blocks direct access
+- Flag 2: requires RCE on the server (not in the browser): Chrome 67 has exploitable CVEs
 
 **Vulnerabilities exploited:**
-- DOM Inspection (Flag 0) — `getElementsByTagName('noscript')[0].innerHTML`
-- SOP null-origin bypass (Flag 1) — iframe escape to access the `data:` URL parent context
-- RCE via Chrome/V8 exploit (Flag 2) — CVE-2018-17462 or CVE-2018-17463 (Chrome 67 specific)
+- DOM Inspection (Flag 0): `getElementsByTagName('noscript')[0].innerHTML`
+- SOP null-origin bypass (Flag 1): iframe escape to access the `data:` URL parent context
+- RCE via Chrome/V8 exploit (Flag 2): CVE-2018-17462 or CVE-2018-17463 (Chrome 67 specific)
 
 **What you learn:**
 - How headless browsers are used as sandboxes in CTFs
-- Same-Origin Policy with `data:` URLs — origin is `null`, isolated from everything
+- Same-Origin Policy with `data:` URLs: origin is `null`, isolated from everything
 - `<noscript>` as a data storage vector in headless environments
-- Chrome 67 is deliberately outdated — specific CVEs are the intended attack vector
+- Chrome 67 is deliberately outdated: specific CVEs are the intended attack vector
 - Browser exploits in CTF: the difference between "trying everything" and "researching exact version CVEs"
 
-**Current status:** 1/3 — Flag 1 and Flag 2 require Chrome 67 CVEs (under investigation)
+**Current status:** 1/3: Flag 1 and Flag 2 require Chrome 67 CVEs (under investigation)
 
 ---
 
@@ -57,7 +57,7 @@ Headless Chrome 67.0.3396.79 (Puppeteer) opens data: URL as top
 
 ---
 
-## Flag 0 — Sandbox DOM (noscript)
+## Flag 0: Sandbox DOM (noscript)
 
 **Status: CAPTURED**  
 **Value:** `3a8277c042c0a9d49844f8e5b0c705d00c456beb054873747841bde33c858bca`
@@ -74,9 +74,9 @@ The `<noscript>` tag is rendered by the HTML parser before script execution, so 
 
 ---
 
-## Flag 1 — Iframe Escape (parent frame)
+## Flag 1: Iframe Escape (parent frame)
 
-**Status: UNSOLVED — blocked by SOP**
+**Status: UNSOLVED: blocked by SOP**
 
 ### Blocker context
 
@@ -97,7 +97,7 @@ The parent is a `data:` URL with origin="null" (null opaque origin). The iframe 
 | `MutationObserver` on parent | SecurityError |
 | `Object.getOwnPropertyNames(top)` | only safelisted properties |
 
-### Accessible top properties (safelisted by spec — NO flag)
+### Accessible top properties (safelisted by spec: NO flag)
 
 ```javascript
 // Cross-origin accessible (but contain no flag):
@@ -109,21 +109,21 @@ top.close, top.focus, top.blur, top.postMessage
 ### Additional techniques tested
 
 - **postMessage**: top has no message listener, no response
-- **sub-iframe with data: URL**: timing — screenshot taken before async response
+- **sub-iframe with data: URL**: timing: screenshot taken before async response
 - **Synchronous XHR to root**: returns only an HTML form, no flag
-- **Performance API**: `performance.getEntries()` — 0 resources (clean sandbox)
+- **Performance API**: `performance.getEntries()`: 0 resources (clean sandbox)
 - **Puppeteer exposeFunction**: no custom functions exposed on window
-- **`top.frames[0] === window`**: TRUE — we are the only child frame
+- **`top.frames[0] === window`**: TRUE: we are the only child frame
 
-### Additional techniques tested (session 23 — 2026-10-11)
+### Additional techniques tested (session 23: 2026-10-11)
 
 | Technique | Result |
 |---|---|
 | iframe `outerHTML` via pixel channel | Only FLAG 0 in noscript |
 | Cookies, localStorage, sessionStorage (Puppeteer) | All empty |
-| `navigator.webdriver` | `true` — confirms Puppeteer, no flag |
+| `navigator.webdriver` | `true`: confirms Puppeteer, no flag |
 | iframe `window.name` | Empty |
-| PNG metadata chunks (tEXt, iTXt) | None — only IHDR+IDAT+IEND |
+| PNG metadata chunks (tEXt, iTXt) | None: only IHDR+IDAT+IEND |
 | postMessage to parent with synchronous polling | Parent does not respond |
 | `window.parent.location = 'javascript:...'` | Silently blocked in Chrome 67 |
 | `window.parent.location = 'http://localhost/'` | Navigates parent → Puppeteer timeout (PANDA GIF) |
@@ -181,25 +181,25 @@ FLAG 1 is not accessible via iframe JavaScript without a SOP bypass. The parent 
 
 ### Hypothesis for next session
 
-- CVE-2018-17463 (V8 type confusion → arbitrary code execution): jhalon findOverlappingProperties FAILED (100k iters, Chrome 67) — try PoC with 8 props or different structure
-- CVE-2018-17462 (AppCache SOP bypass — Chrome < 70)
+- CVE-2018-17463 (V8 type confusion → arbitrary code execution): jhalon findOverlappingProperties FAILED (100k iters, Chrome 67): try PoC with 8 props or different structure
+- CVE-2018-17462 (AppCache SOP bypass: Chrome < 70)
 - David Trapp (2025): "obtained FLAG 1 via the same method as FLAG 2" → RCE first
 
-### Additional techniques tested (session 24 — 2026-10-11)
+### Additional techniques tested (session 24: 2026-10-11)
 
 | Technique | Result |
 |---|---|
-| `findOverlappingProperties` (10k iters) | "no overlap" — Chrome 67 has different layout |
-| `findOverlappingProperties` (100k iters) | same — jhalon PoC incompatible with V8 6.7 |
-| Parent border pixel analysis (10px) | Only white background — no visible text |
+| `findOverlappingProperties` (10k iters) | "no overlap": Chrome 67 has different layout |
+| `findOverlappingProperties` (100k iters) | same: jhalon PoC incompatible with V8 6.7 |
+| Parent border pixel analysis (10px) | Only white background: no visible text |
 | Internal endpoint probing (~30 paths) | Only `/` returns 200, everything else 404 |
-| `location.ancestorOrigins[0]` | `"null"` — does not leak data: URL |
+| `location.ancestorOrigins[0]` | `"null"`: does not leak data: URL |
 
 ---
 
-## Flag 2 — RCE
+## Flag 2: RCE
 
-**Status: UNSOLVED — vector unknown**
+**Status: UNSOLVED: vector unknown**
 
 **Hint:** "You need RCE here. No other way to put it!"
 
@@ -221,7 +221,7 @@ Script execution occurs in the **browser** (HeadlessChrome), not in the Node.js 
 | `nginx_status`, `server-status` | 404 |
 | Internal ports (3000, 8080, 5432, 6379, 3306...) | all closed |
 
-### Session 20 investigation — all exhausted
+### Session 20 investigation: all exhausted
 
 - ffuf with 72 paths: no new endpoint discovered (all 404)
 - Synchronous XHR to `/flag`, `/flag1`, `/flag2`, `/secret`, `/admin`, `/env`, `/config`, `/debug`, `/proc/self/environ`, `/app/*`, `/home/flag`, `/var/flag`: all 404
@@ -275,7 +275,7 @@ tesseract /tmp/rend.png stdout 2>/dev/null
 ## Lessons Learned
 
 1. **`<noscript>` doesn't hide from JS**: content is accessible via `innerHTML` even with JS enabled
-2. **data: URL as parent creates null-origin**: Chrome 67 treats two null-origins as cross-origin — no SOP access
+2. **data: URL as parent creates null-origin**: Chrome 67 treats two null-origins as cross-origin: no SOP access
 3. **Headless Chrome timing**: screenshot is synchronous; only synchronous code appears
 4. **Synchronous XHR is required**: `xhr.open('GET', url, false)` for data in screenshots
 5. **HTML injection via `</script>`**: closing the `<script>` tag injects visible HTML

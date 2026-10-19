@@ -1,7 +1,7 @@
-# Cody's First Blog — Writeup (3/3)
+# Cody's First Blog: Writeup (3/3)
 
 **Difficulty:** Easy  
-**Category:** Web — PHP Injection, LFI, RFI  
+**Category:** Web: PHP Injection, LFI, RFI  
 **Flags:** 3/3 (complete)  
 **Platform:** Hacker101 CTF
 
@@ -11,16 +11,16 @@
 
 **Context:** A PHP blog created by "Cody", a beginner developer. Allows posting public comments, has a hidden admin panel, and uses `include()` to load pages via the `?page=` parameter.
 
-**What you face:** An apparently harmless comment field, a link to the admin panel commented out in the HTML, and a file inclusion feature that accepts any value — including external URLs.
+**What you face:** An apparently harmless comment field, a link to the admin panel commented out in the HTML, and a file inclusion feature that accepts any value: including external URLs.
 
 **Vulnerabilities exploited:**
-- PHP Code Injection (CWE-94) — comments saved to disk and included via `include()`
-- Local File Inclusion / LFI (CWE-98) — `?page=admin.inc` bypasses authentication
-- Remote File Inclusion / RFI — `include()` with `allow_url_include=On` accepts HTTP URLs
-- Information Disclosure — HTML comments expose internal paths (`admin.auth.inc`)
+- PHP Code Injection (CWE-94): comments saved to disk and included via `include()`
+- Local File Inclusion / LFI (CWE-98): `?page=admin.inc` bypasses authentication
+- Remote File Inclusion / RFI: `include()` with `allow_url_include=On` accepts HTTP URLs
+- Information Disclosure: HTML comments expose internal paths (`admin.auth.inc`)
 
 **What you learn:**
-- `include()` with user input = critical LFI/RFI — never combine the two
+- `include()` with user input = critical LFI/RFI: never combine the two
 - HTML comments are public: do not hide sensitive paths in them
 - User comments must NEVER be included as executable PHP files
 - Removing "auth" from `admin.auth.inc` to reach `admin.inc` is a classic filename-based auth bypass
@@ -34,7 +34,7 @@ Exploit PHP code injection via comments and Local/Remote File Inclusion to captu
 
 ---
 
-## Flag 0 — PHP Code Injection via Comments
+## Flag 0: PHP Code Injection via Comments
 
 **Vulnerability:** Comments are written to disk and included via PHP's `include()` without sanitization.
 
@@ -58,7 +58,7 @@ The flag appears in the execution output.
 
 ---
 
-## Flag 1 — Admin Panel Authentication Bypass via LFI
+## Flag 1: Admin Panel Authentication Bypass via LFI
 
 **Vulnerability:** The `?page=` parameter includes PHP files directly; removing "auth" from the path bypasses authentication.
 
@@ -83,7 +83,7 @@ The flag appears in the admin panel.
 
 ---
 
-## Flag 2 — Remote File Inclusion (RFI) via Source Code Disclosure
+## Flag 2: Remote File Inclusion (RFI) via Source Code Disclosure
 
 **Vulnerability:** `include()` accepts URLs and `http://localhost/` returns processed PHP code (with comments already executed).
 
@@ -123,9 +123,9 @@ Then access the page to see the full source with the embedded flag.
 ## Lessons Learned
 
 1. **PHP `include()` with user input** = critical LFI/RFI
-2. **Comments must never execute code** — sanitize and escape all user input
+2. **Comments must never execute code**: sanitize and escape all user input
 3. **HTML comments (`<!-- -->`)** expose internal paths and hidden functionality
-4. **`include()` accepts URLs by default** — disable `allow_url_include` in php.ini
+4. **`include()` accepts URLs by default**: disable `allow_url_include` in php.ini
 5. **Authentication checks via filename** are fragile and trivially bypassable
 
 ---

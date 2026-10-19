@@ -1,28 +1,28 @@
-# RTFM — Complete Writeup (8/8)
+# RTFM: Complete Writeup (8/8)
 
 **Difficulty:** Moderate  
 **Category:** Web  
 **Platform:** Hacker101 CTF (level 43)  
-**Flags:** 8/8 — Completed 2026-10-01
+**Flags:** 8/8: Completed 2026-10-01
 
 ---
 
 ## Challenge Overview
 
-**Context:** A versioned REST API (`/api/v1/`, `/api/v2/`) with Swagger/OpenAPI. Simulates a user platform with posts, configuration, status, an admin panel, and a secret endpoint (`/secrets`) protected by IP restriction — only `localhost` can access it.
+**Context:** A versioned REST API (`/api/v1/`, `/api/v2/`) with Swagger/OpenAPI. Simulates a user platform with posts, configuration, status, an admin panel, and a secret endpoint (`/secrets`) protected by IP restriction: only `localhost` can access it.
 
 **What you face:** 8 flags spread across different endpoints and techniques. Each flag requires a different vector: enumeration, info disclosure, header manipulation, path traversal, and finally SSRF to bypass the IP restriction.
 
 **Vulnerabilities exploited:**
-- Information Disclosure (CWE-200) — Swagger exposes endpoints, user creation returns `flag`, config exposed at `/config`
-- Parameter Fuzzing — `?verbose=X` on `/status` returns extra data
-- Missing Authentication — admin user-list accessible with `X-Session` header
-- Path Traversal (CWE-22) — `post-analytics/..\private` accesses a restricted area
-- SSRF — Server-Side Request Forgery (CWE-918) via `avatar` field that the server fetches internally, bypassing IP restriction on `/secrets`
+- Information Disclosure (CWE-200): Swagger exposes endpoints, user creation returns `flag`, config exposed at `/config`
+- Parameter Fuzzing: `?verbose=X` on `/status` returns extra data
+- Missing Authentication: admin user-list accessible with `X-Session` header
+- Path Traversal (CWE-22): `post-analytics/..\private` accesses a restricted area
+- SSRF: Server-Side Request Forgery (CWE-918) via `avatar` field that the server fetches internally, bypassing IP restriction on `/secrets`
 
 **What you learn:**
 - SSRF via URL fields (avatar, webhook, thumbnail) is an underestimated vector in APIs
-- Localhost bypasses IP-based ACLs — if the server fetches URLs, it has access to internal endpoints
+- Localhost bypasses IP-based ACLs: if the server fetches URLs, it has access to internal endpoints
 - Swagger in production without authentication exposes the entire attack surface
 - Each endpoint of an API can have its own independent vulnerability
 - Path traversal with `..\ ` (backslash) works on some servers even with `/` sanitization
@@ -58,7 +58,7 @@ Versioned REST API with endpoints (/api/v1/, /api/v2/). The 8 flags are obtained
 
 ---
 
-## Flag 8 — Detailed Step-by-Step
+## Flag 8: Detailed Step-by-Step
 
 ### Context
 - `/api/v1/secrets` returns `403 Forbidden: "Access not allowed from your IP address"`
@@ -97,7 +97,7 @@ The server fetched `/api/v1/secrets` via localhost (IP bypass), detected it was 
 
 ## Lessons Learned
 
-1. **URL fields in APIs are SSRF vectors**: avatar, webhook, thumbnail — any field the server fetches must be validated
+1. **URL fields in APIs are SSRF vectors**: avatar, webhook, thumbnail: any field the server fetches must be validated
 2. **IP-based restrictions fail against SSRF**: requests from localhost bypass ACLs that restrict external IPs
 3. **Swagger without auth = complete attack surface**: introspection is a recon tool, not just documentation
 4. **Error messages can expose fetched content**: even a "non-image" error leaked the secrets payload
@@ -109,7 +109,7 @@ The server fetched `/api/v1/secrets` via localhost (IP bypass), detected it was 
 - Use an allowlist of permitted URL schemes and hosts for avatar/webhook fields
 - Disable Swagger/OpenAPI in production or add authentication
 - Never expose raw fetched content in error responses
-- Validate and sanitize all path parameters — reject both `/` and `\` traversal sequences
+- Validate and sanitize all path parameters: reject both `/` and `\` traversal sequences
 
 ---
 

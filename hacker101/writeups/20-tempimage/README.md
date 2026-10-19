@@ -1,4 +1,4 @@
-# TempImage — Writeup (2/2)
+# TempImage: Writeup (2/2)
 
 **Difficulty:** Moderate  
 **Category:** Web (File Upload, Path Traversal, PHP RCE)  
@@ -14,14 +14,14 @@
 **What you face:** An apparently simple upload service. The challenge is to escape the upload directory and place an executable PHP file in the webroot.
 
 **Vulnerabilities exploited:**
-- Path Traversal (CWE-22) in the `filename` parameter of the multipart upload — `../` or `../../` in the filename
-- Unrestricted File Upload (CWE-434) — upload of a PHP webshell with modified extension via Burp
-- Remote Code Execution via webshell — system access after successful upload
+- Path Traversal (CWE-22) in the `filename` parameter of the multipart upload: `../` or `../../` in the filename
+- Unrestricted File Upload (CWE-434): upload of a PHP webshell with modified extension via Burp
+- Remote Code Execution via webshell: system access after successful upload
 
 **What you learn:**
 - The `filename` in the `Content-Disposition` header is client-controlled and must be sanitized before use as a path
 - Renaming the file with MD5 protects against conflicts but not against path traversal in the original name
-- Uploads must not be served as executables — use a separate directory without PHP execution permission
+- Uploads must not be served as executables: use a separate directory without PHP execution permission
 - `../` + `.php` extension = webshell in web directory: a combination of path traversal and unrestricted upload
 - Intercepting and modifying requests in Burp Suite is the core technique for exploiting uploads
 
@@ -39,7 +39,7 @@ Exploit file upload vulnerabilities to gain server access via path traversal and
 
 ---
 
-## Flag 0 — Path Traversal on Upload
+## Flag 0: Path Traversal on Upload
 
 **Vulnerability:** Missing sanitization of the `filename` parameter in the upload.
 
@@ -61,7 +61,7 @@ The path traversal in the filename causes the file to be written outside the exp
 
 ---
 
-## Flag 1 — PHP Webshell via Upload + Path Traversal
+## Flag 1: PHP Webshell via Upload + Path Traversal
 
 **Combined vulnerability:** File type validation bypass + path traversal to place an executable PHP file in the web directory.
 

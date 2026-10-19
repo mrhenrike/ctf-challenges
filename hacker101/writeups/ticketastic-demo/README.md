@@ -1,4 +1,4 @@
-# Ticketastic: Demo Instance — Writeup (2/2)
+# Ticketastic: Demo Instance: Writeup (2/2)
 
 **Difficulty:** Moderate  
 **Category:** Web (CSRF, SQL Injection)  
@@ -15,8 +15,8 @@
 **What you face:** A ticketing application where any user can create tickets, but only admins have full panel access. The code is identical to the Live Instance.
 
 **Vulnerabilities exploited:**
-- CSRF — `newUser` endpoint accepts GET requests without a CSRF token
-- Stored XSS via links in tickets — admin clicks the malicious link
+- CSRF: `newUser` endpoint accepts GET requests without a CSRF token
+- Stored XSS via links in tickets: admin clicks the malicious link
 - SQL Injection on the `id` parameter of the `/ticket` endpoint
 
 **What you learn:**
@@ -27,7 +27,7 @@
 
 ---
 
-## Flag 0 — CSRF via ticket link (user creation)
+## Flag 0: CSRF via ticket link (user creation)
 
 **Vulnerability:** The `newUser` endpoint accepts GET requests without CSRF validation, allowing creation of an admin user by convincing an admin to click a link.
 
@@ -61,7 +61,7 @@ Log in with `attacker:pass123`. The flag appears in the new user's panel.
 
 ---
 
-## Flag 1 — SQL Injection on ticket ID
+## Flag 1: SQL Injection on ticket ID
 
 **Vulnerability:** The `id` parameter in `/ticket?id=N` is directly interpolated into the SQL query without parameterization.
 

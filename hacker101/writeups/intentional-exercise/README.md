@@ -1,4 +1,4 @@
-# Intentional Exercise — Writeup (1/1)
+# Intentional Exercise: Writeup (1/1)
 
 **Difficulty:** Easy  
 **Category:** Android (APK Reverse Engineering, Hash Bypass)  
@@ -14,14 +14,14 @@
 **What you face:** An APK that uses a custom URI scheme (`android:host="level13.hacker101.com"`) to derive the hash payload. The key is hardcoded in Java. Without replicating the exact hash calculation (key + correct path), the server rejects the request.
 
 **Vulnerabilities exploited:**
-- Hardcoded Secret Key (CWE-798) — key `s00p3rs3cr3tk3y` hardcoded in `MainActivity.java`
-- Predictable Authentication Token (CWE-340) — deterministic SHA-256 with static key is forgeable
-- Information Disclosure via APK Decompilation (CWE-200) — authentication logic exposed by decompilation
+- Hardcoded Secret Key (CWE-798): key `s00p3rs3cr3tk3y` hardcoded in `MainActivity.java`
+- Predictable Authentication Token (CWE-340): deterministic SHA-256 with static key is forgeable
+- Information Disclosure via APK Decompilation (CWE-200): authentication logic exposed by decompilation
 
 **What you learn:**
 - Java (Dalvik) APKs can be converted to `.jar` and inspected with `jd-gui`
 - `substring(28)` on the full URI is a non-obvious trick that must be reproduced faithfully
-- Hash algorithms with static keys provide no real security — they are only security through obscurity
+- Hash algorithms with static keys provide no real security: they are only security through obscurity
 - Hardcoded keys at any layer of the app are trivially extractable
 
 ---
@@ -40,7 +40,7 @@ Reverse engineer an Android APK to discover the secret key used to generate requ
 
 ---
 
-## Flag 0 — SHA-256 Hash Forge
+## Flag 0: SHA-256 Hash Forge
 
 **Vulnerability:** Secret key hardcoded in the APK + recoverable hash algorithm via reverse engineering.
 

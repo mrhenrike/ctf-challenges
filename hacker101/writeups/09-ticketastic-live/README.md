@@ -1,4 +1,4 @@
-# Ticketastic: Live Instance — Writeup (2/2)
+# Ticketastic: Live Instance: Writeup (2/2)
 
 **Difficulty:** Moderate  
 **Category:** Web (CSRF, SQL Injection)  
@@ -10,14 +10,14 @@
 
 ## About the Challenge
 
-**Context:** A support ticket system. Users create tickets, admins reply. The "live instance" has no public registration link — but the user creation endpoint exists and has no CSRF protection. The SQLite database is accessed via string concatenation on the ticket ID.
+**Context:** A support ticket system. Users create tickets, admins reply. The "live instance" has no public registration link: but the user creation endpoint exists and has no CSRF protection. The SQLite database is accessed via string concatenation on the ticket ID.
 
 **What you face:** An application seemingly without public registration, tickets with numeric IDs, and an admin who periodically reads tickets (simulated by a bot).
 
 **Vulnerabilities exploited:**
-- CSRF (CWE-352) — `addUser` endpoint accepts GET without a CSRF token, allowing account creation by third parties
-- Stored XSS (CWE-79) — links and scripts in tickets are rendered without sanitization
-- SQL Injection (CWE-89) — `/ticket?id=` uses `%s % user_input` directly in the SQLite query
+- CSRF (CWE-352): `addUser` endpoint accepts GET without a CSRF token, allowing account creation by third parties
+- Stored XSS (CWE-79): links and scripts in tickets are rendered without sanitization
+- SQL Injection (CWE-89): `/ticket?id=` uses `%s % user_input` directly in the SQLite query
 
 **What you learn:**
 - CSRF without tokens allows any site to create resources on the victim server
@@ -34,11 +34,11 @@ Exploit CSRF to create an admin account and SQL injection to extract sensitive d
 
 ## Context
 
-This instance and the "Ticketastic Demo Instance" share the same code. The user creation CSRF vulnerability seen in the demo is also present here. The difference is that there is no public registration link — access is only possible via CSRF.
+This instance and the "Ticketastic Demo Instance" share the same code. The user creation CSRF vulnerability seen in the demo is also present here. The difference is that there is no public registration link: access is only possible via CSRF.
 
 ---
 
-## Flag 0 — CSRF for Account Creation + Stored XSS in Tickets
+## Flag 0: CSRF for Account Creation + Stored XSS in Tickets
 
 **Vulnerabilities:** CSRF on the user creation endpoint + clickable links in tickets.
 
@@ -87,7 +87,7 @@ The flag appears when the admin bot accesses the ticket.
 
 ---
 
-## Flag 1 — SQL Injection on the Ticket ID
+## Flag 1: SQL Injection on the Ticket ID
 
 **Vulnerability:** SQL injection in the `id` parameter of the ticket view endpoint.
 
@@ -104,7 +104,7 @@ File "./main.py", line 78, in ticket
     cur.execute('SELECT title, body, reply FROM tickets WHERE id=%s' % request.args['id'])
 ```
 
-The code uses `%s % user_input` directly in the query — classic injection.
+The code uses `%s % user_input` directly in the query: classic injection.
 
 ### Step 2: Enumerate columns
 
@@ -130,7 +130,7 @@ Returns: `tickets,users`
 
 The flag is in the users table data.
 
-**Alternative — extract users table columns:**
+**Alternative: extract users table columns:**
 
 ```
 /ticket?id=0 UNION SELECT group_concat(sql),2,3 FROM sqlite_master WHERE name='users'--
@@ -149,7 +149,7 @@ FLAG 1: SQL injection on /ticket?id=1' → UNION SELECT from users table → fla
 
 1. **CSRF** without tokens allows third parties to create accounts
 2. **Stored XSS** in tickets + an admin that opens tickets = session/flag theft
-3. **SQL injection via string formatting** (`%s % input`) is critical — use parameterized queries
+3. **SQL injection via string formatting** (`%s % input`) is critical: use parameterized queries
 4. **SQLite sqlite_master** for schema enumeration when `information_schema` is unavailable
 5. **Shared codebase between instances** means shared vulnerabilities: never assume "demo" and "live" have different security
 

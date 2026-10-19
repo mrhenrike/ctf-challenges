@@ -1,4 +1,4 @@
-# BugDB v2 — Writeup (1/1)
+# BugDB v2: Writeup (1/1)
 
 **Difficulty:** Easy  
 **Category:** Web, GraphQL  
@@ -12,12 +12,12 @@
 
 **Context:** Second version of the GraphQL bug reports API. The developer "fixed" some things from v1, but the schema changed in a way that created a new, even more direct access route to private bugs.
 
-**What you face:** The same GraphQL API, but with a slightly different schema. The `allUsers` endpoint may no longer exist, but `allBugs` was added — and it returns bugs from all users, including private ones, without authentication.
+**What you face:** The same GraphQL API, but with a slightly different schema. The `allUsers` endpoint may no longer exist, but `allBugs` was added: and it returns bugs from all users, including private ones, without authentication.
 
 **Vulnerabilities exploited:**
-- Unrestricted GraphQL Introspection (OWASP API9) — reveals the new schema including `allBugs`
-- Broken Object Level Authorization / BOLA (CWE-639) — `allBugs` exposes private bugs from all users without authentication
-- Accidental data exposure via schema change — the "fix" created a new leak
+- Unrestricted GraphQL Introspection (OWASP API9): reveals the new schema including `allBugs`
+- Broken Object Level Authorization / BOLA (CWE-639): `allBugs` exposes private bugs from all users without authentication
+- Accidental data exposure via schema change: the "fix" created a new leak
 
 **What you learn:**
 - GraphQL schema changes can introduce new vulnerabilities even while fixing old ones
@@ -40,7 +40,7 @@ Adapt BugDB v1 queries to the new schema to extract private bug reports.
 
 ---
 
-## Flag 0 — Query Adaptation + allBugs
+## Flag 0: Query Adaptation + allBugs
 
 ### Step 1: Check what changed with introspection
 
@@ -132,7 +132,7 @@ The `text` field of private bugs (`private: true`) contains the flag.
 
 ## Attack Strategy
 
-1. Try the v1 queries exactly — some will likely fail with errors
+1. Try the v1 queries exactly: some will likely fail with errors
 2. Use the error messages to understand what changed in the schema
 3. Adapt the queries using introspection of the new schema
 4. Explore the new `allBugs` endpoint that exposes data more directly

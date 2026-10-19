@@ -1,4 +1,4 @@
-# Postbook — Writeup (5/5)
+# Postbook: Writeup (5/5)
 
 **Difficulty:** Easy  
 **Category:** Web (IDOR, Weak Credentials, Hidden Parameters)  
@@ -9,20 +9,20 @@
 
 ## About the Challenge
 
-**Context:** A mini social network where users create accounts and publish posts. There are private posts from other users that the attacker needs to access, create posts on behalf of others, and edit third-party posts — all without permission.
+**Context:** A mini social network where users create accounts and publish posts. There are private posts from other users that the attacker needs to access, create posts on behalf of others, and edit third-party posts: all without permission.
 
 **What you face:** A post system with sequential IDs, forms with hidden fields (`user_id`), and a login screen with weak credentials. It looks simple, but each feature has a different authorization flaw.
 
 **Vulnerabilities exploited:**
-- IDOR — Insecure Direct Object Reference (CWE-639) on post viewing, creation, and editing
-- Weak/default credentials (CWE-521) — `user/password`
+- IDOR: Insecure Direct Object Reference (CWE-639) on post viewing, creation, and editing
+- Weak/default credentials (CWE-521): `user/password`
 - Hidden parameter manipulation (`type="hidden"`) on the post creation form
 - Predictable/calculated ID (189 × 5 = 945) to access a specific post
 
 **What you learn:**
 - IDOR is the most prevalent vulnerability: the server must verify ownership for EVERY operation
 - HTML `type="hidden"` fields are trivially visible and modifiable by the client
-- Sequential or calculable IDs facilitate enumeration — use UUIDs or opaque tokens instead
+- Sequential or calculable IDs facilitate enumeration: use UUIDs or opaque tokens instead
 - Authorization must be enforced server-side for read, create, edit, and delete operations
 - Default credentials are the first vector to test in any new application
 
@@ -34,7 +34,7 @@ Exploit IDOR (Insecure Direct Object Reference) and weak credentials in a blog s
 
 ---
 
-## Flag 0 — Weak Credentials
+## Flag 0: Weak Credentials
 
 ### Payload
 
@@ -47,7 +47,7 @@ The flag appears after a successful login.
 
 ---
 
-## Flag 1 — IDOR on the `id` Parameter (View)
+## Flag 1: IDOR on the `id` Parameter (View)
 
 **Vulnerability:** The `id` parameter in the post view URL does not validate authorization.
 
@@ -67,7 +67,7 @@ Post 2 belongs to another user and contains the flag.
 
 ---
 
-## Flag 2 — IDOR via Hidden Field (Post as Another User)
+## Flag 2: IDOR via Hidden Field (Post as Another User)
 
 **Vulnerability:** The post creation form has a hidden `user_id` field that can be manipulated.
 
@@ -85,7 +85,7 @@ The post is created on behalf of user 1, and the flag appears.
 
 ---
 
-## Flag 3 — IDOR with a Calculated ID
+## Flag 3: IDOR with a Calculated ID
 
 **Vulnerability:** Predictable mathematical pattern in private post IDs.
 
@@ -102,7 +102,7 @@ The flag is in the hidden post with this calculated ID.
 
 ---
 
-## Flag 4 — IDOR on Post Editing
+## Flag 4: IDOR on Post Editing
 
 **Vulnerability:** The edit form also does not validate whether the post belongs to the current user.
 

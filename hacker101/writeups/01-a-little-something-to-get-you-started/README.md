@@ -1,4 +1,4 @@
-# A Little Something to Get You Started — Writeup (1/1)
+# A Little Something to Get You Started: Writeup (1/1)
 
 **Difficulty:** Trivial  
 **Category:** Web  
@@ -76,7 +76,7 @@ The `background.png` file is actually a **text file disguised as a PNG**!
 
 ## Vulnerability
 
-**Information Disclosure via Misnamed File** — The flag is stored in a file named `background.png` which, despite its extension, is a plain ASCII text file. The server serves it without proper Content-Type validation. The flag is fully exposed when the resource is requested.
+**Information Disclosure via Misnamed File**: The flag is stored in a file named `background.png` which, despite its extension, is a plain ASCII text file. The server serves it without proper Content-Type validation. The flag is fully exposed when the resource is requested.
 
 **Technique:** Source code review / asset inspection.
 
@@ -125,10 +125,10 @@ curl -s -X POST \
 
 ## Lessons Learned
 
-1. **Always inspect all page resources** — Images, CSS, and JS files can contain sensitive information.
-2. **Do not trust file extensions** — A `.png` file can be plain text. Use `file` or `strings` to verify the actual content.
-3. **Hacker101 instance mechanism** — The `/ctf/activate_level/:id` endpoint returns the real instance URL via JSON polling.
-4. **Source code review** — Even in "trivial" challenges, reviewing the HTML source can reveal references to files containing sensitive data.
+1. **Always inspect all page resources**: Images, CSS, and JS files can contain sensitive information.
+2. **Do not trust file extensions**: A `.png` file can be plain text. Use `file` or `strings` to verify the actual content.
+3. **Hacker101 instance mechanism**: The `/ctf/activate_level/:id` endpoint returns the real instance URL via JSON polling.
+4. **Source code review**: Even in "trivial" challenges, reviewing the HTML source can reveal references to files containing sensitive data.
 
 ---
 

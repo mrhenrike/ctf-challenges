@@ -1,4 +1,4 @@
-# H1 Thermostat — Writeup (2/2)
+# H1 Thermostat: Writeup (2/2)
 
 **Difficulty:** Easy  
 **Category:** Android (Traffic Interception, APK Reverse Engineering)  
@@ -14,15 +14,15 @@
 **What you face:** A real Android app that needs to be intercepted with a proxy (Burp Suite) and decompiled. Flag 0 is exposed in network traffic, and Flag 1 requires understanding the authentication protocol (MAC) and replicating it with a key extracted from the APK.
 
 **Vulnerabilities exploited:**
-- Transmission of sensitive data in plaintext (CWE-319) — flag transmitted without encryption
-- Hardcoded Secret Key (CWE-798) — HMAC/MAC key hardcoded in the APK, extractable by decompilation
-- Insecure Authentication Protocol — integrity check based on a static secret
+- Transmission of sensitive data in plaintext (CWE-319): flag transmitted without encryption
+- Hardcoded Secret Key (CWE-798): HMAC/MAC key hardcoded in the APK, extractable by decompilation
+- Insecure Authentication Protocol: integrity check based on a static secret
 
 **What you learn:**
 - How to configure a MitM proxy (Burp Suite) in an Android emulator
 - APK reverse engineering with `jadx` or `apktool` to extract constants
 - MAC-based authentication protocols: how to replicate them with the correct key
-- Never rely on security through hardcoded secrets — APKs are easily decompiled
+- Never rely on security through hardcoded secrets: APKs are easily decompiled
 
 ---
 
@@ -40,7 +40,7 @@ Analyze the traffic from an Android thermostat app and reverse engineer the APK 
 
 ---
 
-## Flag 0 — Intercept POST traffic
+## Flag 0: Intercept POST traffic
 
 **Vulnerability:** The flag is transmitted in plaintext in network traffic.
 
@@ -50,7 +50,7 @@ With the Burp Suite proxy intercepting, start the app and observe the POST reque
 
 ---
 
-## Flag 1 — APK Reverse Engineering (MAC bypass)
+## Flag 1: APK Reverse Engineering (MAC bypass)
 
 **Vulnerability:** The app uses a MAC calculated with a static value accessible in the source code.
 

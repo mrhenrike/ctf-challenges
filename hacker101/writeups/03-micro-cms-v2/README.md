@@ -1,7 +1,7 @@
-# Micro-CMS v2 — Writeup (3/3)
+# Micro-CMS v2: Writeup (3/3)
 
 **Difficulty:** Moderate  
-**Category:** Web — HTTP Method Bypass, SQL Injection  
+**Category:** Web: HTTP Method Bypass, SQL Injection  
 **Flags:** 3/3 (complete)  
 **Platform:** Hacker101 CTF
 
@@ -9,13 +9,13 @@
 
 ## Challenge Overview
 
-**Context:** A minimalist CMS that allows creating and editing text pages. Version 2 adds admin authentication: pages can only be edited when logged in — unlike v1.
+**Context:** A minimalist CMS that allows creating and editing text pages. Version 2 adds admin authentication: pages can only be edited when logged in: unlike v1.
 
 **What you face:** A login screen that appears secure, pages editable only with a valid session, and a Python backend that constructs SQL queries via string concatenation.
 
 **Vulnerabilities exploited:**
 - SQL Injection (CWE-89) via string concatenation on the username field
-- HTTP Method Bypass — auth check applies to GET only, not POST
+- HTTP Method Bypass: auth check applies to GET only, not POST
 - UNION SELECT to inject fake credentials into the authentication flow
 
 **What you learn:**
@@ -36,7 +36,7 @@ v2 requires admin authentication to edit pages. The login is vulnerable to SQL i
 
 ---
 
-## Flag 0 — SQL Injection on Login (UNION-based)
+## Flag 0: SQL Injection on Login (UNION-based)
 
 **Vulnerability:** The username field is inserted directly into the SQL query using `%s % input`.
 
@@ -66,7 +66,7 @@ The flag appears in the admin panel after successful login.
 
 ---
 
-## Flag 1 — HTTP Method Bypass (POST Bypass)
+## Flag 1: HTTP Method Bypass (POST Bypass)
 
 **Vulnerability:** The page edit endpoint checks authentication only for GET, not for POST.
 
@@ -89,7 +89,7 @@ body: title=test&body=test
 
 ---
 
-## Flag 2 — SQL Injection with `OR 1=1` + Credential Extraction
+## Flag 2: SQL Injection with `OR 1=1` + Credential Extraction
 
 **Vulnerability:** SQL injection with OR for full bypass + credential extraction.
 
@@ -121,8 +121,8 @@ FLAG 2: ' or 1=1# → login as any user + credentials exposed
 
 ## Lessons Learned
 
-1. **SQLi via string concatenation** (`%s % input`) is critical — use `cursor.execute(query, (params,))`
-2. **Auth check per HTTP method** is broken — always verify regardless of method
+1. **SQLi via string concatenation** (`%s % input`) is critical: use `cursor.execute(query, (params,))`
+2. **Auth check per HTTP method** is broken: always verify regardless of method
 3. **Exposed Python traceback** leaks query structure and enables targeted SQLi
 4. **UNION SELECT** allows injecting fake results into authentication
 5. **Error-based SQLi**: when tracebacks are visible, use the exposed query to craft precise injections

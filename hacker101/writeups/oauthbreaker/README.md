@@ -1,4 +1,4 @@
-# Oauthbreaker — Writeup (2/2)
+# Oauthbreaker: Writeup (2/2)
 
 **Difficulty:** Medium | **Category:** Android | **Points:** 7 (estimated)
 
@@ -11,9 +11,9 @@
 **What you face:** A real APK that needs to be decompiled, analyzed, and its logic reverse-engineered. OAuth exposes the `access_token` in the callback URL, and the flag path is computed via embedded Brainfuck code.
 
 **Vulnerabilities exploited:**
-- OAuth Token Exposure (CWE-522) — `access_token` exposed in the redirect URL
-- Insecure Data Storage / Hardcoded Logic — flag path computable via APK reverse engineering
-- WebAppInterface exposure — Java method accessible from JS inside a WebView
+- OAuth Token Exposure (CWE-522): `access_token` exposed in the redirect URL
+- Insecure Data Storage / Hardcoded Logic: flag path computable via APK reverse engineering
+- WebAppInterface exposure: Java method accessible from JS inside a WebView
 
 **What you learn:**
 - OAuth flows: how `access_token` can leak in the callback URL (implicit flow)
@@ -24,11 +24,11 @@
 
 ---
 
-## Flag 1 — OAuth Token Leak
+## Flag 1: OAuth Token Leak
 
 Previously credited. The Android app redirects to the CTF server exposing the access_token in the callback URL.
 
-## Flag 2 — APK Reverse Engineering (getFlagPath)
+## Flag 2: APK Reverse Engineering (getFlagPath)
 
 ### Objective
 
@@ -128,7 +128,7 @@ curl -s "https://e8072a862be3003083ebea167ef89592.ctf.hacker101.com/48ce217fea45
 
 ### Flags
 
-- Flag 2: `b3030312ba3221901ce36e54f2d0cba6eae2cd4b86f39f1987019d34310d2710` — **Congratulations ✓**
+- Flag 2: `b3030312ba3221901ce36e54f2d0cba6eae2cd4b86f39f1987019d34310d2710`: **Congratulations ✓**
 
 ### Technical Explanation
 

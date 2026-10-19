@@ -1,4 +1,4 @@
-# Y2FuIHlvdSByZWNvbj8/ (Can You Recon?) — Writeup (3/3)
+# Y2FuIHlvdSByZWNvbj8/ (Can You Recon?): Writeup (3/3)
 
 **Difficulty:** Moderate  
 **Category:** Web (File Upload Bypass, Path Traversal, RCE)  
@@ -15,16 +15,16 @@
 **What you face:** An upload screen with an extension filter, an upload directory that serves files, and flags stored in `flags.txt` one level above the webroot.
 
 **Vulnerabilities exploited:**
-- File Extension Bypass (CWE-434) — `.phtml` is executed as PHP but not filtered
-- Path Traversal in Filename (CWE-22) — `../hello.phtml` saves outside the upload directory
-- RCE via PHP Upload — `shell_exec()` to list directories and read `flags.txt`
+- File Extension Bypass (CWE-434): `.phtml` is executed as PHP but not filtered
+- Path Traversal in Filename (CWE-22): `../hello.phtml` saves outside the upload directory
+- RCE via PHP Upload: `shell_exec()` to list directories and read `flags.txt`
 
 **What you learn:**
-- Alternative PHP extensions: `.phtml`, `.php5`, `.phar`, `.shtml` — the list doesn't end at `.php`
+- Alternative PHP extensions: `.phtml`, `.php5`, `.phar`, `.shtml`: the list doesn't end at `.php`
 - Path traversal in upload filename: the server may accept `../` in the file name
 - How to go from limited RCE (shell_exec) to reading a flags file
 - Progressive recon strategy: `ls` → `ls ..` → `cat ../flags.txt`
-- Never trust extension to determine file type — check magic bytes and block execution in upload directory
+- Never trust extension to determine file type: check magic bytes and block execution in upload directory
 
 ---
 

@@ -1,4 +1,4 @@
-# Encrypted Pastebin — Complete Writeup (4/4)
+# Encrypted Pastebin: Complete Writeup (4/4)
 
 **Difficulty:** Hard  
 **Category:** Web, Cryptography  
@@ -17,7 +17,7 @@ A web paste application where each paste's title and body are stored as JSON enc
 
 ---
 
-## FLAG 0 — HTML Source Exposure
+## FLAG 0: HTML Source Exposure
 
 **Technique:** Inspect the index page source
 
@@ -31,7 +31,7 @@ curl https://HASH.ctf.hacker101.com/ | grep -o '\^FLAG\^[a-f0-9]*\$FLAG\$'
 
 ---
 
-## FLAG 1 — Paste Creation
+## FLAG 1: Paste Creation
 
 **Technique:** POST request to create a paste
 
@@ -46,7 +46,7 @@ The flag appears in the `Location` header or response body. The returned token i
 
 ---
 
-## FLAG 2 — Malformed Base64 Token
+## FLAG 2: Malformed Base64 Token
 
 **Technique:** Invalid token → traceback with flag
 
@@ -60,7 +60,7 @@ curl "https://HASH.ctf.hacker101.com/?post=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 ---
 
-## FLAG 3 — Padding Oracle Attack + SQL Injection
+## FLAG 3: Padding Oracle Attack + SQL Injection
 
 **Technique:** Padding oracle to forge ciphertext → SQL injection → internal URL → FLAG
 
@@ -187,7 +187,7 @@ This allows:
 
 ## Lessons Learned
 
-1. AES-CBC requires integrity authentication — use AES-GCM or add HMAC-SHA256
+1. AES-CBC requires integrity authentication: use AES-GCM or add HMAC-SHA256
 2. Error messages must not differentiate between types of decryption exceptions
 3. The internal bot creates an attack vector: the `tracking` table stores headers with access tokens via the Referer header
 4. SQL injection in `id` field via `UNION SELECT` with `group_concat` extracts data across tables
