@@ -135,7 +135,65 @@ The Demo instance is used to understand the endpoints before attacking the Live 
 ## Lessons Learned
 
 1. **Demo instances** often expose functionality that reveals how to attack production
-2. **CSRF on GET** — state-changing endpoints must never accept GET without a CSRF token
+2. **CSRF on GET**: state-changing endpoints must never accept GET without a CSRF token
 3. **Admin bots** that open user-submitted links are CSRF/XSS vectors
 4. **SQL Injection with ORDER BY** to discover the number of columns is more reliable than blind UNION
-5. **INFORMATION_SCHEMA** for schema enumeration — standard in MySQL/MariaDB
+5. **INFORMATION_SCHEMA** for schema enumeration, standard in MySQL/MariaDB
+
+## Remediation
+
+- Require CSRF tokens on all state-changing endpoints and reject GET for mutations
+- Use parameterized queries (prepared statements) for all SQL operations
+- Validate and sanitize user-submitted HTML in ticket bodies
+- Never use default credentials in any environment; force password change on first login
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Persistence | Account Manipulation: Additional Cloud Credentials | T1098.001 |
+| Credential Access | Brute Force: Password Spraying | T1110.003 |
+| Collection | Data from Information Repositories | T1213 |
+| Defense Evasion | Use Alternate Authentication Material: Web Session Cookie | T1550.004 |
+
+---
+
+## OWASP Top 10 2021
+
+- **A01:2021 Broken Access Control**: CSRF on user creation endpoint allows unauthorized account creation
+- **A03:2021 Injection**: SQL Injection via unparameterized `id` field in ticket queries
+- **A07:2021 Identification and Authentication Failures**: default credentials on demo instance; no CSRF protection
+
+## MITRE D3FEND Countermeasures
+
+- **D3-SCA (Session Cookie Attribute)**: bind CSRF tokens to sessions; reject cross-origin state changes
+- **D3-IPCF (IPC Filtering)**: validate and parameterize all database queries
+- **D3-SPP (Strong Password Policy)**: eliminate default credentials in all environments
+
+## NIST CSF 2.0
+
+- **Protect (PR.AA)**: enforce CSRF validation on all authentication and account-management endpoints
+- **Protect (PR.DS)**: use parameterized queries to prevent SQL injection
+- **Detect (DE.CM)**: monitor for mass account creation or anomalous ticket content
+
+## NIST SP 800-53 Rev. 5
+
+- **SI-10 (Information Input Validation)**: parameterize SQL queries; validate ticket body content
+- **AC-3 (Access Enforcement)**: require CSRF tokens on state-changing operations
+- **IA-5 (Authenticator Management)**: prohibit default credentials; enforce strong password policies
+- **AU-6 (Audit Record Review)**: log and review account creation events for anomalies
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Demo instances are not playgrounds; they are blueprints. If this walkthrough on how CSRF and SQLi chain through a demo-to-live pipeline opened your eyes, share the lesson with your team.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

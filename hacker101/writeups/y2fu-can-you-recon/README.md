@@ -144,6 +144,65 @@ Returns all 3 flags.
 
 1. **Alternative PHP extensions** (`.phtml`, `.php5`, `.phar`, `.shtml`) bypass simple extension filters
 2. **Path traversal in filename** (`../`) can place files outside the upload directory
-3. **Never trust extension** — verify the real MIME type and use `move_uploaded_file()` with a strict whitelist
-4. **RCE via webshell upload** is critical — disable PHP execution in upload directories with `.htaccess` or server configuration
-5. **flags.txt** in accessible directories is a Hacker101 pattern — always explore the directory tree
+3. **Never trust extension**: verify the real MIME type and use `move_uploaded_file()` with a strict whitelist
+4. **RCE via webshell upload** is critical: disable PHP execution in upload directories with `.htaccess` or server configuration
+5. **flags.txt** in accessible directories is a Hacker101 pattern; always explore the directory tree
+
+## Remediation
+
+- Use a strict allowlist for file extensions AND validate content by magic bytes
+- Strip path separators (`../`, `/`, `\`) from uploaded filenames server-side
+- Store uploads outside the webroot or disable script execution in upload directories
+- Rename uploaded files with random hashes, ignoring the original extension entirely
+- Apply `open_basedir` and `disable_functions` in PHP to limit shell access
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Execution | Command and Scripting Interpreter: Unix Shell | T1059.004 |
+| Persistence | Server Software Component: Web Shell | T1505.003 |
+| Defense Evasion | Masquerading: Match Legitimate Name or Location | T1036.005 |
+| Collection | Data from Local System | T1005 |
+
+---
+
+## OWASP Top 10 2021
+
+- **A04:2021 Insecure Design**: extension blocklist instead of allowlist; no content-type validation
+- **A01:2021 Broken Access Control**: path traversal allows writing files outside the upload directory
+- **A05:2021 Security Misconfiguration**: PHP execution enabled in web-accessible upload paths
+
+## MITRE D3FEND Countermeasures
+
+- **D3-FCR (File Content Rules)**: validate uploaded file content by magic bytes, not extension alone
+- **D3-PSEP (Process Segment Execution Prevention)**: disable script execution in upload directories
+- **D3-FE (File Encryption)**: encrypt uploaded files at rest to prevent direct execution
+
+## NIST CSF 2.0
+
+- **Protect (PR.DS)**: enforce strict validation on uploaded file names and content types
+- **Detect (DE.CM)**: monitor for new executable files appearing in web-accessible directories
+- **Respond (RS.MI)**: isolate and remove webshells immediately upon detection
+
+## NIST SP 800-53 Rev. 5
+
+- **SI-10 (Information Input Validation)**: sanitize filenames by stripping traversal sequences and enforcing an extension allowlist
+- **CM-7 (Least Functionality)**: disable PHP execution in upload directories; restrict `shell_exec` and related functions
+- **AC-3 (Access Enforcement)**: restrict write access to web-accessible directories
+- **SI-3 (Malicious Code Protection)**: scan uploaded files for executable content before storage
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+A blocklist is a wish list. If this breakdown on how `.phtml` slips past `.php` filters while path traversal hands you the webroot made you rethink your upload validation, drop a follow and spread the knowledge.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
