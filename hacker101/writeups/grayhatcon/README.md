@@ -116,8 +116,86 @@ IDOR on the subusers endpoint: `enable_toggle=enable` accepts another user's sub
 
 ---
 
+## MITRE ATT&CK Mapping
+
+| ID | Technique | Tactic | How it was used |
+|----|-----------|--------|----------------|
+| T1190 | Exploit Public-Facing Application | Initial Access | IP bypass via X-Forwarded-For to access admin panel |
+| T1078.001 | Valid Accounts: Default Accounts | Persistence | Account takeover via predictable reset hash reused in registration |
+| T1087.001 | Account Discovery: Local Account | Discovery | Enumerated subaccounts and owner hashes via IDOR |
+| T1068 | Exploitation for Privilege Escalation | Privilege Escalation | enable_toggle IDOR to activate unauthorized subaccounts |
+| T1059.001 | Command and Scripting Interpreter | Execution | SQL injection on auction questions endpoint for credential extraction |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **X-Forwarded-For bypass:** Never trust client headers for access control; validate source IP at network/proxy level
+2. **Account takeover:** Reset tokens must be one-time-use, time-limited, and not reusable across endpoints
+3. **IDOR on enable_toggle:** Enforce ownership validation on every subaccount operation
+4. **SQL Injection:** Use parameterized queries on all ID parameters
+
+### OWASP Top 10 2021
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| A01:2021 | Broken Access Control | IDOR on subaccounts; IP bypass via forged header; enable_toggle without ownership check |
+| A03:2021 | Injection | SQL injection on `/dashboard/auctions/questions?id=` for credential extraction |
+| A07:2021 | Identification and Authentication Failures | Predictable reset hash reused for account creation |
+
+### MITRE D3FEND Countermeasures
+
+| ID | Technique | Application |
+|----|-----------|-------------|
+| D3-NTA | Network Traffic Analysis | Detect X-Forwarded-For spoofing at the reverse proxy layer |
+| D3-SPP | Strong Password Policy | Use cryptographically random, one-time reset tokens |
+| D3-ACL | Access Control List | Enforce per-object ownership checks on subaccount operations |
+
+### NIST CSF 2.0
+
+| Function | Category | Application |
+|----------|----------|-------------|
+| PR (Protect) | PR.AC | Server-side IP validation; per-object authorization |
+| PR (Protect) | PR.AT | Developer training on IDOR, SQLi and header trust boundaries |
+| DE (Detect) | DE.CM | Monitor for forged headers and unusual subaccount activity |
+| RS (Respond) | RS.AN | Correlate IP spoofing attempts with admin panel access logs |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---------|-------|-------------|
+| AC-3 | Access Enforcement | Per-object authorization on all CRUD operations |
+| IA-5 | Authenticator Management | Cryptographically random, time-limited reset tokens |
+| SC-23 | Session Authenticity | Validate session origin; do not trust X-Forwarded-For for auth |
+| SI-10 | Information Input Validation | Parameterized queries on all SQL endpoints |
+
+### C2M2
+
+| Domain | Practice | MIL | Application |
+|--------|----------|-----|-------------|
+| ACCESS | Access Control Management | MIL-2 | Enforce BOLA on subaccounts; validate IP at proxy layer |
+| THREAT | Threat and Vulnerability Management | MIL-2 | Regular SQLi and IDOR testing on all user-facing endpoints |
+
+---
+
 ## Tools
 
 - `bash scripts/ctf-session.sh activate 38` — retrieve instance URL
 - `bash scripts/ctf-session.sh submit <flag>` — submit flag
 - `curl` + manual POST parameter manipulation
+
+---
+
+## Final Thoughts
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+GrayHatCon is a masterclass in chaining: IP spoofing, predictable hashes, IDOR and SQL injection, four completely distinct attack vectors in one application. Each vulnerability alone would be moderate, but chained together they give you full admin access and database control. This challenge reinforces why defense in depth matters: a single control failure should never cascade into total compromise.
+
+Let's connect and talk more about web security:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

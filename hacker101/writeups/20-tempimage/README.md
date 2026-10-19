@@ -119,3 +119,53 @@ The content of `index.php` contains the second flag embedded in the source code.
 - Validate type by content-type and "magic number" (file bytes), not just extension
 - Store uploads outside the webroot or in a directory without execution permission
 - Rename files on the server (MD5 was done, but extension must be forced to non-executable)
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Execution | Command and Scripting Interpreter: Unix Shell | T1059.004 |
+| Persistence | Server Software Component: Web Shell | T1505.003 |
+| Defense Evasion | Masquerading: Match Legitimate Name or Location | T1036.005 |
+| Collection | Data from Local System | T1005 |
+
+---
+
+## OWASP Top 10 2021
+
+- **A04:2021 Insecure Design**: no server-side restriction on file types or upload paths
+- **A01:2021 Broken Access Control**: path traversal allows writing files outside the upload directory
+
+## MITRE D3FEND Countermeasures
+
+- **D3-FE (File Encryption)**: encrypt uploaded files at rest to prevent direct execution
+- **D3-PSEP (Process Segment Execution Prevention)**: disable script execution in upload directories
+- **D3-FCR (File Content Rules)**: validate uploaded file content by magic bytes, not extension
+
+## NIST CSF 2.0
+
+- **Protect (PR.DS)**: restrict file upload locations and validate filenames server-side
+- **Detect (DE.CM)**: monitor for new executable files appearing in web-accessible directories
+- **Respond (RS.MI)**: isolate and remove webshells immediately upon detection
+
+## NIST SP 800-53 Rev. 5
+
+- **SI-10 (Information Input Validation)**: sanitize filenames to remove traversal sequences
+- **CM-7 (Least Functionality)**: disable PHP/script execution in upload directories
+- **AC-3 (Access Enforcement)**: restrict write access to web-accessible directories
+- **SI-3 (Malicious Code Protection)**: scan uploaded files for malicious content
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+File upload plus path traversal is the express lane to RCE. If you learned something new about why filename sanitization matters, tag someone who builds upload features.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

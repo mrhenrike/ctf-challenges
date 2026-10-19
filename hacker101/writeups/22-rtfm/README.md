@@ -110,3 +110,55 @@ The server fetched `/api/v1/secrets` via localhost (IP bypass), detected it was 
 - Disable Swagger/OpenAPI in production or add authentication
 - Never expose raw fetched content in error responses
 - Validate and sanitize all path parameters — reject both `/` and `\` traversal sequences
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Execution | Exploitation for Client Execution (SSRF) | T1203 |
+| Discovery | Network Service Discovery (Swagger) | T1046 |
+| Collection | Data from Information Repositories | T1213 |
+| Credential Access | Unsecured Credentials: Credentials In Files | T1552.001 |
+| Lateral Movement | Exploitation of Remote Services (SSRF to internal) | T1210 |
+
+---
+
+## OWASP Top 10 2021
+
+- **A10:2021 Server-Side Request Forgery (SSRF)**: avatar field used to fetch internal endpoints
+- **A05:2021 Security Misconfiguration**: Swagger API documentation exposed without authentication
+- **A04:2021 Insecure Design**: error responses leak fetched content
+
+## MITRE D3FEND Countermeasures
+
+- **D3-NTF (Network Traffic Filtering)**: block outbound requests to internal IP ranges from application layer
+- **D3-IOPR (IO Port Restriction)**: restrict which ports and hosts the application can reach
+- **D3-AL (Authorization Limiting)**: require authentication for API documentation endpoints
+
+## NIST CSF 2.0
+
+- **Protect (PR.DS)**: validate and restrict URL inputs to prevent SSRF
+- **Protect (PR.AA)**: require authentication on all API endpoints, including documentation
+- **Detect (DE.CM)**: monitor for requests to internal IP ranges from application processes
+
+## NIST SP 800-53 Rev. 5
+
+- **SI-10 (Information Input Validation)**: validate URL inputs against an allowlist of external hosts
+- **AC-4 (Information Flow Enforcement)**: prevent application-layer requests to internal network ranges
+- **SI-11 (Error Handling)**: suppress sensitive data in error responses
+- **CM-7 (Least Functionality)**: disable API documentation in production environments
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+SSRF is the bug that turns your own server into the attacker's proxy. If this deep dive into Swagger recon and localhost bypass helped you see how SSRF chains work, connect and share.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

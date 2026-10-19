@@ -127,3 +127,62 @@ Then access the page to see the full source with the embedded flag.
 3. **HTML comments (`<!-- -->`)** expose internal paths and hidden functionality
 4. **`include()` accepts URLs by default** — disable `allow_url_include` in php.ini
 5. **Authentication checks via filename** are fragile and trivially bypassable
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Execution | Command and Scripting Interpreter: Unix Shell | T1059.004 |
+| Execution | Server Software Component: Web Shell | T1505.003 |
+| Discovery | File and Directory Discovery | T1083 |
+| Credential Access | Unsecured Credentials: Credentials In Files | T1552.001 |
+
+---
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Disable `allow_url_include` and `allow_url_fopen` in `php.ini`
+2. Use a strict allowlist for the `page` parameter instead of passing user input directly to `include()`
+3. Sanitize and escape all user-submitted comments before storage and rendering
+4. Never embed authentication logic in filenames; use proper session-based access controls
+
+### OWASP Top 10 2021
+
+- **A03:2021 Injection**: PHP code injection via comments, LFI/RFI via `include()`
+- **A01:2021 Broken Access Control**: authentication bypass by manipulating the `page` parameter
+
+### MITRE D3FEND Countermeasures
+
+- **D3-IPCF (IPC Filtering)**: restrict server-side file inclusion to a predefined directory
+- **D3-PSEP (Process Segment Execution Prevention)**: disable code execution in user-content directories
+- **D3-AL (Authorization Limiting)**: enforce access control on sensitive pages server-side
+
+### NIST CSF 2.0
+
+- **Protect (PR.DS)**: validate and sanitize all inputs before processing
+- **Detect (DE.CM)**: monitor for anomalous file inclusion patterns in web server logs
+- **Respond (RS.AN)**: investigate attempts to include external or unexpected local files
+
+### NIST SP 800-53 Rev. 5
+
+- **SI-10 (Information Input Validation)**: validate `page` parameter against an allowlist
+- **AC-3 (Access Enforcement)**: enforce authorization on all pages, not via filename convention
+- **CM-7 (Least Functionality)**: disable unnecessary PHP features (`allow_url_include`)
+- **AU-6 (Audit Record Review)**: review access logs for LFI/RFI indicators
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+PHP include with user input is one of the oldest sins in web development, and it still shows up everywhere. If this walkthrough helped you understand LFI/RFI from the inside out, pass it along to someone learning the ropes.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

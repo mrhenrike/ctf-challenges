@@ -110,3 +110,53 @@ Note: the flag may appear without the `FLAG$` suffix — complete it manually if
 - Remove credentials and tokens from JavaScript code
 - Implement real authentication (OAuth, JWT with server-side validation)
 - API endpoint access control must be validated server-side, not via header alone
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Reconnaissance | Active Scanning: Vulnerability Scanning | T1595.002 |
+| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 |
+| Discovery | Application Window Discovery (API endpoint) | T1010 |
+| Collection | Data from Information Repositories | T1213 |
+| Defense Evasion | Obfuscated Files or Information: Encoding | T1027.013 |
+
+---
+
+## OWASP Top 10 2021
+
+- **A04:2021 Insecure Design**: API endpoint protected only by an obscure header, no real authentication
+- **A02:2021 Cryptographic Failures**: Base64 encoding used as a "security" mechanism
+
+## MITRE D3FEND Countermeasures
+
+- **D3-MFA (Multi-factor Authentication)**: enforce real authentication on all API endpoints
+- **D3-ACL (Access Control List)**: restrict API access to authenticated sessions only
+- **D3-ANCI (Application Configuration Hardening)**: remove secrets from client-side code
+
+## NIST CSF 2.0
+
+- **Protect (PR.AA)**: enforce server-side authentication on every API endpoint
+- **Protect (PR.DS)**: never expose credentials or tokens in client-side code
+- **Detect (DE.CM)**: monitor for unauthorized API access patterns
+
+## NIST SP 800-53 Rev. 5
+
+- **AC-3 (Access Enforcement)**: implement proper access control on API endpoints
+- **IA-5 (Authenticator Management)**: never store credentials in client-side JavaScript
+- **SC-12 (Cryptographic Key Establishment)**: use proper cryptography, not Base64 encoding
+- **SC-8 (Transmission Confidentiality)**: protect sensitive API responses in transit
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Security by obscurity is not security at all. If this walkthrough showed you why hidden headers and Base64 "encryption" are a joke, spread the word.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

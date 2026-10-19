@@ -142,3 +142,63 @@ FLAG 2: Stored XSS in product name → /cart (no checkout) → flag in item name
 3. **Unsanitized text fields** = Stored XSS if displayed on any page
 4. **XSS in the cart** can be exploited by other users and admins who access the cart
 5. **Username enumeration** before password brute-force drastically reduces the search space
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Credential Access | Brute Force: Password Guessing | T1110.001 |
+| Impact | Data Manipulation: Transmitted Data Manipulation | T1565.002 |
+| Persistence | Server Software Component: Web Shell (Stored XSS) | T1505.003 |
+| Discovery | Account Discovery: Local Account | T1087.001 |
+
+---
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Validate all pricing server-side; never trust client-submitted price values
+2. Use generic login error messages ("Invalid credentials") to prevent username enumeration
+3. Sanitize and encode all user-supplied data before rendering in HTML to prevent Stored XSS
+4. Implement rate limiting and account lockout on login endpoints
+
+### OWASP Top 10 2021
+
+- **A01:2021 Broken Access Control**: client-side price manipulation accepted by the server
+- **A03:2021 Injection**: Stored XSS via unsanitized product name field
+- **A07:2021 Identification and Authentication Failures**: username enumeration through distinct error messages
+
+### MITRE D3FEND Countermeasures
+
+- **D3-SPP (Strong Password Policy)**: enforce password complexity to resist brute-force
+- **D3-IOPR (IO Port Restriction)**: rate-limit authentication endpoints
+- **D3-IPCF (IPC Filtering)**: validate and sanitize all input fields before storage
+
+### NIST CSF 2.0
+
+- **Protect (PR.DS)**: enforce server-side input validation on all transactional data
+- **Protect (PR.AA)**: implement account lockout and rate limiting on authentication
+- **Detect (DE.CM)**: monitor for repeated failed login attempts
+
+### NIST SP 800-53 Rev. 5
+
+- **SI-10 (Information Input Validation)**: validate pricing and product data server-side
+- **IA-5 (Authenticator Management)**: use generic error messages; implement lockout policies
+- **AC-7 (Unsuccessful Logon Attempts)**: limit failed login attempts before lockout
+- **SI-11 (Error Handling)**: suppress verbose error messages that aid enumeration
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Price manipulation bugs are a pentester's favorite because they translate directly to financial impact. If this walkthrough on client-side trust issues resonated with you, share it with your team.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
