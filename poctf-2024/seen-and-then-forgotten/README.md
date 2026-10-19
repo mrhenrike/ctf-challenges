@@ -1,12 +1,45 @@
 # Seen and Then Forgotten
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | OSINT |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+
+```bash
+# Conceptually, searching through commit messages and diffs:
+git log --all --oneline | grep -i poctf
+git log --all -p | grep -i poctf
+```
+
+### Step 4: Locate the Flag
+
+Found a commit that included the flag text in the diff or commit message.
+
+![Commit with flag](images/image2.png)
+
+```
+Flag: poctf{uwsp_5p34k_fr13nd_4nd_3n73r}` |
+
+```bash
+# Conceptually, searching through commit messages and diffs:
+git log --all --oneline | grep -i poctf
+git log --all -p | grep -i poctf
+```
+
+### Step 4: Locate the Flag
+
+Found a commit that included the flag text in the diff or commit message.
+
+![Commit with flag](images/image2.png)
+
+```
+Flag: poctf{uwsp_5p34k_fr13nd_4nd_3n73r}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

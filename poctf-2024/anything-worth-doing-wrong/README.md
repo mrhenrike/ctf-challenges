@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Anything Worth Doing Wrong |
-| **Category** | Miscellaneous |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
 | **Status** | Solved |
 
 ---

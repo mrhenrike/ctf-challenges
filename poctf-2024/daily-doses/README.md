@@ -1,16 +1,13 @@
 # Daily Doses
 
-**Category:** Digital Forensics
-**Challenge:** Daily Doses
-**CTF:** Pointer Overflow CTF 2024
-**Points:** DF 300
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_1_4m_l363nd}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_1_4m_l363nd}` |
+| **Status** | Solved |
 
 ---
 

@@ -1,12 +1,15 @@
 # Novel Means of Lying
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | OSINT |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_7h3_r4v3n_n3v3rm0r3}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

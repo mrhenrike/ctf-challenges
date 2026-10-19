@@ -1,16 +1,13 @@
 # End of the Line
 
-**Category:** Reverse Engineering
-**Challenge:** End of the Line
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 100
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_d0_0r_d0_n07}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_d0_0r_d0_n07}` |
+| **Status** | Solved |
 
 ---
 

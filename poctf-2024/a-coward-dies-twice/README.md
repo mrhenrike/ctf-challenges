@@ -1,13 +1,13 @@
 # A Coward Dies Twice
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Misc                                       |
-| Difficulty  | Easy                                       |
-| Points      | 100                                        |
-| Flag        | `poctf{uwsp_7h3_r04d_n07_74k3n}`          |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Cracking |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_7h3_r04d_n07_74k3n}` |
+| **Status** | Solved |
 
 ---
 

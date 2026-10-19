@@ -1,15 +1,25 @@
 # Better to Burn in the Light
 
-**Category:** Forensics
-**Challenge:** Better to Burn in the Light
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved (reference)
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{dynamic}` |
+~~~
 
-**Flag:**
+![File 1 after fixing the duplicate header](images/04-file1-fixed.jpg)
+
+### File 2: Missing Header JPEG
+
+A second file also contains `CLUE` in its metadata. The hint is "missing header". Adding the 4-byte JPEG magic header `FF D8 FF E0` at the beginning restores the image, which shows:
+
+![File 2 broken header in hex view](images/05-file2-broken-header.png)
 
 ~~~text
-poctf{uwsp_5h1v3r_m3_71mb3r5}
-~~~
+3r_m3_71mb3r5}` |
+| **Status** | Solved (reference) |
 
 ---
 

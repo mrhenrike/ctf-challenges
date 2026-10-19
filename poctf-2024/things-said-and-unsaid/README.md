@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Things Said and Unsaid |
-| **Category** | Steganography |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_w3_4r3_such_57uff}` |
 | **Status** | Solved |
 
 ---

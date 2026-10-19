@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | Between Secrets and Lies |
 | **Category** | Steganography |
 | **Difficulty** | Hard |
 | **Points** | 300 |
+| **Flag** | `poctf{uwsp_83tw33n_53cr375_4nd_l135}` |
 | **Status** | Solved |
 
 ---

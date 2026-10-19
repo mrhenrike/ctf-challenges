@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | To Finish and Flounder |
-| **Category** | Exploitation |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
 | **Status** | Solved |
 
 ---

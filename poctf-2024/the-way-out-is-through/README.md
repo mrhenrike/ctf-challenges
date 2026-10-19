@@ -1,13 +1,13 @@
 # The Way Out is Through
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Easy                                       |
-| Points      | 100                                        |
-| Flag        | `poctf{uwsp_7h3_7ru7h_15_0u7_7h3r3}`      |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | ID |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_7h3_7ru7h_15_0u7_7h3r3}` |
+| **Status** | Solved |
 
 ---
 

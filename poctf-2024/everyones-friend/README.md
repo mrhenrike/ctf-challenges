@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Everyone's Friend |
-| **Category** | Cryptography |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_7h3_h17chh1k3r5_6u1d3}` |
 | **Status** | Solved |
 
 ---

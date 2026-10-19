@@ -1,16 +1,13 @@
 # Beef-Witted Mushrumps
 
-**Category:** Reverse Engineering
-**Challenge:** Beef-Witted Mushrumps
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 300
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_7h3_g4m3_15_4f007}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_7h3_g4m3_15_4f007}` |
+| **Status** | Solved |
 
 ---
 

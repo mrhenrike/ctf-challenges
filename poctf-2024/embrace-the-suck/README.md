@@ -1,13 +1,13 @@
 # Embrace the Suck
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Misc                                       |
-| Difficulty  | Medium                                     |
-| Points      | 200                                        |
-| Flag        | `poctf{uwsp_7h3_n33d5_0f_7h3_m4ny}`      |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_7h3_n33d5_0f_7h3_m4ny}` |
+| **Status** | Solved |
 
 ---
 

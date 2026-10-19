@@ -1,13 +1,13 @@
 # Gifting a White Elephant
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Medium                                     |
-| Points      | 200                                        |
-| Flag        | `poctf{uwsp_4_fr13nd_70_4ll}`             |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | ID |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_4_fr13nd_70_4ll}` |
+| **Status** | Solved |
 
 ---
 

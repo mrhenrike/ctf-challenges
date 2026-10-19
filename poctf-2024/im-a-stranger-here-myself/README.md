@@ -1,16 +1,13 @@
 # I'm a Stranger Here Myself
 
-**Category:** Digital Forensics
-**Challenge:** I'm a Stranger Here Myself
-**CTF:** Pointer Overflow CTF 2024
-**Points:** DF 300
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_f34r_15_7h3_m1nd_k1113r}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_f34r_15_7h3_m1nd_k1113r}` |
+| **Status** | Solved |
 
 ---
 

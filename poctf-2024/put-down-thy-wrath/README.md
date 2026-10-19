@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Put Down Thy Wrath |
-| **Category** | Cryptography |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_T3mp357_4nd_7urnm01l}` |
 | **Status** | Solved |
 
 ---

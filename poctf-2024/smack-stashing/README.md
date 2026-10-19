@@ -1,16 +1,13 @@
 # Smack Stashing
 
-**Category:** Exploitation
-**Challenge:** Smack Stashing
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Exploit 100
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_br4v3_n3w_w0rld}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Exploitation |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_br4v3_n3w_w0rld}` |
+| **Status** | Solved |
 
 ---
 

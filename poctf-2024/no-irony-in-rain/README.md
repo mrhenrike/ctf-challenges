@@ -1,16 +1,13 @@
 # No Irony in Rain
 
-**Category:** Digital Forensics
-**Challenge:** No Irony in Rain
-**CTF:** Pointer Overflow CTF 2024
-**Points:** DF 400
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_50_17_6035}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Expert |
+| **Points** | 400 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

@@ -1,16 +1,13 @@
 # A Record of Events
 
-**Category:** Digital Forensics
-**Challenge:** A Record of Events
-**CTF:** Pointer Overflow CTF 2024
-**Points:** DF 100
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_57r4n63r_1n_4_57r4n63_14nd}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_57r4n63r_1n_4_57r4n63_14nd}` |
+| **Status** | Solved |
 
 ---
 

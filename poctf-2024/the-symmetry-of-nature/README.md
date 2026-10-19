@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | The Symmetry of Nature |
-| **Category** | Cryptography |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_un57Opp4bl3_f0rc3}` |
 | **Status** | Solved |
 
 ---

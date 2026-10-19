@@ -1,16 +1,13 @@
 # We Do It Live
 
-**Category:** Reverse Engineering
-**Challenge:** We Do It Live
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 200
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_7h3_n16h7_15_d4rk}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{uwsp_7h3_n3_n16h7_15_d4rk}` |
+| **Status** | Solved |
 
 ---
 

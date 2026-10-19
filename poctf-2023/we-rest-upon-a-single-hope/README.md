@@ -1,15 +1,13 @@
 # We Rest Upon a Single Hope
 
-**Category:** Web
-**Challenge:** We Rest Upon a Single Hope
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_1_4m_all_7h47_r3m41n5_0f_7h3_d0s7_r3m0v3}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Web Exploitation |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_1_4m_all_7h47_r3m41n5_0f_7h3_d0s7_r3m0v3}` |
+| **Status** | Solved |
 
 ---
 

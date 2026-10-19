@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Things Seen and Unseen |
-| **Category** | Steganography |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_wh47_15_d34d_m4y_n3v3r_d13}` |
 | **Status** | Solved |
 
 ---

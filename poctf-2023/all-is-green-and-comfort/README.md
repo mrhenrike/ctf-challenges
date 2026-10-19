@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | All is Green and Comfort |
 | **Category** | OSINT |
 | **Difficulty** | Easy |
 | **Points** | 100 |
+| **Flag** | `poctf{uwsp_7h3_2357_15_45h}` |
 | **Status** | Solved |
 
 ---

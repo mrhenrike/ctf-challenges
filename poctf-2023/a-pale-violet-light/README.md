@@ -1,15 +1,13 @@
 # A Pale, Violet Light
 
-**Category:** Crypto
-**Challenge:** A Pale, Violet Light
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_533k_4nd_y3_5h411_f1nd}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Cryptography |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

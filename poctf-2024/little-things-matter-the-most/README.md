@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Little Things Matter the Most |
-| **Category** | Steganography |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_7h47_wh1ch_d035_n07_k1ll}` |
 | **Status** | Solved |
 
 ---

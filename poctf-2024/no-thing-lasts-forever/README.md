@@ -1,12 +1,15 @@
 # No Thing Lasts Forever
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | Crack |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_7h3_hum4n_c0nd1710n}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

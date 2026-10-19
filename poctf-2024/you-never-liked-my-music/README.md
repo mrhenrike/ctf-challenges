@@ -3,10 +3,24 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | You Never Liked My Music |
-| **Category** | Steganography |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+
+---
+
+## Flag
+
+```
+poctf{uwsp_7h3_un3x4m1n3d_l1f3}` |
+
+---
+
+## Flag
+
+```
+poctf{uwsp_7h3_un3x4m1n3d_l1f3}` |
 | **Status** | Solved |
 
 ---

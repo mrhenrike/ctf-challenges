@@ -1,16 +1,13 @@
 # Forjeskit Sair with Weary Legs
 
-**Category:** Reverse Engineering
-**Challenge:** Forjeskit Sair with Weary Legs
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 400
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_4ll_7h47_gl1773r5}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Expert |
+| **Points** | 400 |
+| **Flag** | `poctf{uwsp_4ll_7h47_gl1773r5}` |
+| **Status** | Solved |
 
 ---
 
