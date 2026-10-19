@@ -1,66 +1,66 @@
 # Maq153: Mr.Sean
 
-> **Platform:** SEC4US CTF Lab | **Category:** Hacking: Medium | **Points:** Dynamic
+Writeup for the **Mr.Sean** challenge on [SEC4US](https://sec4us.com.br/).
+
+> **Category:** Hacking: Medium
+> **Difficulty:** Medium
+
+---
 
 ## Overview
 
-WordPress with a vulnerable forum plugin susceptible to SQL injection, leading to admin access and code execution.
+A WordPress site with the WP-Forum plugin, which is vulnerable to SQL injection. The attack chain progresses from SQLi to admin access, plugin-based RCE for initial shell, SSH lateral movement as user "sean", and sudo misconfiguration for root.
 
----
+## Reconnaissance
 
-## Approach
+1. Scan the target to identify WordPress and SSH services.
+2. Run `wpscan` to enumerate WordPress plugins, themes, and users.
+3. Identify the WP-Forum plugin as an installed and potentially vulnerable component.
+4. Research WP-Forum SQL injection vulnerabilities and available exploits.
 
-**Technique:** WordPress Forum SQLi + Plugin RCE + SSH Sudo
+## Exploitation
 
-### Reconnaissance
+1. Exploit the SQL injection vulnerability in the WP-Forum plugin.
+2. Extract WordPress admin password hashes from the database via SQLi.
+3. Crack the admin hash or use the SQLi to update the admin password directly.
+4. Authenticate to the WordPress admin panel.
+5. Install a malicious plugin or edit a PHP theme file to inject a reverse shell.
+6. Trigger the payload and catch the shell as the web server user.
 
-```bash
-nmap -sV -sC -p- <TARGET_IP> -oN nmap_full.txt
-wpscan --url http://<TARGET_IP> --enumerate p,u
-```
+## Privilege Escalation
 
-### Exploitation
+1. Enumerate users on the system and identify the "sean" account.
+2. Find credentials for "sean" in WordPress configuration, database, or local files.
+3. SSH into the machine as user "sean" for a stable shell.
+4. Check sudo permissions: `sudo -l`.
+5. Exploit the sudo misconfiguration to escalate to root.
+6. Retrieve the root flag.
 
-1. **Plugin enumeration:** WPScan reveals a forum plugin with known SQL injection vulnerability
-2. **SQL Injection:** Extract admin credentials from the WordPress database through the forum parameter
-3. **Admin access:** Log in to `/wp-admin/` with the extracted credentials
-4. **RCE via theme/plugin editor:** Inject PHP reverse shell code through the theme editor or upload a malicious plugin
-5. **SSH credential discovery:** Find SSH credentials in the WordPress configuration or filesystem
-6. **Privilege escalation:** The SSH user has sudo privileges allowing root shell access
-
-### Tools Used
-
-wpscan, sqlmap, Burp Suite, ssh, netcat
-
----
-
-## Security Frameworks
+## Security Framework Mapping
 
 ### MITRE ATT&CK
 
-| Technique | Description |
-|-----------|-------------|
-| T1190 | Exploit Public-Facing Application |
-| T1548.003 | Sudo and Sudo Caching |
+| Technique | ID |
+|-----------|----|
+| Exploit Public-Facing Application | T1190 |
+| Server Software Component: Web Shell | T1505.003 |
+| Valid Accounts: Local Accounts | T1078.003 |
+| Abuse Elevation Control Mechanism: Sudo | T1548.003 |
 
 ### CWE
 
-| ID | Description |
-|----|-------------|
-| CWE-89 | SQL Injection |
+- **CWE-89:** Improper Neutralization of SQL Commands (WP-Forum SQLi)
+- **CWE-434:** Unrestricted Upload of File with Dangerous Type (plugin upload RCE)
+- **CWE-269:** Improper Privilege Management (sudo misconfiguration)
 
 ---
 
-## Author
+> "Mr. Sean trusted a forum plugin with his kingdom. SQL spoke first, WordPress answered, and sudo handed over the crown. Chain your kills, not your trust."
 
-**Andre Henrike** (@mrhenrike)
-
-WordPress plugins: the gift that keeps on giving to penetration testers worldwide. Thanks guys!! (❍ᴥ❍ʋ)
+```
+(❍ᴥ❍ʋ)
+```
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike
 - X: https://x.com/mrhenrike
-
----
-
-*For educational purposes only. Do not use any technique shown here against systems you do not own or have explicit permission to test.*
