@@ -8,7 +8,7 @@ Personal collection of writeups for the [Pointer Overflow CTF 2024](https://poin
 
 ## Progress Overview
 
-**69/80 challenges** across 9 categories.
+**80/80 challenges** across 9 categories.
 
 ### Cracking
 
@@ -34,6 +34,8 @@ Personal collection of writeups for the [Pointer Overflow CTF 2024](https://poin
 | [Overall a Flop](overall-a-flop/) | 200 | Solved |
 | [Put Down Thy Wrath](put-down-thy-wrath/) | 300 | Solved |
 | [Rechance Meeting](rechance-meeting/) | 200 | Solved |
+| [For All the World to See](for-all-the-world-to-see/) | 100 | Solved |
+| [Honor the Carneia](honor-the-carneia/) | 300 | Solved |
 | [The Symmetry of Nature](the-symmetry-of-nature/) | 100 | Solved |
 
 ### Digital Forensics
@@ -60,7 +62,9 @@ Personal collection of writeups for the [Pointer Overflow CTF 2024](https://poin
 | [Imperfect, Impermanent, and Incomplete](imperfect-impermanent-and-incomplete/) | 400 | Solved |
 | [Overrun and Outdone](overrun-and-outdone/) | 200 | Solved |
 | [Smack Stashing](smack-stashing/) | 100 | Solved |
+| [Empress of What](empress-of-what/) | 300 | Solved |
 | [The Trash Heap Has Spoken](the-trash-heap-has-spoken/) | 300 | Solved |
+| [To Finish and Flounder](to-finish-and-flounder/) | 200 | Solved |
 
 ### Miscellaneous
 
@@ -68,7 +72,13 @@ Personal collection of writeups for the [Pointer Overflow CTF 2024](https://poin
 |-----------|--------|--------|
 | [A Coward Dies Twice](a-coward-dies-twice/) | 100 | Solved |
 | [Embrace the Suck](embrace-the-suck/) | 200 | Solved |
+| [Anything Worth Doing Wrong](anything-worth-doing-wrong/) | 200 | Solved |
+| [Beneath the Pea Beneath the Pillow](beneath-the-pea-beneath-the-pillow/) | 300 | Solved |
+| [Could It Be the Winter](could-it-be-the-winter/) | 100 | Solved |
+| [Deceived by Touch](deceived-by-touch/) | 300 | Solved |
+| [I Never Knew Glory](i-never-knew-glory/) | 100 | Solved |
 | [My Name is Human](my-name-is-human/) | 200 | Solved |
+| [The Hollow Howl of Foreign Winds](the-hollow-howl-of-foreign-winds/) | 300 | Solved |
 
 ### OSINT
 
@@ -96,6 +106,7 @@ Personal collection of writeups for the [Pointer Overflow CTF 2024](https://poin
 | [Think Different, Be Similar](think-different-be-similar/) | 300 | Solved |
 | [Understanding Nonsense](understanding-nonsense/) | 100 | Solved |
 | [We Do It Live](we-do-it-live/) | 300 | Solved |
+| [Constructed Languages](constructed-languages/) | 200 | Solved |
 | [Well Said but Poorly Heard](well-said-but-poorly-heard/) | 100 | Solved |
 
 ### Steganography
