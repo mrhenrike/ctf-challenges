@@ -34,8 +34,8 @@ vulnhub/<vm-slug>/
 
 ```
 pointeroverflow-poctf-<year>/
-  challenges/<challenge-slug>/
-    WRITEUP.md       # Full writeup
+  <challenge-slug>/
+    README.md        # Full writeup
     scripts/         # Solve scripts
 ```
 
