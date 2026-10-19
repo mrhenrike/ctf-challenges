@@ -11,3 +11,21 @@ vulnhub/PIPELINE.md
 
 # Claude Code project rules (local only)
 CLAUDE.md
+
+# SEC4US sensitive data (flags, credentials, VPN, tokens)
+sec4us/.vpn-creds
+sec4us/sec4us.ovpn
+sec4us/challenges/**/loot/
+sec4us/challenges/**/flag.txt
+sec4us/challenges/_archive/
+sec4us/wordlists/
+sec4us/reports/
+
+# SOCBrazil sensitive data
+socbrasil/.env
+socbrasil/.token
+socbrasil/.session_cookie
+socbrasil/hunt_logs_*.json
+socbrasil/hunt_all_logs_consolidated.json
+socbrasil/auto_relogin.py
+socbrasil/recon-deep-*/
