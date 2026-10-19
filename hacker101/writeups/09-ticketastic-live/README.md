@@ -151,4 +151,63 @@ FLAG 1: SQL injection on /ticket?id=1' → UNION SELECT from users table → fla
 2. **Stored XSS** in tickets + an admin that opens tickets = session/flag theft
 3. **SQL injection via string formatting** (`%s % input`) is critical — use parameterized queries
 4. **SQLite sqlite_master** for schema enumeration when `information_schema` is unavailable
-5. **Shared codebase between instances** means shared vulnerabilities — never assume "demo" and "live" have different security
+5. **Shared codebase between instances** means shared vulnerabilities: never assume "demo" and "live" have different security
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Initial Access | Phishing: Spearphishing Link | T1566.002 |
+| Execution | Command and Scripting Interpreter: JavaScript | T1059.007 |
+| Credential Access | Steal Web Session Cookie | T1539 |
+| Collection | Data from Information Repositories | T1213 |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Implement CSRF tokens on all state-changing forms (account creation, ticket submission)
+2. Parameterize all SQL queries to prevent injection via string formatting
+3. Apply context-aware output encoding on ticket body rendering to prevent stored XSS
+4. Set HttpOnly and Secure flags on session cookies to mitigate cookie theft via XSS
+5. Implement Content Security Policy (CSP) headers to restrict inline script execution
+
+### OWASP Top 10 2021
+
+- **A03:2021 Injection**: SQL injection via unparameterized ticket ID query
+- **A07:2021 Cross-Site Scripting**: stored XSS in ticket body rendered to admin
+- **A01:2021 Broken Access Control**: CSRF enables unauthorized account creation
+
+### MITRE D3FEND Countermeasures
+
+- **D3-IPCF (Input/Payload Content Filtering)**: filter XSS payloads and SQL metacharacters
+- **D3-MFA (Multi-factor Authentication)**: prevent single-factor session theft
+- **D3-SCA (Session Cookie Attribute)**: enforce HttpOnly, Secure, SameSite on all cookies
+
+### NIST CSF 2.0
+
+- **Protect (PR.AA-1)**: identities and credentials are managed and verified
+- **Protect (PR.DS-2)**: data-in-transit is protected
+- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+
+### NIST SP 800-53 Rev. 5
+
+- **SI-10 Information Input Validation**: validate all inputs (ticket body, query parameters)
+- **SC-23 Session Authenticity**: protect session integrity with CSRF tokens
+- **AC-3 Access Enforcement**: enforce authorization for account creation endpoints
+- **AU-6 Audit Record Review**: monitor admin ticket viewing for anomalous behavior
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+CSRF to create an account, stored XSS to weaponize a ticket, and SQLi to dump the entire users table. This challenge chains three OWASP classics into a devastating sequence that mirrors real-world phishing-to-data-exfil attack paths.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

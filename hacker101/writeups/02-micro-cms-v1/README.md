@@ -234,3 +234,61 @@ POST /page/create    → body=<img src=x onerror=alert(1)> → flag in img tag
 GET /page/edit/1'    → flag in response body
 POST /page/create    → title=<script>alert(1)</script> → flag on home page
 ```
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Discovery | File and Directory Discovery | T1083 |
+| Collection | Data from Information Repositories | T1213 |
+| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 |
+| Execution | Command and Scripting Interpreter: JavaScript | T1059.007 |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Apply consistent access control checks across all routes for the same resource (view, edit, delete)
+2. Use parameterized queries or an ORM for all database interactions to prevent SQL injection
+3. Implement context-aware output encoding on all user-supplied data, not just `<script>` tag filtering
+4. Enforce sequential authorization checks: authentication first, then resource ownership validation
+
+### OWASP Top 10 2021
+
+- **A01:2021 Broken Access Control**: IDOR on the edit endpoint bypassing the 403 on the view endpoint
+- **A03:2021 Injection**: SQL injection via unparameterized route parameter
+- **A07:2021 Cross-Site Scripting**: stored XSS through event handlers and title rendering
+
+### MITRE D3FEND Countermeasures
+
+- **D3-IPCF (Input/Payload Content Filtering)**: validate and sanitize all input before database insertion or HTML rendering
+- **D3-ACL (Access Control List)**: enforce resource-level authorization on every route variant
+- **D3-SPP (Strong Password Policy)**: ensure unique, non-predictable resource identifiers
+
+### NIST CSF 2.0
+
+- **Protect (PR.AA-1)**: identities and credentials are issued, managed, and verified
+- **Protect (PR.DS-1)**: data-at-rest is protected
+- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+
+### NIST SP 800-53 Rev. 5
+
+- **AC-3 Access Enforcement**: enforce approved authorizations for logical access to information and system resources
+- **SI-10 Information Input Validation**: check the validity of all inputs
+- **AC-6 Least Privilege**: authorize access only to the minimum necessary
+- **AU-6 Audit Record Review, Analysis, and Reporting**: review and analyze audit records for indications of inappropriate activity
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Four flags from four completely different vectors in one tiny CMS. IDOR, stored XSS, SQL injection, and escaping inconsistency all living under the same roof. If that does not convince you to test every single route variant, nothing will.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

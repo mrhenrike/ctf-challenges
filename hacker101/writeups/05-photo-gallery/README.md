@@ -155,3 +155,63 @@ FLAG 2: stacked UPDATE → filename='* || env > recon.txt' → GET / → UNION S
 4. **subprocess with shell=True and unsanitized data** = critical command injection
 5. **User-controlled filenames** must never be passed to shell commands
 6. **Environment variables** frequently contain flags and secrets in lab/container environments
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Execution | Command and Scripting Interpreter: Unix Shell | T1059.004 |
+| Collection | Data from Information Repositories | T1213 |
+| Discovery | File and Directory Discovery | T1083 |
+| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 |
+| Persistence | Server Software Component: SQL Stored Procedures | T1505.001 |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Parameterize all SQL queries, including numeric ID parameters
+2. Disable stacked queries in the database driver configuration when not needed
+3. Replace `subprocess.Popen(shell=True)` with `subprocess.run(["cmd", arg])` to prevent command injection
+4. Sanitize user-controlled filenames before any filesystem or shell operation
+5. Never store secrets in environment variables accessible to web processes; use a dedicated secrets manager
+
+### OWASP Top 10 2021
+
+- **A03:2021 Injection**: SQL injection via numeric parameter and OS command injection via unsanitized filename
+- **A05:2021 Security Misconfiguration**: stacked queries enabled, debug secrets in environment variables
+
+### MITRE D3FEND Countermeasures
+
+- **D3-IPCF (Input/Payload Content Filtering)**: validate and parameterize all inputs
+- **D3-PSEP (Process Segment Execution Prevention)**: prevent arbitrary shell execution from web contexts
+- **D3-EAL (Execution Allow Listing)**: restrict which commands can be invoked by the web application
+
+### NIST CSF 2.0
+
+- **Protect (PR.DS-1)**: data-at-rest is protected
+- **Protect (PR.DS-2)**: data-in-transit is protected
+- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+- **Respond (RS.AN-3)**: forensics are performed
+
+### NIST SP 800-53 Rev. 5
+
+- **SI-10 Information Input Validation**: check the validity of information inputs
+- **SC-39 Process Isolation**: maintain a separate execution domain for each executing process
+- **CM-7 Least Functionality**: configure the system to provide only essential capabilities
+- **AU-6 Audit Record Review**: review and analyze information system audit records
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+SQL injection into stacked queries that pivot to OS command injection through `shell=True` is a devastating chain. One unparameterized ID field, and you go from reading database rows to dumping environment variables with full RCE.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

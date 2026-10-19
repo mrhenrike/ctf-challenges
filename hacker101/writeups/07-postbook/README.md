@@ -139,3 +139,60 @@ FLAG 4: id=1 in edit form
 3. **Sequential or predictable IDs** facilitate enumeration
 4. **Authorization must be enforced server-side** for each operation (read, create, edit, delete)
 5. **Default credentials** must never be used in production
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Valid Accounts: Default Accounts | T1078.001 |
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Collection | Data from Information Repositories | T1213 |
+| Discovery | Account Discovery: Local Account | T1087.001 |
+| Privilege Escalation | Access Token Manipulation | T1134 |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Enforce server-side authorization checks on every operation (read, create, edit, delete) verifying the authenticated user owns the resource
+2. Use unpredictable, non-sequential identifiers (UUIDs) for all resource IDs
+3. Remove hidden fields that carry authorization-relevant data (like `user_id`); derive ownership from the server session
+4. Disable or force rotation of default credentials on first login
+
+### OWASP Top 10 2021
+
+- **A01:2021 Broken Access Control**: IDOR on post view and edit endpoints, hidden field manipulation for user impersonation
+- **A07:2021 Identification and Authentication Failures**: default credentials accepted without forced change
+
+### MITRE D3FEND Countermeasures
+
+- **D3-ACL (Access Control List)**: enforce per-resource ownership verification
+- **D3-SPP (Strong Password Policy)**: prevent default or weak credentials from being active
+- **D3-IOPR (IO Port Restriction)**: limit server-side trust in client-supplied identifiers
+
+### NIST CSF 2.0
+
+- **Protect (PR.AA-1)**: identities and credentials are issued, managed, verified
+- **Protect (PR.AC-4)**: access permissions and authorizations are managed with least privilege
+- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+
+### NIST SP 800-53 Rev. 5
+
+- **AC-3 Access Enforcement**: enforce approved authorizations for logical access
+- **AC-6 Least Privilege**: authorize only the minimum necessary access
+- **IA-5 Authenticator Management**: manage system authenticators (no default passwords)
+- **SI-10 Information Input Validation**: check the validity of all client-supplied inputs
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Five flags, five different flavors of IDOR. Default creds to get in, sequential IDs to enumerate, hidden fields to impersonate, and missing server-side checks on every CRUD operation. This is the challenge that teaches you broken access control is never just one bug.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

@@ -137,4 +137,56 @@ curl -s -X POST \
 - **Reconnaissance:** GET on the main page, HTML source review
 - **Discovery:** Identified `background.png` referenced in the CSS tag
 - **Exploitation:** Downloaded and read the file with `strings`
-- **Submission:** Flag submitted and accepted — 1/26 points
+- **Submission:** Flag submitted and accepted, 1/26 points
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Reconnaissance | Active Scanning: Vulnerability Scanning | T1595.002 |
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Collection | Data from Information Repositories | T1213 |
+| Discovery | File and Directory Discovery | T1083 |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Never serve sensitive data through files accessible via direct URL, even if they have misleading extensions
+2. Implement proper access controls on all static assets
+3. Remove debug or placeholder files from production deployments
+4. Use a Content Security Policy (CSP) header to restrict resource loading
+
+### OWASP Top 10 2021
+
+- **A01:2021 Broken Access Control**: sensitive data exposed through a publicly accessible file with no authentication
+
+### MITRE D3FEND Countermeasures
+
+- **D3-AL (Authorization Limiting)**: restrict access to static resources based on authentication status
+- **D3-FA (File Analysis)**: scan deployed assets for unintended sensitive content before going live
+
+### NIST CSF 2.0
+
+- **Protect (PR.DS-1)**: data-at-rest is protected through access controls
+- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+
+### NIST SP 800-53 Rev. 5
+
+- **AC-3 Access Enforcement**: enforce approved authorizations for logical access to information
+- **CM-7 Least Functionality**: configure systems to provide only essential capabilities
+- **SC-28 Protection of Information at Rest**: protect the confidentiality of information at rest
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Sometimes the simplest challenges teach the most important lesson: always check every resource the page loads. A "background image" that turns out to be plain text is a classic reminder that file extensions mean nothing without validation.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

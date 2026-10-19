@@ -125,4 +125,62 @@ FLAG 2: ' or 1=1# → login as any user + credentials exposed
 2. **Auth check per HTTP method** is broken — always verify regardless of method
 3. **Exposed Python traceback** leaks query structure and enables targeted SQLi
 4. **UNION SELECT** allows injecting fake results into authentication
-5. **Error-based SQLi** — when tracebacks are visible, use the exposed query to craft precise injections
+5. **Error-based SQLi**: when tracebacks are visible, use the exposed query to craft precise injections
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Credential Access | Brute Force: Password Spraying | T1110.003 |
+| Defense Evasion | Exploitation for Defense Evasion | T1211 |
+| Collection | Data from Information Repositories | T1213 |
+| Persistence | Valid Accounts: Local Accounts | T1078.003 |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Replace string interpolation in SQL queries with parameterized statements (`cursor.execute(query, (param,))`)
+2. Enforce authentication and authorization checks on all HTTP methods, not just GET
+3. Disable debug tracebacks in production (never expose query structure to the user)
+4. Hash stored passwords with bcrypt or argon2 instead of storing plaintext
+
+### OWASP Top 10 2021
+
+- **A03:2021 Injection**: SQL injection via string concatenation in authentication queries
+- **A07:2021 Identification and Authentication Failures**: plaintext password storage and bypassable login
+- **A05:2021 Security Misconfiguration**: Python tracebacks exposed in production
+
+### MITRE D3FEND Countermeasures
+
+- **D3-IPCF (Input/Payload Content Filtering)**: sanitize and parameterize all database inputs
+- **D3-SPP (Strong Password Policy)**: enforce hashed, salted credential storage
+- **D3-MFA (Multi-factor Authentication)**: add a second authentication factor to prevent single-point bypass
+
+### NIST CSF 2.0
+
+- **Protect (PR.AA-1)**: identities and credentials are issued, managed, verified, revoked
+- **Protect (PR.DS-1)**: data-at-rest is protected
+- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+
+### NIST SP 800-53 Rev. 5
+
+- **SI-10 Information Input Validation**: check the validity of information inputs
+- **IA-5 Authenticator Management**: manage information system authenticators (passwords must be hashed)
+- **AC-3 Access Enforcement**: enforce approved authorizations for all HTTP methods
+- **SI-11 Error Handling**: generate error messages that provide only necessary information without revealing implementation details
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+When a traceback hands you the raw SQL query on a silver platter, the game is already over. UNION SELECT to bypass auth, method-based access control that forgets POST exists, and plaintext passwords: this CMS is a textbook of what not to do.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
