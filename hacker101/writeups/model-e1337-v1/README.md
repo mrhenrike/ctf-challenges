@@ -91,6 +91,14 @@ See also `../model-e1337/README.md` for the complete implementation with scripts
 | D3-CSPP | Content Security Policy Pinning | Restrict XML processing capabilities |
 | D3-MFA | Multi-factor Authentication | Replace rolling code with HMAC-OTP (RFC 6238) |
 
+### NIST CSF 2.0
+
+| Function | Category | Application |
+|----------|----------|-------------|
+| PR (Protect) | PR.DS | Disable external entities in XML parsers |
+| PR (Protect) | PR.AC | Authenticate configuration endpoints; rate-limit unlock |
+| DE (Detect) | DE.CM | Monitor for XXE probes and brute-force on `/unlock` |
+
 ### NIST SP 800-53 Rev. 5
 
 | Control | Title | Application |
@@ -98,6 +106,13 @@ See also `../model-e1337/README.md` for the complete implementation with scripts
 | SC-13 | Cryptographic Protection | Use CSPRNG with adequate seed size (128+ bits) |
 | SI-10 | Information Input Validation | Disable DTD and external entity processing in XML |
 | SI-11 | Error Handling | Return generic errors; do not leak internal state |
+
+### C2M2
+
+| Domain | Practice | MIL | Application |
+|--------|----------|-----|-------------|
+| ACCESS | Access Control Management | MIL-2 | Restrict configuration endpoints; enforce authentication |
+| ASSET | Asset, Change, and Configuration Management | MIL-2 | Enforce secure XML parser defaults across all components |
 
 ---
 
