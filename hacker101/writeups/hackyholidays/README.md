@@ -224,52 +224,77 @@ GET /attack-box/launch/?payload=<base64>
 
 ## MITRE ATT&CK Mapping
 
-| Tactic | Technique | TTP-ID |
+| Tactic | Technique | ID | Description |
+|---|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 | SQLi, SSTI, LFI, SSRF across multiple endpoints |
+| Credential Access | Brute Force: Password Cracking | T1110.002 | Cracking Grinch's hash on `/forum` (password: `BahHumbug`) |
+| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 | Flags in `robots.txt` and HTML comments |
+| Persistence | Account Manipulation | T1098 | Cookie tampering to set `admin:true` in `/secure-login` |
+| Execution | Command and Scripting Interpreter | T1059 | SSTI via `{{template:...}}` in `/hate-mail-generator` |
+| Discovery | File and Directory Discovery | T1083 | LFI with `str_replace` bypass in `/my-diary` |
+| Collection | Data from Information Repositories | T1213 | Blind SQLi side-channel extraction in `/evil-quiz` |
+| Lateral Movement | Exploitation of Remote Services | T1210 | Nested SSRF via SQLi in `/r3c0n_server` to reach internal API |
+
+---
+
+## Remediation
+
+### Technical Fixes
+
+1. **Parameterize all SQL queries** to eliminate blind SQLi (evil-quiz, r3c0n_server)
+2. **Sign and encrypt session cookies** with HMAC; never trust client-side JSON with `admin` flags
+3. **Use allowlists for template parameters**; disable dynamic template inclusion (hate-mail-generator)
+4. **Canonicalize file paths** and use allowlists for LFI prevention; `str_replace` is insufficient
+5. **Use `intval()` with strict type checking** or cast to `(int)` to prevent scientific notation overflow
+6. **Restrict SSRF** with URL allowlists and disable internal network access from user-controlled inputs
+7. **Use bcrypt/argon2** for password hashing; enforce strong password policies
+8. **Remove sensitive data** from `robots.txt` and HTML comments
+
+### OWASP Top 10 2021
+
+| ID | Risk | Relevance |
 |---|---|---|
-| Initial Access | Exploit Public-Facing Application | T1190 |
-| Credential Access | Brute Force: Password Cracking | T1110.002 |
-| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 |
-| Persistence | Account Manipulation | T1098 |
-| Execution | Server-Side Template Injection (SSTI) | T1059 |
-| Discovery | File and Directory Discovery | T1083 |
-| Collection | Data from Information Repositories | T1213 |
-| Initial Access | Supply Chain Compromise (nested SSRF) | T1195 |
+| A01 | Broken Access Control | IDOR in `/people-rater`, admin cookie tampering, LFI bypass in `/my-diary` |
+| A03 | Injection | Blind SQLi (`/evil-quiz`), SSTI (`/hate-mail-generator`), nested SQLi+SSRF (`/r3c0n_server`) |
+| A05 | Security Misconfiguration | `robots.txt` flag disclosure, HTML comments, `intval()` integer overflow |
+| A07 | Identification and Authentication Failures | Unsigned JSON cookies, default credentials, weak password hashes |
+
+### D3FEND Countermeasures
+
+| ID | Technique | Application |
+|---|---|---|
+| D3-IPCF | IPC Filtering | Parameterize SQL queries; restrict template inputs with allowlists |
+| D3-SPP | Strong Password Policy | Enforce password complexity; use bcrypt/argon2 for hashing |
+| D3-SCA | Session Cookie Attribute | Sign and encrypt cookies; set HttpOnly, Secure, SameSite |
+| D3-CSPP | Client-Side Parameter Pollution Prevention | Validate base64 JSON IDs server-side (IDOR prevention) |
+
+### NIST CSF 2.0
+
+| Function | Category | Subcategory | Application |
+|---|---|---|---|
+| Protect | PR.DS | PR.DS-01 | Validate and sanitize all inputs server-side |
+| Protect | PR.AA | PR.AA-01 | Sign authentication cookies; enforce MFA on admin endpoints |
+| Detect | DE.CM | DE.CM-01 | Monitor for blind SQLi patterns, cookie manipulation, SSRF payloads |
+| Respond | RS.AN | RS.AN-03 | Alert on anomalous record count changes (blind SQLi side-channel) |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---|---|---|
+| SI-10 | Information Input Validation | Validate all inputs; use allowlists for template parameters and file paths |
+| AC-3 | Access Enforcement | Server-side authorization; sign session tokens; enforce RBAC |
+| IA-5 | Authenticator Management | bcrypt/argon2 for hashing; no default credentials in production |
+| SC-28 | Protection of Information at Rest | Never store sensitive data in `robots.txt` or HTML comments |
 
 ---
 
-## OWASP Top 10 2021
+## Final Thoughts
 
-- **A01:2021 Broken Access Control**: IDOR in `/people-rater`, admin cookie tampering, LFI bypass
-- **A03:2021 Injection**: blind SQLi in `/evil-quiz`, SSTI in `/hate-mail-generator`, nested SQLi+SSRF in `/r3c0n_server`
-- **A07:2021 Identification and Authentication Failures**: unsigned JSON cookies, default credentials, weak password hashes
-- **A05:2021 Security Misconfiguration**: `robots.txt` disclosure, HTML comments with flags, `intval()` integer overflow
-
-## MITRE D3FEND Countermeasures
-
-- **D3-IPCF (IPC Filtering)**: parameterize all SQL queries; restrict template inputs
-- **D3-SPP (Strong Password Policy)**: enforce password complexity; never store passwords in crackable hashes
-- **D3-SCA (Session Cookie Attribute)**: sign and encrypt session cookies; never trust client-side JSON cookies
-
-## NIST CSF 2.0
-
-- **Protect (PR.DS)**: validate all inputs server-side; parameterize database queries
-- **Protect (PR.AA)**: sign authentication cookies; enforce MFA on admin endpoints
-- **Detect (DE.CM)**: monitor for blind SQLi patterns, anomalous cookie manipulation, SSRF payloads
-
-## NIST SP 800-53 Rev. 5
-
-- **SI-10 (Information Input Validation)**: validate all inputs; use allowlists for template parameters
-- **AC-3 (Access Enforcement)**: enforce server-side authorization; sign session tokens
-- **IA-5 (Authenticator Management)**: use bcrypt/argon2 for password hashing; no default credentials
-- **SC-28 (Protection of Information at Rest)**: encrypt sensitive data; never store flags in `robots.txt`
-
----
+Twelve flags, nine vulnerability classes, one Christmas theme. Hacky Holidays is a masterclass in breadth: from basic recon (`robots.txt`) to chained nested SSRF via SQLi, with IDOR, cookie tampering, blind SQLi, SSTI, LFI, integer overflow, and hash cracking in between. The `intval('1e3')` trick alone is worth remembering for every PHP audit you do. And the nested SSRF inside SQLi results? That is the kind of chain that shows up in real-world pentests more often than you'd expect.
 
 Thanks guys!! (❍ᴥ❍ʋ)
 
----
-
-Twelve flags, nine vulnerability classes, one Christmas theme. If this marathon through IDOR, blind SQLi, SSTI, integer overflow, and nested SSRF gave you new tools for your next engagement, spread the holiday cheer.
+Twelve flags down, countless more to go. If this marathon gave you new tools for your next engagement, share the holiday cheer:
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike

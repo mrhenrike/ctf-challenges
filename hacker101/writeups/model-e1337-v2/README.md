@@ -113,3 +113,80 @@ curl -s "$BASE/unlock" -d "code=10322713006950444088"
 ```
 
 **Flag:** `01a30081fa302d4743705cd9239a9a1a7e98acf3456aa7f1b4ca432076b06787`
+
+## Lessons Learned
+
+1. Partial hardening (removing XXE, adding more PRNG rounds) does not fix a 32-bit seed; the fundamental weakness is the keyspace
+2. GF(2) linear algebra is the mathematically correct tool for XOR/shift-based PRNGs; Z3 works but scales poorly
+3. Without source code, empirical analysis of PRNG outputs reveals the algorithm structure
+4. Information leakage via error messages (/unlock revealing expected codes) is the root enabler of the entire attack chain
+
+## MITRE ATT&CK Mapping
+
+| ID | Technique | Tactic | How it was used |
+|----|-----------|--------|----------------|
+| T1190 | Exploit Public-Facing Application | Initial Access | Information leakage via `/unlock` error responses |
+| T1588.005 | Obtain Capabilities: Exploits | Resource Development | GF(2) solver for 64-bit PRNG state recovery from outputs |
+| T1040 | Network Sniffing | Collection | Captured PRNG outputs via repeated probes to `/unlock` |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **Error leakage:** Never reveal the expected code; return only "incorrect" or "correct"
+2. **PRNG:** Replace with CSPRNG (`secrets.token_bytes()` or HMAC-OTP)
+3. **Rate limiting:** Limit `/unlock` attempts per session to prevent output harvesting
+4. **Seed size:** Even with stronger PRNG rounds, 32-bit seed = brute-forceable; use 128+ bits
+
+### OWASP Top 10 2021
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| A02:2021 | Cryptographic Failures | 32-bit PRNG seed; linear (GF(2)) structure allows algebraic recovery |
+| A04:2021 | Insecure Design | Error response leaks the expected code, creating an output oracle |
+
+### MITRE D3FEND Countermeasures
+
+| ID | Technique | Application |
+|----|-----------|-------------|
+| D3-MFA | Multi-factor Authentication | Replace custom rolling code with HMAC-OTP (RFC 6238) |
+| D3-AL | Audit Logging | Log all unlock attempts; alert on repeated failures from same source |
+
+### NIST CSF 2.0
+
+| Function | Category | Application |
+|----------|----------|-------------|
+| PR (Protect) | PR.DS | Use cryptographically secure random number generators |
+| PR (Protect) | PR.AC | Rate-limit unlock attempts; lock out after threshold |
+| DE (Detect) | DE.CM | Detect patterns of systematic code probing |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---------|-------|-------------|
+| SC-13 | Cryptographic Protection | CSPRNG with 128+ bit seeds; HMAC-OTP for rolling codes |
+| SI-11 | Error Handling | Generic error responses; never reveal expected values |
+| AC-7 | Unsuccessful Logon Attempts | Lock account or endpoint after repeated failed unlock attempts |
+
+### C2M2
+
+| Domain | Practice | MIL | Application |
+|--------|----------|-----|-------------|
+| ACCESS | Access Control Management | MIL-2 | Rate limiting and lockout on authentication endpoints |
+| ASSET | Asset, Change, and Configuration Management | MIL-2 | Review cryptographic implementations for adequate key sizes |
+
+---
+
+## Final Thoughts
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+Model E1337 v2 "Hardened" proves that hardening without addressing the root cause is theater: adding more PRNG rounds and removing XXE still leaves a 32-bit seed and an output oracle. The correct fix is not to make the PRNG harder to break; it is to use a cryptographically secure one and stop leaking expected codes. GF(2) linear algebra makes the "hardened" version just as trivial to solve as v1.
+
+Follow along for more advanced crypto and web exploitation writeups:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike

@@ -230,3 +230,141 @@ curl -s -X POST "$BASE/unlock" -d "code=47054530"
 2. Endpoints that reveal the "expected code" in error messages eliminate the PRNG's advantage
 3. A 32-bit seed is brute-forceable in ~7 minutes with C+OpenMP/parallel on CPU
 4. Two consecutive PRNG outputs are sufficient to uniquely identify the seed (2 constraints for 2^32 space)
+
+---
+
+## MITRE ATT&CK Mapping
+
+| Tactic | Technique | TTP-ID |
+|---|---|---|
+| Initial Access | Exploit Public-Facing Application | T1190 |
+| Execution | Command and Scripting Interpreter: Python | T1059.006 |
+| Collection | Data from Information Repositories | T1213 |
+| Discovery | File and Directory Discovery | T1083 |
+| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. Disable external entities in the XML parser: `parser.setFeature(xml.sax.handler.feature_external_ges, False)`
+2. Replace the custom PRNG with a CSPRNG (`secrets.token_bytes()` or `os.urandom()`)
+3. Use seeds of at least 128 bits to prevent brute-force recovery
+4. Never reveal expected values in error messages: return only "incorrect code"
+5. Implement rate limiting on `/unlock` to slow down PRNG output collection
+
+### OWASP Top 10 2021
+
+- **A05:2021 Security Misconfiguration**: XML parser with external entities enabled
+- **A02:2021 Cryptographic Failures**: custom PRNG with 32-bit seed instead of CSPRNG
+
+### CWE
+
+- **CWE-611**: Improper Restriction of XML External Entity Reference
+- **CWE-338**: Use of Cryptographically Weak Pseudo-Random Number Generator
+
+### MITRE D3FEND Countermeasures
+
+- **D3-IPCF (Input/Payload Content Filtering)**: disable DTD processing and external entity resolution in XML parsers
+- **D3-EAL (Execution Allow Listing)**: restrict file system access from XML processing contexts
+- **D3-CKMS (Cryptographic Key Management)**: use CSPRNG with adequate seed entropy for rolling codes
+
+### NIST CSF 2.0
+
+- **Protect (PR.DS-1)**: data-at-rest is protected (source code not exfiltrable)
+- **Protect (PR.DS-2)**: data-in-transit is protected
+- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+
+### NIST SP 800-53 Rev. 5
+
+- **SI-10 Information Input Validation**: validate and sanitize all XML inputs; disable external entities
+- **SC-13 Cryptographic Protection**: use approved cryptographic algorithms for random number generation
+- **SI-11 Error Handling**: generate error messages without revealing implementation details or expected values
+- **CM-7 Least Functionality**: disable unnecessary XML features (DTD, external entities)
+
+---
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+XXE to read the source code, then brute-force a 32-bit PRNG seed with two leaked outputs: this challenge is a masterclass in chaining information disclosure with cryptographic weakness. Custom PRNGs with small seeds and error messages that leak expected values are a recipe for disaster.
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
+
+---
+
+## MITRE ATT&CK Mapping
+
+| ID | Technique | Tactic | How it was used |
+|----|-----------|--------|----------------|
+| T1190 | Exploit Public-Facing Application | Initial Access | XXE on `/set-config` to exfiltrate source code |
+| T1005 | Data from Local System | Collection | Read `main.py` and `rng.py` via XXE entity resolution |
+| T1588.005 | Obtain Capabilities: Exploits | Resource Development | Built C brute-forcer for 32-bit PRNG seed recovery |
+| T1059.006 | Command and Scripting Interpreter: Python | Execution | Python XXE payload generation and URL encoding |
+
+## Remediation and Containment
+
+### Technical Fixes
+
+1. **XXE:** Disable external entity resolution in `xml.sax` with `setFeature(feature_external_ges, False)`
+2. **PRNG:** Use `secrets.token_bytes()` or `/dev/urandom` instead of custom PRNG with 32-bit seed
+3. **Error messages:** Never reveal the expected code in error responses
+4. **Seed space:** If rolling codes are required, use HMAC-based OTP (RFC 4226/6238) with 128+ bit secrets
+
+### OWASP Top 10 2021
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| A05:2021 | Security Misconfiguration | XML parser with external entities enabled; error leaking expected codes |
+| A02:2021 | Cryptographic Failures | 32-bit PRNG seed; custom (non-cryptographic) random number generator |
+
+### MITRE D3FEND Countermeasures
+
+| ID | Technique | Application |
+|----|-----------|-------------|
+| D3-CSPP | Content Security Policy Pinning | Restrict XML processing; disable external entity resolution |
+| D3-MFA | Multi-factor Authentication | Use HMAC-OTP instead of custom rolling codes |
+| D3-AL | Audit Logging | Log all `/set-config` and `/unlock` attempts for anomaly detection |
+
+### NIST CSF 2.0
+
+| Function | Category | Application |
+|----------|----------|-------------|
+| PR (Protect) | PR.DS | Disable external entities in all XML parsers |
+| PR (Protect) | PR.AC | Restrict access to configuration endpoints; rate-limit unlock attempts |
+| DE (Detect) | DE.CM | Monitor for XXE probes and brute-force patterns on `/unlock` |
+
+### NIST SP 800-53 Rev. 5
+
+| Control | Title | Application |
+|---------|-------|-------------|
+| SC-12 | Cryptographic Key Establishment and Management | Use CSPRNG with 128+ bit seeds for all security-sensitive randomness |
+| SC-13 | Cryptographic Protection | Replace custom PRNG with HMAC-based OTP (RFC 6238) |
+| SI-10 | Information Input Validation | Validate and sanitize XML input; disable DTD processing |
+| SI-11 | Error Handling | Generic error messages; never reveal expected values |
+
+### C2M2
+
+| Domain | Practice | MIL | Application |
+|--------|----------|-----|-------------|
+| ACCESS | Access Control Management | MIL-2 | Restrict configuration endpoints; enforce authentication |
+| ASSET | Asset, Change, and Configuration Management | MIL-2 | Inventory XML parsers; enforce secure defaults across all XML processing |
+
+---
+
+## Final Thoughts
+
+Thanks guys!! (❍ᴥ❍ʋ)
+
+---
+
+This challenge is a perfect demonstration of why custom cryptography is dangerous: a 32-bit seed means only ~4 billion possibilities, and with two leaked outputs the seed is uniquely determined. Combined with XXE for source code exfiltration, it shows how information disclosure chains into full compromise. If you need rolling codes, use HMAC-OTP with proper key sizes.
+
+Reach out and let's discuss crypto and web security:
+
+- Instagram: https://www.instagram.com/uniaogeek
+- LinkedIn: http://linkedin.com/in/mrhenrike
+- X: https://x.com/mrhenrike
