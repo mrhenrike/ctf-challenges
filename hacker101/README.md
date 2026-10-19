@@ -1,4 +1,4 @@
-# Hacker101 CTF — Writeups
+# Hacker101 CTF: Writeups
 
 Personal collection of writeups for the [Hacker101 CTF](https://ctf.hacker101.com/) challenges by HackerOne.
 
@@ -32,10 +32,10 @@ Personal collection of writeups for the [Hacker101 CTF](https://ctf.hacker101.co
 | 20 | [XSS Playground by zseano](writeups/22-xss-playground/) | Expert | Web, XSS | 3/3 | ✅ Complete |
 | 21 | [H1 Thermostat](writeups/h1-thermostat/) | Expert | IoT, Web | 2/2 | ✅ Complete |
 | 22 | [Ticketastic (full version)](writeups/21-ticketastic/) | Moderate | Web | 2/2 | ✅ Complete |
-| 23 | [Model E1337 — Rolling Code Lock](writeups/model-e1337/) | Expert | Crypto, Math | 3/3 | ✅ Complete |
+| 23 | [Model E1337: Rolling Code Lock](writeups/model-e1337/) | Expert | Crypto, Math | 3/3 | ✅ Complete |
 | 24 | [Model E1337 v1](writeups/model-e1337-v1/) | Expert | Crypto, Math | 2/2 | ✅ Complete |
-| 25 | [Model E1337 v2 — Hardened](writeups/model-e1337-v2/) | Expert | Crypto, Math | 1/1 | ✅ Complete |
-| 26 | [Y2FuIHlvdSByZWNvbj8 — Can You Recon?](writeups/y2fu-can-you-recon/) | Expert | OSINT, Recon | 3/3 | ✅ Complete |
+| 25 | [Model E1337 v2: Hardened](writeups/model-e1337-v2/) | Expert | Crypto, Math | 1/1 | ✅ Complete |
+| 26 | [Y2FuIHlvdSByZWNvbj8: Can You Recon?](writeups/y2fu-can-you-recon/) | Expert | OSINT, Recon | 3/3 | ✅ Complete |
 | 27 | [Rend Asunder](writeups/rend-asunder/) | Expert | DOM XSS, Browser | 1/3 | 🔄 In Progress |
 
 ---
@@ -82,8 +82,8 @@ writeups/
 ```
 
 Each challenge folder contains:
-- `README.md` — step-by-step writeup with commands and expected output
-- `scripts/` — exploit scripts (when applicable)
+- `README.md`: step-by-step writeup with commands and expected output
+- `scripts/`: exploit scripts (when applicable)
 
 ---
 
