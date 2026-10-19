@@ -10,12 +10,9 @@ Personal collection of CTF writeups, boot2root challenge solutions and competiti
 |----------|---------|--------|
 | [Hacker101 CTF](hacker101/) | 27 web challenges | Complete |
 | [VulnHub](vulnhub/) | 140+ boot2root VMs | In progress |
-| [POCTF 2020](poctf-2020/) | Competition writeups | Incomplete |
-| [POCTF 2021](poctf-2021/) | Competition writeups | Incomplete |
-| [POCTF 2022](poctf-2022/) | Competition writeups | Incomplete |
-| [POCTF 2023](poctf-2023/) | 4 challenges (Cracking, Forensics) | Incomplete |
-| [POCTF 2024](poctf-2024/) | Competition writeups | Incomplete |
-| [POCTF 2025](poctf-2025/) | Competition writeups | Incomplete |
+| [POCTF 2023](poctf-2023/) | 4/25 challenges (Cracking, Forensics) | Incomplete |
+| [POCTF 2024](poctf-2024/) | 0/80 challenges | Incomplete |
+| [POCTF 2025](poctf-2025/) | 0/80 challenges | Incomplete |
 | [POCTF 2026](poctf-2026/) | 14 challenges (Web, Crypto, Stego, Forensics, RE, Exploitation) | Complete |
 
 ---
