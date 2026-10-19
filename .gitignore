@@ -69,11 +69,11 @@ sec4us/
 socbrasil/
 
 # POCTF 2026 internal files (writeups with frameworks are published)
-pointeroverflow-poctf-2026/challenges/stego_solver.py
-pointeroverflow-poctf-2026/challenges/browser_solver.js
-pointeroverflow-poctf-2026/challenges/exploit_solver.py
-pointeroverflow-poctf-2026/challenges/solve_all.py
-pointeroverflow-poctf-2026/challenges/browser_mass_solve.js
+poctf-2026/stego_solver.py
+poctf-2026/browser_solver.js
+poctf-2026/exploit_solver.py
+poctf-2026/solve_all.py
+poctf-2026/browser_mass_solve.js
 
 # Pwn2Win (incomplete, private notes)
 pwn2win/
