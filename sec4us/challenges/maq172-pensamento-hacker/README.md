@@ -1,67 +1,63 @@
-# Maq172: Pensamento Hacker (BlueKeep)
+# Maq172: Pensamento Hacker
 
-> **Platform:** SEC4US CTF Lab | **Category:** Hacking: Medium | **Points:** Dynamic
+Writeup for the **Pensamento Hacker** challenge on [SEC4US](https://sec4us.com.br/).
+
+> **Category:** Hacking: Medium
+> **Difficulty:** Medium
+
+---
 
 ## Overview
 
-Windows machine vulnerable to the BlueKeep RDP vulnerability (CVE-2019-0708). Requires precise target configuration in Metasploit.
+A lateral-thinking web exploitation challenge that rewards creative problem-solving. The target requires unconventional approaches to discover hidden functionality, bypass restrictions, and ultimately achieve system access through non-obvious attack vectors.
 
----
+## Reconnaissance
 
-## Approach
+1. Scan the target to identify all exposed services and their versions.
+2. Perform thorough web enumeration: directories, files, subdomains, virtual hosts.
+3. Inspect all client-side code, comments, and hidden parameters in the web application.
+4. Look for non-standard ports, obscure protocols, or services that are not immediately obvious.
+5. Think laterally: check source code comments, HTTP headers, and unusual response behaviors.
 
-**Technique:** BlueKeep CVE-2019-0708 RDP RCE
+## Exploitation
 
-### Reconnaissance
+1. Identify the hidden or non-obvious entry point that requires lateral thinking.
+2. Apply creative techniques: parameter manipulation, encoding tricks, or logic abuse.
+3. Chain discoveries from multiple sources to form a complete exploitation path.
+4. Achieve code execution through the unconventional attack vector.
+5. Establish a foothold on the target system.
 
-```bash
-nmap -sV -sC -p- <TARGET_IP> -oN nmap_full.txt
-```
+## Privilege Escalation
 
-RDP service detected on port 3389. Version check confirms vulnerability to BlueKeep.
+1. Enumerate the system thoroughly for escalation opportunities.
+2. Apply the same lateral-thinking approach to privilege escalation.
+3. Look for unusual system configurations, custom scripts, or overlooked permissions.
+4. Escalate privileges and retrieve the flag.
 
-### Exploitation
-
-1. **Vulnerability verification:** Confirm BlueKeep vulnerability with the Metasploit scanner module
-2. **Target configuration:** Set the appropriate Metasploit target (architecture-specific) and GROOMBASE value for the lab environment
-3. **Exploit execution:** Run the `exploit/windows/rdp/cve_2019_0708_bluekeep_rce` module
-4. **SYSTEM shell:** Successful exploitation provides SYSTEM-level access immediately
-5. **Flag retrieval:** Read the flag from the filesystem
-
-> **Note:** BlueKeep exploitation can be unreliable. Multiple attempts with different GROOMBASE values may be required.
-
-### Tools Used
-
-nmap, Metasploit (cve_2019_0708_bluekeep_rce)
-
----
-
-## Security Frameworks
+## Security Framework Mapping
 
 ### MITRE ATT&CK
 
-| Technique | Description |
-|-----------|-------------|
-| T1210 | Exploitation of Remote Services |
+| Technique | ID |
+|-----------|----|
+| Exploit Public-Facing Application | T1190 |
+| Exploitation for Privilege Escalation | T1068 |
+| Obfuscated Files or Information | T1027 |
 
 ### CWE
 
-| ID | Description |
-|----|-------------|
-| CWE-416 | Use After Free |
+- **CWE-693:** Protection Mechanism Failure
+- **CWE-20:** Improper Input Validation
+- **CWE-284:** Improper Access Control
 
 ---
 
-## Author
+> "Hacker thinking is not about the tools; it is about seeing doors where others see walls. The most dangerous vulnerability is the one nobody thought to test, hidden in plain sight behind an assumption."
 
-**Andre Henrike** (@mrhenrike)
-
-BlueKeep: a reminder that RDP was never meant to be internet-facing. Thanks guys!! (❍ᴥ❍ʋ)
+```
+(❍ᴥ❍ʋ)
+```
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike
 - X: https://x.com/mrhenrike
-
----
-
-*For educational purposes only. Do not use any technique shown here against systems you do not own or have explicit permission to test.*
