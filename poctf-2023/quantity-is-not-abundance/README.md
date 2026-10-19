@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | Quantity is Not Abundance |
-| **Category** | Web |
+| **Category** | Web Exploitation |
 | **Difficulty** | Hard |
 | **Points** | 300 |
+| **Flag** | `poctf{uwsp_qu4n717y_15_n07_48und4nc3}` |
 | **Status** | Solved |
 
 ---

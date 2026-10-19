@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | We Mighty, We Meek |
 | **Category** | Cracking |
 | **Difficulty** | Hard |
 | **Points** | 300 |
+| **Flag** | `poctf{uwsp_m19h7y_m33k_cr4ck3d_w1d3_0p3n}` |
 | **Status** | Solved |
 
 ---

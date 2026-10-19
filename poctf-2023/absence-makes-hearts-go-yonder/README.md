@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | Absence Makes Hearts Go Yonder |
 | **Category** | Steganography |
 | **Difficulty** | Easy |
 | **Points** | 100 |
+| **Flag** | `poctf{uwsp_4853nc3_m4k35_h34275_90_y0nd3r}` |
 | **Status** | Solved |
 
 ---

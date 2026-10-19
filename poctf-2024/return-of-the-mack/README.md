@@ -1,12 +1,15 @@
 # Return of the Mack
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | Crack |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_h34r7_0f_7h3_m4773r}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

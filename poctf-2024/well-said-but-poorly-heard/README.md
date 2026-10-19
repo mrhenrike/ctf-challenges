@@ -1,16 +1,22 @@
 # Well Said but Poorly Heard
 
-**Category:** Reverse Engineering
-**Challenge:** Well Said but Poorly Heard
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 100
-**Result:** Solved
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{dynamic}` |
 
-**Flag:**
+---
 
-~~~text
-poctf{uwsp_1n_w1n3_7h3r3_15_7ru7h}
-~~~
+## 3. Static Analysis
+
+Opening the binary in Binary Ninja reveals the main function logic:
+
+~~~c
+__builtin_strcpy(dest: &var_38, src: "poctf{uwsp_1n_w1n3_7h3r3_15_7ru7h}` |
+| **Status** | Solved |
 
 ---
 

@@ -1,12 +1,15 @@
 # Grifting Lonesome Widowers
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | OSINT |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_50m37h1n6_w1ck3d_7h15_w4y}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

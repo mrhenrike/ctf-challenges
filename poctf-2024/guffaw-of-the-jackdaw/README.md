@@ -1,12 +1,15 @@
 # Guffaw of the Jackdaw
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | Crack |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_p4r7_0f_7h3_m4ch1n3}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

@@ -1,16 +1,13 @@
 # A Finer Token Never Was
 
-**Category:** Exploitation
-**Challenge:** A Finer Token Never Was
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Exploit 100
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_411_4n1m4l5_4r3_3qu41}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Cryptography |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_411_4n1m4l5_4r3_3qu41}` |
+| **Status** | Solved |
 
 ---
 

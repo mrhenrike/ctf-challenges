@@ -1,16 +1,13 @@
 # It's All in the Hips
 
-**Category:** Digital Forensics
-**Challenge:** It's All in the Hips
-**CTF:** Pointer Overflow CTF 2024
-**Points:** DF 300
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_7h3_574r5_my_d3571n4710n}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_7h3_574r5_my_d3571n4710n}` |
+| **Status** | Solved |
 
 ---
 

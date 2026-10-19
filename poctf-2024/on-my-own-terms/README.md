@@ -1,13 +1,13 @@
 # On My Own Terms
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Medium                                     |
-| Points      | 200                                        |
-| Flag        | `poctf{uwsp_w3_4r3_wh47_w3_7h1nk}`       |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | ID |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_w3_4r3_wh47_w3_7h1nk}` |
+| **Status** | Solved |
 
 ---
 

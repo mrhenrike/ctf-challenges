@@ -1,13 +1,13 @@
 # Giving Up the Game
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Easy                                       |
-| Points      | 100                                        |
-| Flag        | `poctf{uwsp_1_7H1nk_7H3r3r0_1_4m}`       |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | ID |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_1_7H1nk_7H3r3r0_1_4m}` |
+| **Status** | Solved |
 
 ---
 

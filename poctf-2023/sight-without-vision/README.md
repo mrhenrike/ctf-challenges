@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | Sight Without Vision |
 | **Category** | Miscellaneous |
 | **Difficulty** | Easy |
 | **Points** | 100 |
+| **Flag** | `poctf{uwsp_n4m3}` |
 | **Status** | Solved |
 
 ---

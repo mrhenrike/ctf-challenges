@@ -1,12 +1,15 @@
 # Not All Secrets Are Exciting
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | OSINT |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_411_7h3_b357_p30p13}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

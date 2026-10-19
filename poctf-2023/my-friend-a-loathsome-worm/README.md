@@ -1,15 +1,13 @@
 # My Friend, A Loathsome Worm
 
-**Category:** Exploitation (Pwn)
-**Challenge:** My Friend, A Loathsome Worm
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_5w337_c10v32_4nd_50f7_511k}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Exploitation |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_5w337_c10v32_4nd_50f7_511k}` |
+| **Status** | Solved |
 
 ---
 

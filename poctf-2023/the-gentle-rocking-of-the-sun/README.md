@@ -1,15 +1,13 @@
 # The Gentle Rocking of the Sun
 
-**Category:** Cracking
-**Challenge:** The Gentle Rocking of the Sun
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved (reference)
-
-**Flag:**
-
-~~~text
-poctf{uwsp_c411f02n14_d234m1n9}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Cracking |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_c411f02n14_d234m1n9}` |
+| **Status** | Solved (reference) |
 
 ---
 

@@ -1,16 +1,13 @@
 # Heroes and Zeros
 
-**Category:** Exploitation
-**Challenge:** Heroes and Zeros
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Exploit 100
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_w3ll_d0n3_15_b3773r_7h4n_w3ll_541d}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Exploitation |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

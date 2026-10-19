@@ -1,15 +1,43 @@
 # A Petty Wage in Regret
 
-**Category:** Forensics
-**Challenge:** A Petty Wage in Regret
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved (reference)
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+~~~
 
-**Flag:**
+The `::P1/2::` prefix indicates this is part 1 of 2.
+
+![EXIF metadata extraction and hex decoding](images/01-exif-xxd.png)
+
+---
+
+## 3. Part 2: Visual Steganography
+
+The image itself contains barely visible characters. Applying an image gradient filter (e.g., in GIMP: Filters > Edge Detect > Image Gradient) reveals:
 
 ~~~text
-poctf{uwsp_7h3_w0rld_h4d_17_f1257}
+::P2/2::
+17
+_f1257
 ~~~
+
+So the second fragment is `_17_f1257`.
+
+![GIMP Image Gradient filter revealing hidden text](images/02-gimp-image-gradient.png)
+
+---
+
+## 4. Flag Assembly
+
+Concatenating part 1 and part 2:
+
+~~~text
+poctf{uwsp_7h3_w0rld_h4d + _17_f1257}` |
+| **Status** | Solved (reference) |
 
 ---
 
