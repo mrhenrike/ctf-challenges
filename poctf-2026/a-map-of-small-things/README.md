@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{73.1391.YTRCNRU3QYH4T7U7.E7MFBDMKUAVEV4UJMVJ7ZA2F5F}
+poctf{...}
 ~~~
 
 ---

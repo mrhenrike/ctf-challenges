@@ -9,7 +9,7 @@
 **Flag:**
 
 ~~~text
-POCTF{72.1391.UAXYWITBQBDAZLL2.AH4IRJRTFM6VG24F6JYHSOP3RZ}
+poctf{...}
 ~~~
 
 ---
@@ -72,7 +72,7 @@ python3 -I padding_oracle.py
 [*] 80 bytes, 5 blocks (4 to decrypt)
 
 [*] Block 1/4...
-  -> b'POCTF{72.1391.UA'
+  -> b'poctf{...partial'
 
 [*] Block 2/4...
   -> b'XYWITBQBDAZLL2.A'
@@ -83,7 +83,7 @@ python3 -I padding_oracle.py
 [*] Block 4/4...
   -> b'JYHSOP3RZ}\x06\x06\x06\x06\x06\x06'
 
-[+] PLAINTEXT: POCTF{72.1391.UAXYWITBQBDAZLL2.AH4IRJRTFM6VG24F6JYHSOP3RZ}
+[+] PLAINTEXT: poctf{...}
 ~~~
 
 The last 6 bytes are `\x06` (PKCS#7 padding for 6 bytes). After stripping, the flag is revealed.
