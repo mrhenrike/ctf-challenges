@@ -10,9 +10,10 @@ Personal collection of CTF writeups, boot2root challenge solutions and competiti
 |----------|---------|--------|
 | [Hacker101 CTF](hacker101/) | 27 web challenges | Active |
 | [VulnHub](vulnhub/) | 140+ boot2root VMs | Active |
-| [Pointer Overflow CTF 2023](pointeroverflow-poctf-2023/) | 4 challenges (Cracking, Forensics) | Complete |
-| [Pointer Overflow CTF 2024](pointeroverflow-poctf-2024/) | Competition writeups | Coming soon |
-| [Pointer Overflow CTF 2025](pointeroverflow-poctf-2025/) | Competition writeups | Coming soon |
+| [POCTF 2023](poctf-2023/) | 4 challenges (Cracking, Forensics) | Complete |
+| [POCTF 2024](poctf-2024/) | Competition writeups | Coming soon |
+| [POCTF 2025](poctf-2025/) | Competition writeups | Coming soon |
+| [POCTF 2026](poctf-2026/) | 14 challenges (Web, Crypto, Stego, Forensics, RE, Exploitation) | Complete |
 
 ---
 
@@ -33,7 +34,7 @@ vulnhub/<vm-slug>/
 ### Pointer Overflow CTF
 
 ```
-pointeroverflow-poctf-<year>/
+poctf-<year>/
   <challenge-slug>/
     README.md        # Full writeup
     scripts/         # Solve scripts
