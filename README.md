@@ -13,7 +13,7 @@ Personal collection of CTF writeups, boot2root challenge solutions and competiti
 | [POCTF 2023](poctf-2023/) | 24/27 challenges (Crypto, Crack, Web, Forensics, Exploit, Stego, RE, Misc, OSINT) | Incomplete |
 | [POCTF 2024](poctf-2024/) | 80/80 challenges (Crack, Crypto, Exploit, Forensics, Misc, OSINT, RE, Stego, Web) | Complete |
 | [POCTF 2025](poctf-2025/) | 0/80 challenges | Incomplete |
-| [POCTF 2026](poctf-2026/) | 14 challenges (Web, Crypto, Stego, Forensics, RE, Exploitation) | In progress |
+| [POCTF 2026](poctf-2026/) | 34/34 challenges (Web, Crypto, Stego, Forensics, RE, Exploitation, Misc, OSINT) | Complete |
 
 ---
 
