@@ -8,7 +8,7 @@ Personal collection of writeups for the [Pointer Overflow CTF 2023](https://poin
 
 ## Progress Overview
 
-**24/27 challenges** across 9 categories.
+**27/27 challenges** across 9 categories (26 solved, 1 not solved).
 
 ### Cryptography
 
@@ -72,12 +72,15 @@ Personal collection of writeups for the [Pointer Overflow CTF 2023](https://poin
 |-----------|-----------|--------|
 | [Sight Without Vision](sight-without-vision/) | 100 | Solved |
 | [Here You See A Passer By](here-you-see-a-passer-by/) | 200 | Solved |
+| [This Fellow is Dancing Mad!](this-fellow-is-dancing-mad/) | 300 | Not Solved |
 
 ### OSINT
 
 | Challenge | Difficulty | Status |
 |-----------|-----------|--------|
 | [All is Green and Comfort](all-is-green-and-comfort/) | 100 | Solved |
+| [A Great Interior Desert](a-great-interior-desert/) | 200 | Solved |
+| [A Pilgrim in an Unholy Land](a-pilgrim-in-an-unholy-land/) | 300 | Solved |
 
 ---
 
