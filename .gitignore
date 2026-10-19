@@ -3,11 +3,104 @@ Thumbs.db
 *.tmp
 *.log
 *.swp
+*.restore
 
-# Internal style/tooling — not for public
+# Credentials and VPN
+*.ovpn
+.vpn-creds
+.vpn.log
+.env
+.token
+.session_cookie
+
+# Large binary files
+*.pcap
+*.cap
+*.har
+*.zip
+
+# Node
+node_modules/
+package.json
+package-lock.json
+
+# Internal style/tooling
 vulnhub/_STYLE/
 vulnhub/.vm-database.json
 vulnhub/PIPELINE.md
 
-# Claude Code project rules (local only)
+# Claude Code / session artifacts
 CLAUDE.md
+.claude/
+.remember/
+.playwright-mcp/
+
+# Session handoffs and internal notes (not for public)
+**/HANDOFF.md
+**/NOTES.md
+**/STATUS.md
+**/COMPLETION-PLAN.md
+**/CLAUDE-CODE-TASK.md
+
+# Templates and solvers (internal tooling)
+**/templates/
+**/WRITEUP-TEMPLATE.md
+
+# References (cloned external repos, not our content)
+**/references/
+
+# Solver scripts (internal automation, not writeup content)
+**/stego_solver.py
+**/browser_solver.js
+**/exploit_solver.py
+**/solve_all.py
+**/browser_mass_solve.js
+**/auto_relogin.py
+
+# Loot and cracking artifacts
+**/loot/
+*.potfile
+*.hash
+
+# Sec4US (private lab, credentials)
+sec4us/
+
+# SOCBrasil (tokens, sessions, private data)
+socbrasil/
+
+# POCTF 2026 (competition may be active, not public yet)
+pointeroverflow-poctf-2026/
+
+# Pwn2Win (incomplete, private notes)
+pwn2win/
+
+# HC Go Party (single evidence file, no writeup)
+hc-go-party/
+
+# VulnHub stub/empty directories
+vulnhub/death-star-1/
+vulnhub/devcontainer-1/
+vulnhub/moth-06/
+vulnhub/xpto-system-1/
+vulnhub/zion-12/
+
+# VulnHub reference PDFs (third-party, not our writeups)
+vulnhub/outras/
+
+# VulnHub incomplete (HANDOFF only, no writeup)
+vulnhub/Axis2 and Tomcat Manager/
+vulnhub/GoldenEye-1/
+vulnhub/My Tomcat Host/
+vulnhub/Thales-1/
+vulnhub/Tr0ll/
+vulnhub/Tr0ll2/
+vulnhub/Tr0ll3/
+
+# Hacker101 internal files
+hacker101/logs/
+hacker101/refs/
+hacker101/petshop/
+hacker101/oauthbreaker/
+hacker101/.tmp-*
+hacker101/hydra.restore
+hacker101/WRITEUPS-BSDEREK-CATALOG.md
