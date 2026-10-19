@@ -1,16 +1,13 @@
 # The Trash Heap Has Spoken
 
-**Category:** Exploitation
-**Challenge:** The Trash Heap Has Spoken
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Exploit 300
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_17_w45_7h3_b357_0f_71m35}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Exploitation |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_17_w45_7h3_b357_0f_71m35}` |
+| **Status** | Solved |
 
 ---
 

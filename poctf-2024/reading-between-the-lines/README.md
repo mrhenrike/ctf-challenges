@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Reading Between the Lines |
-| **Category** | Steganography |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_b3w4r3_7h3_j4bb3rw0ck}` |
 | **Status** | Solved |
 
 ---

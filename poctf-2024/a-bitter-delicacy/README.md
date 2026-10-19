@@ -1,13 +1,13 @@
 # A Bitter Delicacy
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Expert                                     |
-| Points      | 400                                        |
-| Flag        | `poctf{uwsp_4ll_w3_h4v3_70_d3c1d3}`      |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Steganography |
+| **Difficulty** | Expert |
+| **Points** | 400 |
+| **Flag** | `poctf{uwsp_4ll_w3_h4v3_70_d3c1d3}` |
+| **Status** | Solved |
 
 ---
 

@@ -1,15 +1,13 @@
 # Everything Left Open
 
-**Category:** Forensics
-**Challenge:** Everything Left Open
-**Points:** FOR 100 (Wave 1)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Forensics |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

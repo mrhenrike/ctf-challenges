@@ -1,11 +1,15 @@
 # Velocity
 
-| Field | Value |
-|---|---|
-| CTF | Pointer Overflow CTF 2026 |
-| Category | Steganography (Wave 3) |
-| Challenge ID | 103 |
-| Flag | `poctf{...}` |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Application |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
+
+---
 
 ## Overview
 

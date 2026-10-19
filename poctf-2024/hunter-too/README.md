@@ -1,12 +1,15 @@
 # Hunter Too
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | Crack |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_f4ll3n_fr0m_gr4c3}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

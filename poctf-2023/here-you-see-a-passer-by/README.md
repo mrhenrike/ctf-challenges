@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | Here You See A Passer By |
 | **Category** | Miscellaneous |
 | **Difficulty** | Medium |
 | **Points** | 200 |
+| **Flag** | `poctf{uwsp_p4553r_8y_7h3_m4z3}` |
 | **Status** | Solved |
 
 ---

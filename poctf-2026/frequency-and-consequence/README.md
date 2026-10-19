@@ -1,11 +1,13 @@
 # Frequency and Consequence
 
-| Field | Value |
-|---|---|
-| CTF | Pointer Overflow CTF 2026 |
-| Category | Miscellaneous / Signal Processing (Wave 2) |
-| Challenge ID | 91 |
-| Flag | `poctf{...}` |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Activity |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

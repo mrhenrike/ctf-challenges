@@ -1,16 +1,13 @@
 # The Shape of Query
 
-**Category:** Web
-**Challenge:** The Shape of Query
-**CTF:** Pointer Overflow CTF 2026
-**Points:** 97 (WEB 300, Wave 1)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Web |
+| **Difficulty** | Unknown |
+| **Points** | 97 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

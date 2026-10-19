@@ -1,16 +1,13 @@
 # Understanding Nonsense
 
-**Category:** Reverse Engineering
-**Challenge:** Understanding Nonsense
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 100
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_br3v17y_15_7h3_50u1}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Easy |
+| **Points** | 100 |
+| **Flag** | `poctf{uwsp_br3v17y_15_7h3_50u1}` |
+| **Status** | Solved |
 
 ---
 

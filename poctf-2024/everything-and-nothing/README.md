@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2024 |
-| **Challenge** | Everything and Nothing |
-| **Category** | Steganography |
-| **Difficulty** | Hard |
-| **Points** | 300 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_n07_4ll_7h053_wh0_w4nd3r}` |
 | **Status** | Solved |
 
 ---

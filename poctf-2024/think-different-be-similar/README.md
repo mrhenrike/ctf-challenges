@@ -1,16 +1,13 @@
 # Think Different, Be Similar
 
-**Category:** Reverse Engineering
-**Challenge:** Think Different, Be Similar
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 300
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_4b4nd0n_4ll_h0p3}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Hard |
+| **Points** | 300 |
+| **Flag** | `poctf{uwsp_4b4nd0n_4ll_h0p3}` |
+| **Status** | Solved |
 
 ---
 

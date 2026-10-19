@@ -1,16 +1,13 @@
 # Hooper Hollar
 
-**Category:** Digital Forensics
-**Challenge:** Hooper Hollar
-**CTF:** Pointer Overflow CTF 2024
-**Points:** DF 200
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_l3553r_b31ng5}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Digital Forensics |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{uwsp_l3553r_b31ng5}` |
+| **Status** | Solved |
 
 ---
 

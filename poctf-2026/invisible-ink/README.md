@@ -1,16 +1,13 @@
 # Invisible Ink (The Invisible Text)
 
-**Category:** Steganography
-**Challenge:** Invisible Ink / The Invisible Text
-**CTF:** Pointer Overflow CTF 2026
-**Points:** STEG 200, Wave 1
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Steganography |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

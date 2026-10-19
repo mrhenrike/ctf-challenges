@@ -1,12 +1,53 @@
 # Gently Down the Stream
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | Crack |
-| **Difficulty** | Medium |
-| **Points** | 200 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+
+## Objective
+
+Identify the RC4 cipher, derive the encryption key using known-plaintext analysis, and decrypt the ciphertext to reveal the flag.
+
+## Methodology
+
+### Step 1: Identify the Cipher
+
+The description provides a diagram and references "ABC" steps:
+- **A**: "Always read up on your cipher" (repeated twice: AA)
+- **B**: "Be prepared. Download a good wordlist" (twice: BB)
+- **C**: "Calibrate your cracking rig" (two rigs mentioned: CC)
+- **D**: "Dead chicken" (wave two dead chickens: DD)
+
+The diagram shows an RC4 structure with KSA (Key Scheduling Algorithm) and PRGA (Pseudo-Random Generation Algorithm).
+
+### Step 2: Known-Plaintext Attack
+
+The ciphertext in hex:
+```
+71 81 13 f7 f7 b2 87 bd c6 77 68 67 25 ae fd 99 00 6e 2e 53 e6 60 50 50 ae a8 0f 9b 0a
+```
+
+Using the known flag prefix `poctf{uwsp` and XORing it with the ciphertext bytes, the key pattern `AABBCCDD` emerges. The password uses only A-Z characters as stated in the description.
+
+### Step 3: Decrypt with Script
+
+Using the RC4 decryption script with the derived key `AABBCCDD`:
+
+```python
+python3 scripts/decrypt.py
+```
+
+The script implements KSA + PRGA and brute-forces using an uppercase wordlist, confirming the key and decrypting the full flag.
+
+```
+Flag: poctf{uwsp_l16h7_1n_7h3_d4rk}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

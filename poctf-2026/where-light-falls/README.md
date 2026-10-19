@@ -1,11 +1,15 @@
 # Where Light Falls
 
-| Field | Value |
-|---|---|
-| CTF | Pointer Overflow CTF 2026 |
-| Category | Steganography (Wave 2) |
-| Challenge ID | 99 |
-| Flag | `poctf{...}` |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Application |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
+
+---
 
 ## Overview
 

@@ -1,11 +1,15 @@
 # Thirty-Two Steps Down
 
-| Field | Value |
-|---|---|
-| CTF | Pointer Overflow CTF 2026 |
-| Category | Exploitation (EXP 300, Wave 2) |
-| Challenge ID | 129 |
-| Flag | `poctf{...}` |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Unknown |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
+
+---
 
 ## Overview
 

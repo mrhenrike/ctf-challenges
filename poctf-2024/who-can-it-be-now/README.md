@@ -1,12 +1,15 @@
 # Who Can It Be Now
 
-| Property | Value |
-|----------|-------|
-| **CTF** | Pointer Overflow CTF 2024 (UWSP) |
-| **Category** | OSINT |
-| **Difficulty** | Easy |
-| **Points** | 100 |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Relevance |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_l3_p41n_qu071d13n}` |
 | **Status** | Solved |
+
+---
 
 ## Challenge Overview
 

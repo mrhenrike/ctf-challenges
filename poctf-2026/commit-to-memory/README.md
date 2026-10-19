@@ -1,11 +1,13 @@
 # Commit to Memory
 
-| Field | Value |
-|---|---|
-| CTF | Pointer Overflow CTF 2026 |
-| Category | Steganography / Forensics (Wave 2) |
-| Challenge ID | 100 |
-| Flag | `poctf{...}` |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Activity |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

@@ -1,13 +1,13 @@
 # Three Raccoons in a Trench Coat
 
-| Detail      | Value                                      |
-|-------------|--------------------------------------------|
-| CTF         | Pointer Overflow CTF 2024                  |
-| Category    | Web                                        |
-| Difficulty  | Medium                                     |
-| Points      | 200                                        |
-| Flag        | `poctf{uwsp_h3ll_15_07h3r_p30pl3}`        |
-| Status      | Solved                                     |
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | ID |
+| **Difficulty** | Unknown |
+| **Points** | N/A |
+| **Flag** | `poctf{uwsp_h3ll_15_07h3r_p30pl3}` |
+| **Status** | Solved |
 
 ---
 

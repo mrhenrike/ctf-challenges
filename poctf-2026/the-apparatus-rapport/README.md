@@ -1,16 +1,13 @@
 # The Apparatus, Rapport
 
-**Category:** Cryptography
-**Challenge:** The Apparatus, Rapport
-**Points:** CRYP 125 (Wave 2)
-**Series:** The Apparatus (2 of 8)
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{...}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2026 |
+| **Category** | Cryptography |
+| **Difficulty** | Unknown |
+| **Points** | 125 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 

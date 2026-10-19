@@ -3,10 +3,10 @@
 | Detail | Value |
 |--------|-------|
 | **CTF** | Pointer Overflow CTF 2023 |
-| **Challenge** | An Invincible Summer |
 | **Category** | Steganography |
 | **Difficulty** | Medium |
 | **Points** | 200 |
+| **Flag** | `poctf{uwsp_1nv1nc18l3_5umm3r_r3v34l3d}` |
 | **Status** | Solved |
 
 ---

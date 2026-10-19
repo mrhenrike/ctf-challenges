@@ -1,16 +1,13 @@
 # Planned Obsequence
 
-**Category:** Reverse Engineering
-**Challenge:** Planned Obsequence
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Reverse 200
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_4_7h1n6_0f_b34u7y}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{uwsp_4_7h1n6_0f_b34u7y}` |
+| **Status** | Solved |
 
 ---
 

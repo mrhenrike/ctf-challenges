@@ -1,16 +1,13 @@
 # Imperfect, Impermanent, and Incomplete
 
-**Category:** Exploitation
-**Challenge:** Imperfect, Impermanent, and Incomplete
-**CTF:** Pointer Overflow CTF 2024
-**Points:** Exploit 400
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_7h3_unb34r4bl3_l1gh7n355}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2024 |
+| **Category** | Exploitation |
+| **Difficulty** | Expert |
+| **Points** | 400 |
+| **Flag** | `poctf{uwsp_7h3_unb34r4bl3_l1gh7n355}` |
+| **Status** | Solved |
 
 ---
 

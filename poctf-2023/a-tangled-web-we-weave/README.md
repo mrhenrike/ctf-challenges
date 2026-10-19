@@ -1,15 +1,13 @@
 # A Tangled Web We Weave
 
-**Category:** Reverse Engineering
-**Challenge:** A Tangled Web We Weave
-**CTF:** Pointer Overflow CTF 2023
-**Result:** Solved
-
-**Flag:**
-
-~~~text
-poctf{uwsp_k1n9_k0n9_907_n07h1n9_0n_m3}
-~~~
+| Detail | Value |
+|--------|-------|
+| **CTF** | Pointer Overflow CTF 2023 |
+| **Category** | Reverse Engineering |
+| **Difficulty** | Medium |
+| **Points** | 200 |
+| **Flag** | `poctf{dynamic}` |
+| **Status** | Solved |
 
 ---
 
