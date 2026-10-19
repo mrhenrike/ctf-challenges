@@ -1,63 +1,64 @@
-# Maq184: Halloween SEC4US Trick or Treat
+# Maq184: Halloween SEC4US
 
-> **Platform:** SEC4US CTF Lab | **Category:** Web Hacking: Medium | **Points:** Dynamic
+Writeup for the **Halloween SEC4US** challenge on [SEC4US](https://sec4us.com.br/).
+
+> **Category:** Hacking: Medium
+> **Difficulty:** Medium
+
+---
 
 ## Overview
 
-A Halloween-themed web challenge from SEC4US with hidden vulnerabilities in the seasonal application.
+A Halloween-themed "Trick or Treat" web challenge where the seasonal web application conceals exploitable vulnerabilities behind its festive facade. Creative enumeration and exploitation of the themed application lead to system compromise.
 
----
+## Reconnaissance
 
-## Approach
+1. Scan the target to identify web services and any additional ports.
+2. Access the Halloween-themed web application and explore all visible pages.
+3. Enumerate hidden directories and files using wordlists, including Halloween-themed terms.
+4. Inspect page sources, JavaScript, cookies, and HTTP headers for hidden clues or parameters.
+5. Check for robots.txt, sitemap.xml, or other metadata files that may reveal hidden paths.
 
-**Technique:** Web Application Exploitation
+## Exploitation
 
-### Reconnaissance
+1. Identify the trick hidden in the treat: discover the exploitable vulnerability in the themed application.
+2. Test discovered parameters and endpoints for injection flaws, authentication bypass, or file inclusion.
+3. Exploit the vulnerability to gain code execution or sensitive information disclosure.
+4. Establish a reverse shell or extract credentials for direct system access.
+5. Gain initial foothold on the target machine.
 
-```bash
-nmap -sV -sC -p- <TARGET_IP> -oN nmap_full.txt
-gobuster dir -u http://<TARGET_IP> -w /usr/share/wordlists/dirb/common.txt
-```
+## Privilege Escalation
 
-### Exploitation
+1. Enumerate the system from the initial access context.
+2. Check for SUID binaries, sudo permissions, cron jobs, and writable scripts.
+3. Look for credentials in application configuration files or database connections.
+4. Exploit the identified escalation vector to obtain root access.
+5. Retrieve the flag to complete the Trick or Treat challenge.
 
-1. **Theme analysis:** The Halloween-themed web application contains hidden endpoints and parameters
-2. **Vulnerability discovery:** Identify the exploitable vulnerability through careful enumeration
-3. **Exploitation:** Leverage the vulnerability for code execution or information disclosure
-4. **Flag retrieval:** Navigate to the flag location
-
-### Tools Used
-
-Burp Suite, gobuster, curl, nmap
-
----
-
-## Security Frameworks
+## Security Framework Mapping
 
 ### MITRE ATT&CK
 
-| Technique | Description |
-|-----------|-------------|
-| T1190 | Exploit Public-Facing Application |
+| Technique | ID |
+|-----------|----|
+| Exploit Public-Facing Application | T1190 |
+| Command and Scripting Interpreter | T1059 |
+| Exploitation for Privilege Escalation | T1068 |
 
 ### CWE
 
-| ID | Description |
-|----|-------------|
-| CWE-200 | Exposure of Sensitive Information |
+- **CWE-200:** Exposure of Sensitive Information to an Unauthorized Actor
+- **CWE-20:** Improper Input Validation
+- **CWE-693:** Protection Mechanism Failure
 
 ---
 
-## Author
+> "Trick or treat? In this challenge, the treat is a shell and the trick is finding it. On Halloween night, every jack-o-lantern hides a vulnerability, and every candy wrapper conceals an exploit."
 
-**Andre Henrike** (@mrhenrike)
-
-The scariest thing on Halloween is not the monsters; it is the unpatched web applications. Thanks guys!! (❍ᴥ❍ʋ)
+```
+(❍ᴥ❍ʋ)
+```
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike
 - X: https://x.com/mrhenrike
-
----
-
-*For educational purposes only. Do not use any technique shown here against systems you do not own or have explicit permission to test.*
