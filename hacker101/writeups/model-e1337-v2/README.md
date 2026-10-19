@@ -127,54 +127,78 @@ curl -s "$BASE/unlock" -d "code=10322713006950444088"
 
 ## MITRE ATT&CK Mapping
 
-| Tactic | Technique | TTP-ID |
-|---|---|---|
-| Initial Access | Exploit Public-Facing Application | T1190 |
-| Collection | Data from Information Repositories | T1213 |
-| Credential Access | Unsecured Credentials: Credentials in Files | T1552.001 |
-| Discovery | System Information Discovery | T1082 |
+| ID | Technique | Tactic | How it was used |
+|----|-----------|--------|----------------|
+| T1190 | Exploit Public-Facing Application | Initial Access | Information leakage via `/unlock` error responses |
+| T1588.005 | Obtain Capabilities: Exploits | Resource Development | GF(2) solver for 64-bit PRNG state recovery from outputs |
+| T1040 | Network Sniffing | Collection | Captured PRNG outputs via repeated probes to `/unlock` |
 
 ## Remediation and Containment
 
 ### Technical Fixes
 
-1. Replace the custom PRNG with a CSPRNG (`secrets.token_bytes()` or `os.urandom()`)
-2. Use seeds of at least 128 bits to prevent brute-force and algebraic recovery
-3. Never reveal expected values in error messages: return only "incorrect code"
-4. Implement account lockout or exponential backoff on `/unlock`
-5. Add HMAC-based verification so that even known outputs cannot predict future codes
+1. **Error leakage:** Never reveal the expected code; return only "incorrect" or "correct"
+2. **PRNG:** Replace with CSPRNG (`secrets.token_bytes()` or HMAC-OTP)
+3. **Rate limiting:** Limit `/unlock` attempts per session to prevent output harvesting
+4. **Seed size:** Even with stronger PRNG rounds, 32-bit seed = brute-forceable; use 128+ bits
+
+### OWASP Top 10 2021
+
+| ID | Category | Relevance |
+|----|----------|-----------|
+| A02:2021 | Cryptographic Failures | 32-bit PRNG seed; linear (GF(2)) structure allows algebraic recovery |
+| A04:2021 | Insecure Design | Error response leaks the expected code, creating an output oracle |
 
 ### CWE
 
-- **CWE-338**: Use of Cryptographically Weak Pseudo-Random Number Generator
-- **CWE-209**: Generation of Error Message Containing Sensitive Information
+| ID | Name | Relevance |
+|----|------|-----------|
+| CWE-338 | Use of Cryptographically Weak PRNG | 32-bit seed; custom non-cryptographic generator |
+| CWE-209 | Error Message Containing Sensitive Information | `/unlock` reveals the expected code |
 
 ### MITRE D3FEND Countermeasures
 
-- **D3-CKMS (Cryptographic Key Management)**: use CSPRNG with adequate seed entropy
-- **D3-MFA (Multi-factor Authentication)**: add a second factor beyond the rolling code
-- **D3-SPP (Strong Password Policy)**: enforce minimum entropy requirements for authentication secrets
+| ID | Technique | Application |
+|----|-----------|-------------|
+| D3-MFA | Multi-factor Authentication | Replace custom rolling code with HMAC-OTP (RFC 6238) |
+| D3-AL | Audit Logging | Log all unlock attempts; alert on repeated failures from same source |
+| D3-SPP | Strong Password Policy | Enforce minimum entropy for authentication secrets (128+ bits) |
 
 ### NIST CSF 2.0
 
-- **Protect (PR.AA-1)**: identities and credentials are issued, managed, verified
-- **Protect (PR.DS-2)**: data-in-transit is protected
-- **Detect (DE.CM-1)**: the network is monitored to detect potential cybersecurity events
+| Function | Category | Application |
+|----------|----------|-------------|
+| PR (Protect) | PR.DS | Use cryptographically secure random number generators |
+| PR (Protect) | PR.AC | Rate-limit unlock attempts; lock out after threshold |
+| DE (Detect) | DE.CM | Detect patterns of systematic code probing |
 
 ### NIST SP 800-53 Rev. 5
 
-- **SC-13 Cryptographic Protection**: use approved cryptographic algorithms and adequate key lengths
-- **SI-11 Error Handling**: generate error messages without revealing implementation details
-- **IA-5 Authenticator Management**: manage authenticators with sufficient entropy
-- **AC-7 Unsuccessful Logon Attempts**: enforce lockout after consecutive failures
+| Control | Title | Application |
+|---------|-------|-------------|
+| SC-13 | Cryptographic Protection | CSPRNG with 128+ bit seeds; HMAC-OTP for rolling codes |
+| SI-11 | Error Handling | Generic error responses; never reveal expected values |
+| AC-7 | Unsuccessful Logon Attempts | Lock account or endpoint after repeated failed unlock attempts |
+| IA-5 | Authenticator Management | Manage authenticators with sufficient entropy |
+
+### C2M2
+
+| Domain | Practice | MIL | Application |
+|--------|----------|-----|-------------|
+| ACCESS | Access Control Management | MIL-2 | Rate limiting and lockout on authentication endpoints |
+| ASSET | Asset, Change, and Configuration Management | MIL-2 | Review cryptographic implementations for adequate key sizes |
 
 ---
+
+## Final Thoughts
 
 Thanks guys!! (❍ᴥ❍ʋ)
 
 ---
 
-The "hardened" version triples the PRNG rounds per bit, but the 32-bit seed and the error oracle remain. GF(2) linear algebra recovers the full 64-bit state from a single output. Hardening the cipher without fixing the key size is rearranging deck chairs on the Titanic.
+Model E1337 v2 "Hardened" proves that hardening without addressing the root cause is theater: adding more PRNG rounds and removing XXE still leaves a 32-bit seed and an output oracle. The correct fix is not to make the PRNG harder to break; it is to use a cryptographically secure one and stop leaking expected codes. GF(2) linear algebra makes the "hardened" version just as trivial to solve as v1.
+
+Follow along for more advanced crypto and web exploitation writeups:
 
 - Instagram: https://www.instagram.com/uniaogeek
 - LinkedIn: http://linkedin.com/in/mrhenrike
